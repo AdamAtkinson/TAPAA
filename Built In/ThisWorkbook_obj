@@ -1,0 +1,85 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+
+
+Private Sub PossibleButtonMovementEventOccured(ByVal wsObject As Object)
+'    Dim ws As Worksheet
+'    Set ws = wsObject
+'    MoveAPStartButtonToVisibleRange ws
+End Sub
+
+
+
+Private Sub Workbook_Open()
+    If gcAP Is Nothing Then
+        Set gcAP = New APApplication.APclsMainApplication
+        gcAP.LoadAP
+    End If
+    'Set gcAP = APApplication.APmodVariables.gcAP
+    'AddAllMenus
+'    EnableKeyboardShortcuts
+'    StartAutoSave
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    'RemoveAllMenus
+    If Not gcAP Is Nothing Then
+        If Not gcAP.kbHotKeys Is Nothing Then
+            gcAP.kbHotKeys.DisableKeyboardShortcuts
+        End If
+    End If
+End Sub
+
+Private Sub Workbook_AfterSave(ByVal success As Boolean)
+    #If Devmode Then
+        If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+        Dim excelState As New APclsExcelStates
+
+
+        Dim savePath As String
+        savePath = gBackupPath & "\" & Format(Now, "yymmdd_hhnn") & "-auto ( " & Replace(Me.Name, ".xlsm", vbNullString) & " ).xlsm"
+        If Not success Then MsgBox "The original save job did not complete", , "ERROR SAVING"
+
+        APmodMethods.StopEvents
+        Dim backupStatus As String
+        Me.SaveCopyAs savePath
+        If CBool(Len(Dir(savePath))) Then
+            backupStatus = "Batch Backup -   Success"
+        Else
+            backupStatus = "Batch Backup -   FAIL"
+        End If
+        If BackupXLAMafterBatch(savePath) Then
+            backupStatus = backupStatus & DBLLN & "AddIn Backup -   Success"
+        Else
+            backupStatus = backupStatus & DBLLN & "AddIn Backup -   FAIL"
+        End If
+        MsgBox backupStatus, vbExclamation, "Backup Status"
+        APmodMethods.ResumeEvents
+    #End If
+End Sub
+
+Private Sub Workbook_SheetChange(ByVal sh As Object, ByVal target As Range)
+'    PossibleButtonMovementEventOccured sh
+'    If autosave Is Nothing Then ContinueAutoSave
+End Sub
+
+Private Sub Workbook_SheetSelectionChange(ByVal sh As Object, ByVal target As Range)
+'    PossibleButtonMovementEventOccured sh
+'    If autosave Is Nothing Then ContinueAutoSave
+End Sub
+
+Private Sub Workbook_WindowActivate(ByVal Wn As Window)
+'    PossibleButtonMovementEventOccured Wn.ActiveSheet
+End Sub
+
+Private Sub Workbook_WindowResize(ByVal Wn As Window)
+'    PossibleButtonMovementEventOccured Wn.ActiveSheet
+End Sub

@@ -1,0 +1,274 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UserForm_SelectWorkbook 
+   Caption         =   "Find and Activate Worksheet"
+   ClientHeight    =   1590
+   ClientLeft      =   45
+   ClientTop       =   375
+   ClientWidth     =   5400
+   OleObjectBlob   =   "UserForm_SelectWorkbook_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "UserForm_SelectWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+Public Event WorksheetSelected(ByRef selectedWorksheet As Worksheet)
+Public Event WorkbookSelected(ByRef selectedWorkbook As Workbook)
+Public Event SelectionConfirmed()
+
+
+'form to select an open workbook and worksheet, uses two combo boxes and two command buttons (okay and cancel)
+'first combo box lists every open workbook
+'second combo box lists every worksheet in the selected workbook
+'need to add some error trapping before this can be widely used
+
+Private Const mSELECTWORKBOOKPROMPT As String = "Select workbook..."
+Private Const mSELECTWORKSHEETPROMPT As String = "Select worksheet..."
+Private Const mPIXELSPERROW As Single = 7.875 ' 15.75
+Private Const mMINHEIGHT As Single = 100
+
+Private pOnlySelectWorkbook As Boolean
+Private mFormEventsEnabled As Boolean
+Private mWB As Workbook
+Private mWS As Worksheet
+Private mDefaultDirectory As String
+Private mSelectedDirectory As String
+Private mApp As Excel.Application
+Private pWindowTitle As String
+Private pActivateSelection As Boolean
+
+Public Property Get ActivateSelection() As Boolean
+    ActivateSelection = pActivateSelection
+End Property
+Public Property Let ActivateSelection(p As Boolean)
+    pActivateSelection = p
+End Property
+
+Public Property Get WindowTitle() As String
+    WindowTitle = pWindowTitle
+End Property
+Public Property Let WindowTitle(p As String)
+    pWindowTitle = p
+End Property
+
+
+Public Property Get selectedWorkbook() As Workbook
+    Set selectedWorkbook = mWB
+End Property
+Public Property Get selectedWorksheet() As Worksheet
+    Set selectedWorksheet = mWS
+End Property
+Public Property Get SelectedDirectory() As String
+    SelectedDirectory = mSelectedDirectory
+End Property
+Public Property Get DefaultDirectory() As String
+    DefaultDirectory = mDefaultDirectory
+End Property
+Public Property Let DefaultDirectory(p_DefaultDirectory As String)
+    mDefaultDirectory = p_DefaultDirectory
+End Property
+Public Property Get OnlySelectWorkbook() As Boolean
+    WorkbookOnly = pOnlySelectWorkbook
+End Property
+Public Property Let OnlySelectWorkbook(p_WorkbookOnly As Boolean)
+    pOnlySelectWorkbook = p_WorkbookOnly
+End Property
+
+Private Sub CommandButton_RefreshList_Click()
+    mFormEventsEnabled = False
+    Me.ComboBox_WorksheetList.Clear
+    PopulateWorkbookList
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub UserForm_Activate()
+    If CBool(Len(pWindowTitle)) Then Me.Caption = pWindowTitle
+End Sub
+
+Private Sub UserForm_Initialize()
+    mFormEventsEnabled = False
+    Set mApp = GetObject(, "Excel.Application")
+    If Len(mDefaultDirectory) = 0 Then mDefaultDirectory = gRootFolder
+    Me.ComboBox_WorksheetList.Visible = False
+'    Me.Label_SelectWorksheet.Visible = False
+    Me.CommandButton_Activate.Visible = False
+    Call PopulateWorkbookList
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub ComboBox_WorkbookList_Change()
+        
+'    Me.Label_SelectWorksheet.Visible = False
+    Me.ComboBox_WorksheetList.Visible = False
+    Me.CommandButton_Activate.Visible = False
+
+    If Me.ComboBox_WorkbookList.ListIndex = -1 Or Me.ComboBox_WorkbookList.ListIndex = 0 Then
+    
+        Me.ComboBox_WorksheetList.Visible = False
+    
+'        Me.Label_SelectWorkbook.Visible = True
+        
+    Else
+    
+        If Not mFormEventsEnabled Then Exit Sub
+        mFormEventsEnabled = False
+
+'        Me.Label_SelectWorkbook.Visible = False
+
+        Dim wb As Workbook
+        For Each wb In mApp.Workbooks
+            If wb.Name = Me.ComboBox_WorkbookList.Value Then
+                Set mWB = mApp.Workbooks(Me.ComboBox_WorkbookList.Value)
+                Exit For
+            End If
+        Next wb
+        
+        If Not mWB Is Nothing And Not pOnlySelectWorkbook Then
+            
+'            Me.Label_SelectWorksheet.Visible = True
+            Me.ComboBox_WorksheetList.Visible = True
+            PopulateWorksheetList mWB
+            
+        ElseIf mWB Is Nothing Then
+            Select Case MsgBox(Me.ComboBox_WorkbookList.Value & " is not available." & DBLLN & "Do you want to refresh the list?", vbExclamation + vbYesNo, "Workbook Not Available")
+                Case vbYes
+                    PopulateWorkbookList
+                Case vbNo
+                    Me.ComboBox_WorkbookList.RemoveItem Me.ComboBox_WorkbookList.ListIndex
+                    Me.ComboBox_WorkbookList.ListIndex = -1
+'                    Me.Label_SelectWorkbook.Visible = True
+            End Select
+        ElseIf pOnlySelectWorkbook Then
+            Me.CommandButton_Activate.Visible = True
+        End If
+    End If
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub ComboBox_WorksheetList_Change()
+
+    If Me.ComboBox_WorksheetList.ListIndex = -1 Then
+'        Me.Label_SelectWorksheet.Visible = True
+        Me.CommandButton_Activate.Visible = False
+    
+    Else
+
+        If Not mFormEventsEnabled Then Exit Sub
+        mFormEventsEnabled = False
+    
+        Set mWS = mWB.Sheets(Me.ComboBox_WorksheetList.Value)
+        
+        If Not mWS Is Nothing Then
+'            Me.Label_SelectWorksheet.Visible = False
+            Me.CommandButton_Activate.Visible = True
+            RaiseEvent WorksheetSelected(mWS)
+            
+        ElseIf mWS Is Nothing Then
+        
+            Select Case MsgBox(Me.ComboBox_WorksheetList.Value & " is not available." & DBLLN & "Do you want to refresh the list?", vbExclamation + vbYesNo, "Worksheet Not Available")
+                Case vbYes
+                    PopulateWorksheetList mWB
+                Case vbNo
+                    Me.ComboBox_WorksheetList.RemoveItem Me.ComboBox_WorksheetList.ListIndex
+                    Me.ComboBox_WorksheetList.ListIndex = -1
+'                    Me.Label_SelectWorksheet.Visible = True
+            End Select
+        End If
+        mFormEventsEnabled = True
+    End If
+        
+End Sub
+
+Private Sub CommandButton_Activate_Click()
+    If Not mWS Is Nothing And Not pOnlySelectWorkbook Then
+        RaiseEvent SelectionConfirmed
+        If pActivateSelection Then
+        AppFocus
+        mWS.Activate
+        End If
+    ElseIf pOnlySelectWorkbook Then
+        RaiseEvent SelectionConfirmed
+        If pActivateSelection Then
+        AppActivate mWB.Parent.Caption
+        mWB.Activate
+        End If
+    ElseIf mWS Is Nothing Then
+        MsgBox ("Worksheet not selected")
+    End If
+End Sub
+
+
+Private Sub CommandButton_Find_Click()
+    With mApp.FileDialog(msoFileDialogFilePicker)
+        .Filters.Clear
+        .AllowMultiSelect = False
+        .Title = "Select Workbook"
+        .InitialView = msoFileDialogViewList
+        .InitialFileName = mDefaultDirectory
+        .Filters.Add "Excel workbooks", "*.xls,*.xlsx,*.xlsm"
+        If .Show = -1 Then
+            Set mWB = mApp.Workbooks.Open(.SelectedItems.item(1))
+            Me.ComboBox_WorkbookList.AddItem mWB.Name
+            Me.ComboBox_WorkbookList.Value = mWB.Name
+        End If
+    End With
+End Sub
+
+Private Sub PopulateWorkbookList()
+    Dim wb As Workbook
+    With Me.ComboBox_WorkbookList
+        .Clear
+        .AddItem mSELECTWORKBOOKPROMPT
+        For Each wb In mApp.Workbooks
+            .AddItem wb.Name
+        Next wb
+        .ListIndex = 0
+    End With
+    AdjustFormHeight
+'    Me.Label_SelectWorkbook.Visible = True
+End Sub
+
+Private Sub PopulateWorksheetList(wb As Workbook)
+    Dim ws As Worksheet
+    mFormEventsEnabled = False
+    With Me.ComboBox_WorksheetList
+        .Clear
+        .AddItem mSELECTWORKSHEETPROMPT
+        For Each ws In wb.Worksheets
+            .AddItem ws.Name
+        Next ws
+        .ListIndex = 0
+    End With
+    AdjustFormHeight
+'    Me.Label_SelectWorksheet.Visible = True
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub AdjustFormHeight()
+'    Me.height = (Me.ComboBox_WorkbookList.ListCount + 1) * mPIXELSPERROW + (Me.ComboBox_WorksheetList.ListCount + 1) * mPIXELSPERROW + 100
+'    Me.Frame_Buttons.top = (Me.ComboBox_WorkbookList.ListCount + 1) * mPIXELSPERROW + (Me.ComboBox_WorksheetList.ListCount + 1) * mPIXELSPERROW + 100
+'    Me.ComboBox_WorksheetList.top = (Me.ComboBox_WorkbookList.ListCount + 1) * mPIXELSPERROW + 30
+'    Me.ComboBox_WorksheetList.height = (Me.ComboBox_WorksheetList.ListCount + 1) * mPIXELSPERROW
+'    Me.ComboBox_WorkbookList.height = (Me.ComboBox_WorkbookList.ListCount + 1) * mPIXELSPERROW
+End Sub
+
+Private Sub InsertDialogInList(ByRef listToEdit As ComboBox, ByVal dialogToInsert As String)
+    mFormEventsEnabled = False
+    Dim ary() As String
+    ReDim ary(0 To listToEdit.LineCount)
+    Dim i As Long
+    ary(0) = dialogToInsert
+    For i = 1 To UBound(ary)
+        ary(i) = listToEdit.List(i - 1)
+    Next i
+    listToEdit.Clear
+    For i = 0 To UBound(ary)
+        listToEdit.AddItem ary(i)
+    Next i
+    listToEdit.ListIndex = 0
+    mFormEventsEnabled = True
+End Sub

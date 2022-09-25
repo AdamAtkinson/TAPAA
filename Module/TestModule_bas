@@ -1,0 +1,22 @@
+Attribute VB_Name = "TestModule"
+Option Explicit
+
+Sub TestMacro(testStr As String, testLng As Long, testObj As Object)
+Attribute TestMacro.VB_ProcData.VB_Invoke_Func = " \n14"
+    dbP "Recd TestMacro", testStr, testLng, testObj.Name
+        testPassBack testLng, testObj
+End Sub
+
+
+ Sub testPassBack(testLng As Long, testObj As Object)
+        Application.Run "'Book1.xlsm'!VBAProject.Module1.testFinalDestination", """explicit string""", testLng, testObj
+ End Sub
+
+Sub SimpleTestMacro1(testStr As String)
+    dbP "Recd TestMacro", testStr
+    Application.Run "'Book1.xlsm'!VBAProject.Module1.testFinalDestination", """explicit string"""
+
+End Sub
+Sub SimpleTestMacro2(testStr As String, testLng As Long)
+    dbP "Recd TestMacro", testStr, testLng
+End Sub

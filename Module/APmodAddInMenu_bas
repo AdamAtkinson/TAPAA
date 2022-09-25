@@ -1,0 +1,282 @@
+Attribute VB_Name = "APmodAddInMenu"
+Option Explicit
+Option Private Module
+
+
+'=======================+
+'  QUICK ACCESS TOOLBAR |
+'=======================+
+'   Worksheet Menu Bar  |
+'   Standard            |
+'=======================+
+'  CONTECT MENU         |
+'=======================+
+'   Cell                |
+'   Row                 |
+'   Column              |
+'=======================+
+' GOOD COMMAND CONTROLS |
+'=======================+
+'   msoControlPopup     |
+'   msoControlButton    |
+'=======================+
+
+
+Private mdToolBarCommands As New Scripting.Dictionary
+Private mdMenuCommands As New Scripting.Dictionary
+Private mdCustomToolBars As New Scripting.Dictionary
+
+
+
+
+'easily convertable to class but did not want to muddy up the class module tree
+
+Sub AddAllMenus()
+    Dim MenuList() As tMENU
+    Dim i As Long
+    MenuList = PopulateMenuList
+    For i = 1 To UBound(MenuList)
+        AddMenu MenuList(i)
+    Next i
+    AddMenuButtons False
+End Sub
+Sub RemoveAllMenus()
+    Dim MenuList() As tMENU
+    Dim i As Long
+    MenuList = PopulateMenuList
+    On Error Resume Next
+    For i = 1 To UBound(MenuList)
+        Application.CommandBars("Worksheet Menu Bar").Controls(MenuList(i).tCaption).Delete
+    Next i
+    RemoveMenuButtons
+    On Error GoTo 0
+End Sub
+
+Function PopulateMenuList() As tMENU()
+    Dim MenuList(1 To 3) As tMENU
+    MenuList(1) = Get_AP_Menu
+    MenuList(2) = Get_iServe_Menu
+    MenuList(3) = Get_PDF_Menu
+    PopulateMenuList = MenuList
+End Function
+
+
+Sub AddMenu(Menu As tMENU, Optional ButtonOnly As Boolean)
+    Dim cbWorkSheetMenuBar As CommandBar
+    Dim cbcMenu As CommandBarControl
+    Dim i As Long
+
+    Set cbWorkSheetMenuBar = Application.CommandBars("Worksheet Menu Bar")
+    Set cbcMenu = cbWorkSheetMenuBar.Controls.Add(Type:=msoControlPopup, Temporary:=True)
+    With cbcMenu
+        .Tag = Menu.tTag
+        .Caption = "&" & Menu.tCaption
+        For i = 1 To UBound(Menu.tItems)
+            With .Controls.Add(Type:=msoControlButton, Temporary:=True)
+                .Caption = Menu.tItems(i).tCaption
+                .OnAction = Menu.tItems(i).tCommand
+                .FaceId = Menu.tItems(i).tIcon
+                .Tag = Menu.tItems(i).tTag
+            End With
+        Next i
+    End With
+
+End Sub
+
+'======================================================================================================================================
+'       DEFINE MENUS                                                                                                                  '
+'======================================================================================================================================
+Function Get_AP_Menu() As tMENU
+    Dim Menu As tMENU
+    Menu.tTag = "AP Menu"
+    Menu.tCaption = "AP Menu"
+    
+    ReDim Menu.tItems(1 To 4)
+    Menu.tItems(1).tCaption = "Start Application"
+    Menu.tItems(1).tTag = "Start Application"
+    Menu.tItems(1).tCommand = "'" & ThisWorkbook.Name & "!AP___Launcher.APApplication_Start"
+    Menu.tItems(1).tIcon = 1098
+    
+    Menu.tItems(2).tCaption = "Reset Application"
+    Menu.tItems(2).tTag = "Reset Application"
+    Menu.tItems(2).tCommand = "'" & ThisWorkbook.Name & "!AP___Launcher.APApplication_Stop"
+    Menu.tItems(2).tIcon = 1098
+    Get_AP_Menu = Menu
+
+    Menu.tItems(1).tCaption = "Add Menus"
+    Menu.tItems(1).tTag = "Add Menus"
+    Menu.tItems(1).tCommand = "'" & ThisWorkbook.Name & "!APmodAddInMenu.AddAllMenus"
+    Menu.tItems(1).tIcon = 1098
+    
+    Menu.tItems(2).tCaption = "Remove Menus"
+    Menu.tItems(2).tTag = "Remove Menus"
+    Menu.tItems(2).tCommand = "'" & ThisWorkbook.Name & "!APmodAddInMenu.RemoveAllMenus"
+    Menu.tItems(2).tIcon = 1098
+    Get_AP_Menu = Menu
+    
+End Function
+
+Function Get_iServe_Menu() As tMENU
+    Dim Menu As tMENU
+    Menu.tTag = "iServeMenu"
+    Menu.tCaption = "iServe Menu"
+    
+    ReDim Menu.tItems(1 To 2)
+    Menu.tItems(1).tCaption = "NOT USED"
+    Menu.tItems(1).tTag = "Upload Batch"
+    Menu.tItems(1).tCommand = "runuploadbatch"
+    Menu.tItems(1).tIcon = 1098
+    
+    Menu.tItems(2).tCaption = "NOT USED"
+    Menu.tItems(2).tTag = "Address Inquiry"
+    Menu.tItems(2).tCommand = "runinquiry"
+    Menu.tItems(2).tIcon = 1098
+    Get_iServe_Menu = Menu
+End Function
+
+Function Get_PDF_Menu() As tMENU
+    Dim Menu As tMENU
+    
+    ReDim Menu.tItems(1 To 5)
+    
+    Menu.tTag = "PDF Menu"
+    Menu.tCaption = "PDF Menu"
+       
+    Menu.tItems(1).tCaption = "Split"
+    Menu.tItems(1).tTag = "Split"
+    Menu.tItems(1).tCommand = "'" & ThisWorkbook.Name & "'!APmodPDF.SplitAllPagesFromPDF"
+    Menu.tItems(1).tIcon = 1098
+    
+    Menu.tItems(2).tCaption = "Convert Invoices"
+    Menu.tItems(2).tTag = "Convert"
+    Menu.tItems(2).tCommand = "'" & ThisWorkbook.Name & "'!APmodPDF.ConvertPDFwithSaveAs"
+    Menu.tItems(2).tIcon = 1098
+    
+    Menu.tItems(3).tCaption = "Import Converted Invoices"
+    Menu.tItems(3).tTag = "Import"
+    Menu.tItems(3).tCommand = "'" & ThisWorkbook.Name & "'!APmodExtractInvoiceDetails.ExtractInvoicesFromConvertedPDF"
+    Menu.tItems(3).tIcon = 1098
+    Get_PDF_Menu = Menu
+    
+    Menu.tItems(4).tCaption = "Mass Save and Exit"
+    Menu.tItems(4).tTag = "Save All"
+    Menu.tItems(4).tCommand = "'" & ThisWorkbook.Name & "'!APmodPDF.PDFSaveAllOpen"
+    Menu.tItems(4).tIcon = 1098
+    
+    Menu.tItems(5).tCaption = "Match and Name"
+    Menu.tItems(5).tTag = "Match"
+    Menu.tItems(5).tCommand = "'" & ThisWorkbook.Name & "'!APmodPDF.MatchAndNamePDFtoSheet"
+    Menu.tItems(5).tIcon = 1098
+    Get_PDF_Menu = Menu
+End Function
+
+Private Sub AddMenuButtons(Optional IsMenuItem As Boolean)
+    Dim cbWorkSheetMenuBar As CommandBar
+    Dim cbcMenu As CommandBarControl
+    Dim objControlAnchor As Object
+    
+    Set cbWorkSheetMenuBar = Application.CommandBars("Standard")
+    If IsMenuItem Then
+        Set cbcMenu = cbWorkSheetMenuBar.Controls.Add(Type:=msoControlPopup, Temporary:=True)
+            cbcMenu.BeginGroup = True
+            cbcMenu.Tag = "Anchor"
+'            cbcMenu.Caption "Buttons"
+        Set objControlAnchor = cbcMenu
+    Else
+        Set objControlAnchor = cbWorkSheetMenuBar
+    End If
+    
+    
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Start Application"
+        .OnAction = "'" & ThisWorkbook.Name & "'!AP___Launcher.APApplication_Start"
+        .FaceId = 351
+        .Tag = "Start"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Find Invoice"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APaInvoiceBatchEntry.ManualInvoiceHistorySearch"
+        .FaceId = 25
+        .Tag = "Query"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Reset Application"
+        .OnAction = "'" & ThisWorkbook.Name & "'!AP___Launcher.APApplication_Stop"
+        .FaceId = 352
+        .Tag = "Reset"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Turn Shortcuts On"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APmodCommonKeys.EnableKeyboardShortcuts"
+        .FaceId = 346
+        .Tag = "Enable Shortcuts"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Turn Shortcuts Off"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APmodCommonKeys.DisableKeyboardShortcuts"
+        .FaceId = 347
+        .Tag = "Disable Shortcuts"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Show Timer"
+        .OnAction = "'" & ThisWorkbook.Name & "'!AP___Launcher.AP_Show_GlobalTimer"
+        .FaceId = 33
+        .Tag = "Show Timer"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Auto Batch"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APmodPDF.InitializeAutoBatch"
+        .FaceId = 473
+        .Tag = "Auto Batch"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Open Outlook"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APappOutlook.LoadOutlook"
+        .FaceId = 1675
+        .Tag = "Open Outlook"
+    End With
+    With objControlAnchor.Controls.Add(Type:=msoControlButton, Temporary:=True)
+        .Caption = "Download Selection"
+        .OnAction = "'" & ThisWorkbook.Name & "'!APappOutlook.ShowDownloadForm"
+        .FaceId = 1760
+        .Tag = "Download Selection"
+    End With
+    
+1675
+End Sub
+Private Sub RemoveMenuButtons()
+    Dim i As Long
+    On Error Resume Next
+    For i = Application.CommandBars("Standard").Controls.Count To 1 Step -1
+        If Application.CommandBars("Standard").Controls(i).BuiltIn = False Then Application.CommandBars("Standard").Controls(i).Delete
+    Next
+    On Error GoTo 0
+'    With Application.CommandBars("Standard")
+'        .Controls("Buttons").Delete
+'        .Controls("Start Application").Delete
+'        .Controls("Find Invoice").Delete
+'        .Controls("Reset Application").Delete
+'        .Controls("Enable Shortcuts").Delete
+'        .Controls("Disable Shortcuts").Delete
+'    End With
+End Sub
+
+Private Sub ListAllCommandBars()
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim cmndBar As CommandBar
+    Dim barControl As CommandBarControl
+    Dim Y As Long: Y = 1
+    StopScreen
+    Set wb = ActiveWorkbook
+    Set ws = wb.Worksheets.Add
+    For Each cmndBar In Application.CommandBars
+        For Each barControl In cmndBar.Controls
+            ws.Cells(Y, 1) = cmndBar.Name
+            ws.Cells(Y, 2) = barControl.Caption
+            Y = Y + 1
+        Next
+    Next
+    ResumeScreen
+End Sub
+

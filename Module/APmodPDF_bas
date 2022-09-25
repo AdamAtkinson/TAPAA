@@ -1,0 +1,1088 @@
+Attribute VB_Name = "APmodPDF"
+Option Explicit
+        
+        '==============================================================================================='
+        '                                   Automated Workflow                                          '
+        '================================================================================================
+        'Select emails from previously mapped vendors                                                   '
+        'Save the PDF attachments in the processing folder and move the emails to the processed folder  '
+        'Merge the PDF files into one large PDF                                                         '
+        'Convert the PDF into an Excel table                                                            '
+        'Split the PDFs into seperate documents and save them in the processing folder                  '
+        'Import the Excel table                                                                         '
+        'Validate and match the PDF invoices with the Excel table                                       '
+        'Rename each invoice after validation and them it the upload staging folder                     '
+        'Upload the batch to Sales Force                                                                '
+        '==============================================================================================='
+        
+
+
+    Private Const mEMAILTEMPLATE_FILENAME As String = "C:\Users\e-aatkinson\AppData\Local\VBA\Outlook\ForwardFromBatch.htm"
+
+    Private Const mAUTOPROCESS_ROOT_FOLDER As String = "C:\Users\e-aatkinson\iServe\Active Queue\AUTO PROCESS\"
+    Private Const mBAT_COMMAND_CD As String = "cd "
+    Private Const mBAT_COMMAND_START As String = "start "
+    Private Const mNPDFASSIST_PARAMETER As String = " -dm3 "
+    Private Const mNPDFCREATE_PARAMETER As String = " -i "
+    Private Const mNPDFASSIST_LONGFILENAME  As String = "C:\Program Files (x86)\Nuance\Power PDF\NPDFAssist.exe"
+    Private Const mBATCHFILE_LONGFILENAME  As String = "C:\Users\e-aatkinson\AppData\Local\VBA\runtime.bat"
+    Private Const mNPDFCREATE_LONGFILENAME As String = "C:\Program Files (x86)\Nuance\Power PDF\bin\NPDFCreate.exe"
+    Private Const mNPDFCREATE_AUTONAME_SUFFIX As String = "_1.pdf"
+    Private Const mNPDFCREATE_WINDOW_TITLE As String = "Nuance PDF Create Assistant"
+    Private Const mONTIME_TIMETOWAIT As String = "00:00:05"
+    
+    Private mFilenameOfConvertedPDF As String
+    Private mFilenameOfMergedPDF As String
+    Private mBatchFolder_OriginalFiles As String
+    Private mBatchFolder_Split As String
+    Private mBatchFolder_Root As String
+    Private mConcatenatedFilenames As String
+    Private mArrayOfOriginalFilenames() As String
+    Private mArrayOfRelocatedFilenames() As String
+
+Sub autobatchcallspecial()
+'    If Not CBool(Len(targetFolder)) And Not gflgPopulateAll Then
+'        If Dir(ActiveFolder, vbDirectory) <> vbNullString Then strVal = ActiveFolder
+'        With Application.FileDialog(msoFileDialogOpen)
+'            .InitialView = msoFileDialogViewDetails
+'            .InitialFileName = iifPathWithBackSlash(strVal)
+'            .AllowMultiSelect = True
+'            .Filters.Clear
+'            .Filters.Add "PDF Files", "*.pdf; *.PDF", 1
+'            .Show
+'            If .SelectedItems.Count = 0 Then Exit Sub
+'            ReDim PDF_Array(1 To .SelectedItems.Count)
+'            For i = 1 To .SelectedItems.Count
+'                PDF_Array(i) = .SelectedItems(i)
+'            Next
+'        End With
+AutoBatch_GetListOfInvoices
+End Sub
+
+
+Sub AutoBatch_GetListOfInvoices(Optional ByVal folderContainingInvoicesToProcess As String)
+
+    If Not CBool(Len(Dir(mAUTOPROCESS_ROOT_FOLDER, vbDirectory))) Then MkDir mAUTOPROCESS_ROOT_FOLDER
+    mBatchFolder_Root = CreateNewFolder_Safe_noUI(mAUTOPROCESS_ROOT_FOLDER & Format(Date, "yymmdd-") & Format(Time, "hhnn"))
+    mBatchFolder_Split = CreateNewFolder_Safe_noUI(mBatchFolder_Root & "Split\")
+    mBatchFolder_OriginalFiles = CreateNewFolder_Safe_noUI(mBatchFolder_Root & "Originals\")
+    
+    If Not CBool(Len(folderContainingInvoicesToProcess)) Then
+        'mConcatenatedFilenames = GetFromFileDialogWindow(msoFileDialogFilePicker, gRootFolder, _
+                                    "Select PDF Files to Merge and Import", "Merge", True)
+        If Not GetFromFileDialogWindow(msoFileDialogFilePicker, mConcatenatedFilenames, gRootFolder, _
+                                    "Select PDF Files to Merge and Import", "Merge", True) Then GoTo SAFEEXIT
+    Else
+        mConcatenatedFilenames = GetAllFilenamesInFolder(folderContainingInvoicesToProcess)
+    End If
+    
+    AutoBatch_MergeInvoices
+
+SAFEEXIT:
+End Sub
+
+Sub AutoBatch_MergeInvoices()
+    Dim i As Long
+    Dim t As eTRUTHINESS
+    mArrayOfOriginalFilenames = Split(mConcatenatedFilenames, Chr(124))
+    
+    ReDim mArrayOfRelocatedFilenames(LBound(mArrayOfOriginalFilenames) To UBound(mArrayOfOriginalFilenames))
+    
+    For i = LBound(mArrayOfOriginalFilenames) To UBound(mArrayOfOriginalFilenames)
+        mArrayOfRelocatedFilenames(i) = mBatchFolder_OriginalFiles & GetShortNameFromLongFileName(mArrayOfOriginalFilenames(i), False)
+        Name mArrayOfOriginalFilenames(i) As mArrayOfRelocatedFilenames(i)
+    Next
+        
+    mFilenameOfMergedPDF = mArrayOfRelocatedFilenames(0)
+    
+    mConcatenatedFilenames = Chr(34) & Join(mArrayOfRelocatedFilenames, Chr(34) & Chr(32) & Chr(34)) & Chr(34)
+        
+    MergePDF_ShellBAT mConcatenatedFilenames
+
+    mFilenameOfMergedPDF = Replace(mFilenameOfMergedPDF, GetFileNameExtension(mFilenameOfMergedPDF, False), mNPDFCREATE_AUTONAME_SUFFIX)
+    t = TestIfFileIsReady(mFilenameOfMergedPDF, -1) 'resetting static variables, t is not used
+    If OnTimeLoopUntilFunction_simple(mONTIME_TIMETOWAIT, "TestIfFileIsReady", "AutoBatch_SplitInvoices") = isother Then GoTo TimedOut
+
+    Exit Sub
+TimedOut:
+    MsgBox "Unable to access " & mFilenameOfMergedPDF, vbCritical, "File Not Available"
+End Sub
+
+
+Sub AutoBatch_SplitInvoices()
+    Dim t As eTRUTHINESS
+    
+    Name mFilenameOfMergedPDF As mBatchFolder_Root & GetShortNameFromLongFileName(mFilenameOfMergedPDF, False)
+    
+    mFilenameOfMergedPDF = mBatchFolder_Root & GetShortNameFromLongFileName(mFilenameOfMergedPDF, False)
+    mFilenameOfConvertedPDF = Replace(mFilenameOfMergedPDF, GetFileNameExtension(mFilenameOfMergedPDF, True), "xlsx")
+   
+    ConvertPDF_ShellBAT mFilenameOfMergedPDF
+    
+    DoEvents
+     
+    t = TestIfFileIsReady(mFilenameOfConvertedPDF, -1) 'resetting static variables, t is not used
+    If OnTimeLoopUntilFunction_simple(mONTIME_TIMETOWAIT, "TestIfFileIsReady", "AutoBatch_OpenConvertedFile") = isother Then GoTo TimedOut
+        
+    SplitAllPDF mFilenameOfMergedPDF, mBatchFolder_Split
+        
+    Exit Sub
+TimedOut:
+    MsgBox "Unable to access " & mFilenameOfConvertedPDF, vbCritical, "File Not Available"
+End Sub
+
+Sub AutoBatch_OpenConvertedFile()
+    Dim t As eTRUTHINESS
+    t = TestIfWorkbookIsReady(mFilenameOfConvertedPDF, -1) 'resetting static variables, t is not used
+    If OnTimeLoopUntilFunction_simple(mONTIME_TIMETOWAIT, "TestIfWorkbookIsReady", "AutoBatch_ImportConvertedInvoices") = isother Then GoTo TimedOut
+TimedOut:
+    MsgBox "Unable to open " & mFilenameOfConvertedPDF, vbCritical, "Workbook Not Available"
+End Sub
+ 
+    
+
+'TestIfWorkbookIsReady
+Sub AutoBatch_ImportConvertedInvoices()
+    Dim wbConvertedInvoices As Workbook
+    Dim wsConvertedInvoices As Worksheet
+    
+    Set wbConvertedInvoices = Workbooks.Open(mFilenameOfConvertedPDF)
+    If wbConvertedInvoices Is Nothing Then GoTo WORKBOOKERROR
+    
+    ExtractInvoicesFromConvertedPDF wbConvertedInvoices, mFilenameOfConvertedPDF
+
+    Application.EnableEvents = True
+    gflgPopulateAll = True
+    InvoiceEntryMode = True
+    ModifyFormButton gcAP.mainAPform.CommandButton_InvoiceEntryMode, styleOn, "ON"
+    ModifyFormButton gcAP.mainAPform.CommandButton_GrabPDF, styleOn, BUTTONLABEL_PDFQUEUE_ENABLED
+    OpenPDF_App
+        
+SAFEEXIT:
+    RemoveAllEmptyFolders mAUTOPROCESS_ROOT_FOLDER
+    Exit Sub
+WORKBOOKERROR:
+    MsgBox "Unable to open " & mFilenameOfConvertedPDF, vbCritical, "Workbook Not Available"
+End Sub
+
+
+Sub ConvertPDF_ShellBAT(ByVal pdfToConvertLongFilename As String)
+    Dim batCommandString As String
+    batCommandString = mBAT_COMMAND_CD & GetPathFromLongFileName(mNPDFASSIST_LONGFILENAME) & vbNewLine
+    batCommandString = batCommandString & mBAT_COMMAND_START & GetShortNameFromLongFileName(mNPDFASSIST_LONGFILENAME)
+    batCommandString = batCommandString & mNPDFASSIST_PARAMETER & Chr(34) & pdfToConvertLongFilename & Chr(34)
+    RunShellFromBAT mBATCHFILE_LONGFILENAME, batCommandString
+End Sub
+
+Sub MergePDF_ShellBAT(ByVal listOfFilesToMerge As String)
+    Dim batCommandString As String
+    batCommandString = mBAT_COMMAND_CD & GetPathFromLongFileName(mNPDFCREATE_LONGFILENAME) & vbNewLine
+    batCommandString = batCommandString & mBAT_COMMAND_START & GetShortNameFromLongFileName(mNPDFCREATE_LONGFILENAME)
+    batCommandString = batCommandString & mNPDFCREATE_PARAMETER & listOfFilesToMerge
+    RunShellFromBAT mBATCHFILE_LONGFILENAME, batCommandString
+End Sub
+
+Sub THISSUBLIESITSPLITES(Optional sourceLongName As String) 'MergAllPDF(Optional sourceLongName As String)
+    Dim PDFApp As PDFPlus.App
+    Dim dDocTarget As PDFPlus.DDDoc
+    Dim dDocSource As PDFPlus.DDDoc
+    Dim vDocTarget As PDFPlus.DVDoc
+    Dim vDocSource As PDFPlus.DVDoc
+    Dim pvDocSource As PDFPlus.DVPageView
+    Dim pageCount As Long
+    Dim cleanName As String
+    Dim sourceName As String
+    Dim sourcePath As String
+    Dim targetPath As String
+    Dim fName As String
+    Dim fext As String
+    Dim i As Long
+    
+    Set PDFApp = New PDFPlus.App
+    Set dDocSource = New PDFPlus.DDDoc
+    Set vDocSource = New PDFPlus.DVDoc
+    
+
+    
+
+    If Not CBool(Len(sourceLongName)) Then
+        If Dir(ActiveFolder, vbDirectory) <> vbNullString Then sourcePath = ActiveFolder & "\_EXTRACT"
+        With Application.FileDialog(msoFileDialogOpen)
+            .InitialFileName = sourcePath
+            .AllowMultiSelect = False
+            .Show
+            If .SelectedItems.Count = 1 Then
+                sourceName = .SelectedItems(1)
+            Else
+                'if selected items = 0 or > 1 then drop the job
+                MsgBox "Selected file count <> 1, exiting"
+                Exit Sub
+            End If
+        End With
+    Else
+        sourceName = sourceLongName
+    End If
+    
+    targetPath = Left(sourceName, InStrRev(sourceName, "\"))
+    cleanName = Right(sourceName, Len(sourceName) - InStrRev(sourceName, "\"))
+    cleanName = Left(cleanName, InStr(1, cleanName, ".") - 1)
+    targetPath = targetPath & cleanName & "\"
+    
+    If CBool(Len(Dir(targetPath, vbDirectory))) Then
+        MsgBox "directory exists"
+        Exit Sub
+    End If
+    
+    MkDir targetPath
+    
+    If dDocSource.Open(sourceName) = False Then
+        MsgBox "could not open source"
+    End If
+    
+    fext = ".pdf"
+    fName = Left(dDocSource.GetFileName, InStr(1, dDocSource.GetFileName, ".") - 1)
+    pageCount = dDocSource.GetNumPages
+    
+    'Set pvDocSource = vDocSource.GetDVPageView
+    'pvDocSource.Goto pageCount
+    
+    For i = pageCount To 1 Step -1
+        Set dDocTarget = New PDFPlus.DDDoc
+        dDocTarget.Create
+        If dDocTarget.InsertPages(-1, dDocSource, i - 1, 1, False) = False Then
+            MsgBox "failed to insert"
+        End If
+        If dDocTarget.Save(DDSaveFull, targetPath & fName & "-" & i & fext) = False Then
+            MsgBox "failed to save"
+        Else
+            dDocTarget.Close
+        End If
+    Next i
+    
+    dDocSource.Close
+    vDocSource.Close 1
+    If PDFApp.GetNumDVDocs = 0 Then PDFApp.Exit
+    
+    OpenFolder targetPath
+
+End Sub
+
+
+Sub SplitAllPDF(ByVal sourceLongFilename As String, ByVal destinationFolder As String)
+    Dim PDFApp As PDFPlus.App
+    Dim dDocTarget As PDFPlus.DDDoc
+    Dim dDocSource As PDFPlus.DDDoc
+    Dim pageCount As Long
+    Dim tempStr As String
+    Dim shortFilename As String
+    Dim newfileLongFilename As String
+    Dim filenameExtension As String
+    Dim i As Long
+    
+    Set PDFApp = New PDFPlus.App
+    Set dDocSource = New PDFPlus.DDDoc
+
+    shortFilename = GetShortNameFromLongFileName(sourceLongFilename, True)
+    filenameExtension = GetFileNameExtension(sourceLongFilename, False)
+    If Right(destinationFolder, 1) <> "\" Then destinationFolder = destinationFolder & "\"
+
+
+    If dDocSource.Open(sourceLongFilename) = False Then
+        MsgBox "could not open source, write this file name down and handle it manually" & DBLLN & sourceLongFilename
+    End If
+    pageCount = dDocSource.GetNumPages
+    If UBound(PDF_Array) > 0 Or flgPDFisOpen Or IndexPDF > 1 Then _
+                MsgBox "PDF Array UBound = " & UBound(PDF_Array) & vbCr & _
+                "PDF Index = " & IndexPDF & vbCr & _
+                "Open File Flag = " & flgPDFisOpen & DBLLN & _
+                "Processing will continue after this window closes", vbExclamation, "Previous Configuration Not Released"
+    ReDim PDF_Array(1 To pageCount)
+    'gcAP.mainAPform.TogglePDFPanel -1
+    gcAP.mainAPform.ResetPDFPanelText
+    flgPDFisOpen = False
+    IndexPDF = 1
+    For i = pageCount To 1 Step -1
+
+        Set dDocTarget = New PDFPlus.DDDoc
+        dDocTarget.Create
+        If dDocTarget.InsertPages(-1, dDocSource, i - 1, 1, False) = False Then
+            MsgBox "failed to insert"
+        End If
+        newfileLongFilename = destinationFolder & shortFilename & "-" & i & filenameExtension
+        PDF_Array(i) = newfileLongFilename
+        If dDocTarget.Save(DDSaveFull, newfileLongFilename) = False Then
+            MsgBox "record this filename continuing" & newfileLongFilename, vbCritical, "failed to save pdf"
+        Else
+            dDocTarget.Close
+        End If
+    Next i
+    dDocSource.Close
+    If PDFApp.GetNumDVDocs = 0 Then PDFApp.Exit
+
+    'OpenFolder destinationFolder
+End Sub
+
+Sub OpenPDF_App(Optional tgt As Range = Nothing)
+    Dim pdfWindow As tPDF_WINDOW_STATE
+    Dim pdfPageCount As Long
+    Dim wb As Workbook
+    Dim apphandle As Long
+    Set wb = ThisWorkbook
+    
+
+    If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+    Set gPDFdvDoc = New PDFPlus.DVDoc
+    
+    If gPDFdvDoc.Open(PDF_Array(IndexPDF)) = False Then
+        MsgBox "could not open PDF"
+    End If
+    Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+    Set gPDFdvPageView = gPDFdvDoc.GetDVPageView
+    
+    '    gPDFddDoc.Close
+    '    gPDFapp.Exit
+
+    With loInvoiceBatch
+        If tgt Is Nothing Then
+            Set tgt = .ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(.Range.Rows.Count)
+            Call UnloadEntryForms
+        End If
+    End With
+    If Not flgPDFisOpen And (UBound(PDF_Array) >= IndexPDF And LBound(PDF_Array) <= IndexPDF) Then
+        'gcAP.mainAPform.TogglePDFPanel 1
+        gcAP.mainAPform.Frame_CurrentPDFDetails.Caption = "Showing " & IndexPDF & " of " & UBound(PDF_Array) & " PDF files"
+        
+        gcAP.mainAPform.TextBox_CurrentFileName.Text = PDF_Array(IndexPDF)
+                
+        flgPDFisOpen = True
+        'gcAP.mainAPform.TogglePDFPanel 1
+        gPDFdvPageView.Goto 0
+        apphandle = FindWindow(vbNullString, gPDFddDoc.GetFileName & sAPP_TITLE_SUFFIX_NUANCE)
+        
+        '                                                           '
+        'Open New PDF Window                                        '
+        SetWindowPos apphandle, 0, -1900, 20, 1000, 1000, &H20 '    '
+        'SetWindowPos(hWnd, zOrder, xPos, yPos, Width, Height, Flags)
+        '                       see reference notes for more API info
+ 
+
+        ApplyDefaultWindowStatePDF
+        
+        DoEvents
+        
+        gPDFdvDoc.BringToFront
+'        pdfPageCount = gPDFddDoc.GetNumPages
+'        If APsheetBatch.PDFPageCounter Is Nothing Then APsheetBatch.SetPDFPageCounter
+        APsheetBatch.UpdatePDFPageCounter ' pdfPageCount
+        
+        
+        
+
+        AppFocus
+'        If pdfPageCount <> 1 Then MsgBox "File contained " & pdfPageCount & " pages", vbExclamation, "WARNING !!"
+    End If
+End Sub
+
+Sub StopOpeningPDF()
+    Dim Msg As String
+    'Sleep SLEEP_MIN
+    'DoEvents
+    'Call SendMessage(AppHWND, WM_CLOSE, 0, 0)
+    'Sleep SLEEP_MIN
+    'DoEvents
+    If flgPDFisOpen Then
+        Select Case MsgBox("Close the PDF without batching and empty the queue?", vbYesNo)
+            Case vbYes
+                If Not gPDFddDoc Is Nothing Then
+                    gPDFddDoc.Close
+                    Set gPDFddDoc = Nothing
+                End If
+                
+                If Not gPDFdvDoc Is Nothing Then
+                    gPDFdvDoc.Close 1
+                End If
+                
+                If Not gPDFapp Is Nothing Then
+                    If gPDFapp.GetNumDVDocs = 0 Then
+                        gPDFapp.Exit
+                        Set gPDFapp = Nothing
+                    End If
+                End If
+                
+                'TaskTracker = 0
+                AppTitle = vbNullString
+                AppHWND = 0
+                vPID = 0
+                'gcAP.mainAPform.TogglePDFPanel -1
+                gcAP.mainAPform.ResetPDFPanelText
+                flgPDFisOpen = False
+                IndexPDF = 1
+                ReDim PDF_Array(0 To 0)
+                APsheetBatch.KillPDFPageCounter
+            Case vbNo
+                'do nothing
+        End Select
+    End If
+End Sub
+
+Sub SafelyCloseGlobalPDF()
+    If Not gPDFddDoc Is Nothing Then
+        gPDFddDoc.Close
+        Set gPDFddDoc = Nothing
+    End If
+    If Not gPDFdvDoc Is Nothing Then
+        gPDFdvDoc.Close 1
+    End If
+    If Not gPDFapp Is Nothing Then
+        If gPDFapp.GetNumDVDocs = 0 Then
+            gPDFapp.Exit
+            Set gPDFapp = Nothing
+        End If
+    End If
+    APsheetBatch.KillPDFPageCounter
+End Sub
+
+
+Function GetPDFPAgeCountWithDialog(Optional ByVal ShowDialog As Boolean = True) As Long
+    If Not gPDFddDoc Is Nothing Then
+        Dim pdfPageCount As Long
+        pdfPageCount = gPDFddDoc.GetNumPages
+        If pdfPageCount <> 1 And ShowDialog Then MsgBox "File contained " & pdfPageCount & " pages", vbExclamation, "WARNING !!"
+    End If
+    GetPDFPAgeCountWithDialog = pdfPageCount
+End Function
+
+
+Sub MovePDFtoFolder(moveToFolder As String, Optional allowAdditionalText As Boolean = False)
+    Dim strVal As String
+    Dim newname As String
+    Dim oldName As String
+    Dim additionalText As String
+    On Error Resume Next
+    DoEvents
+    
+
+    
+    If CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+    
+    If allowAdditionalText Then
+    additionalText = InputBox("Text to include in file name =", "Include Custom Text")
+    
+    If gcAP.mainAPform.CheckBox_CapsLock And Not CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+    
+    additionalText = ReplaceSpecialCharacters(additionalText, "_", True)
+    If additionalText <> vbNullString Then additionalText = additionalText & "-"
+    End If
+    
+    
+    
+    'Call SendMessage(AppHWND, WM_CLOSE, 0, 0)
+'    If Not gPDFddDoc Is Nothing Then
+'        gPDFddDoc.Close
+'        Set gPDFddDoc = Nothing
+'    End If
+'    If Not gPDFdvDoc Is Nothing Then
+'        gPDFdvDoc.Close 1
+'    End If
+'    If Not gPDFapp Is Nothing Then
+'        If gPDFapp.GetNumDVDocs = 0 Then
+'            gPDFapp.Exit
+'            Set gPDFapp = Nothing
+'        End If
+'    End If
+
+    SafelyCloseGlobalPDF
+                
+    DoEvents
+    On Error GoTo 0
+    oldName = Replace(PDF_Array(IndexPDF), """", "")
+    newname = GetShortNameFromLongFileName(oldName)
+    strVal = Format(Now, "yy") & Format(Now, "mm") & Format(Now, "dd") & "-" & Format(Now, "hh") & Format(Now, "nn")
+    'If allowAdditionalText Then
+    '    additionalText = InputBox("Text to include in file name =", "Include Custom Text")
+    '    additionalText = ReplaceSpecialCharacters(additionalText, "_", True)
+    '    If additionalText <> vbNullString Then additionalText = additionalText & "-"
+    'End If
+    newname = additionalText & strVal & Chr(32) & newname
+    Name oldName As iifPathWithBackSlash(moveToFolder) & newname
+    DoEvents
+    'TaskTracker = 0
+    vPID = 0
+    AppTitle = vbNullString
+    'AppLongName = vbNullString
+    AppHWND = 0
+    flgPDFisOpen = False
+    IndexPDF = IndexPDF + 1
+    If IndexPDF > UBound(PDF_Array) Then
+        MsgBox "No more PDF's to open"
+        'gcAP.mainAPform.TogglePDFPanel -1
+        gcAP.mainAPform.ResetPDFPanelText
+        flgPDFisOpen = False
+        ReDim PDF_Array(0 To 0)
+        IndexPDF = 1
+        With gcAP.mainAPform
+            '.TogglePDFPanel -1
+            ModifyFormButton .CommandButton_GrabPDF, styleOff, BUTTONLABEL_PDFQUEUE_DEFAULT
+        End With
+    Else
+        OpenPDF_App
+    End If
+    Sleep SLEEP_MIN
+    DoEvents
+    AppFocus
+End Sub
+
+
+Sub CreateFilenameArrayFromPDFSelection(Optional targetFolder As String)
+    Dim i As Long
+    Dim strVal As String
+    Dim myfile As String
+
+    If Not CBool(Len(targetFolder)) And Not gflgPopulateAll Then
+        If Dir(ActiveFolder, vbDirectory) <> vbNullString Then strVal = ActiveFolder
+        With Application.FileDialog(msoFileDialogOpen)
+            .InitialView = msoFileDialogViewDetails
+            .InitialFileName = iifPathWithBackSlash(strVal)
+            .AllowMultiSelect = True
+            .Filters.Clear
+            .Filters.Add "PDF Files", "*.pdf; *.PDF", 1
+            .Show
+            If .SelectedItems.Count = 0 Then Exit Sub
+            ReDim PDF_Array(1 To .SelectedItems.Count)
+            For i = 1 To .SelectedItems.Count
+                PDF_Array(i) = .SelectedItems(i)
+            Next
+        End With
+    Else
+        Dim useFolder As String
+        If Not CBool(Len(targetFolder)) Then
+            useFolder = ActiveFolder
+        Else
+            useFolder = targetFolder
+        End If
+        useFolder = iifPathWithBackSlash(useFolder)
+        ReDim PDF_Array(1 To 1)
+        myfile = Dir(useFolder & "*.pdf")
+        Do While Len(myfile) > 0
+            PDF_Array(UBound(PDF_Array)) = useFolder & myfile
+            myfile = Dir
+            If CBool(Len(myfile)) Then ReDim Preserve PDF_Array(1 To UBound(PDF_Array) + 1)
+        Loop
+    End If
+    
+    IndexPDF = 1
+    
+    With gPDFdefaultView
+        .tMode = eFullScreen
+        .tZoom = eFitPage
+    End With
+        
+    Call OpenPDF_App
+
+
+End Sub
+
+Public Sub ApplyDefaultWindowStatePDF()
+    ChangeWindowStatePDF gPDFdefaultView
+End Sub
+
+Public Sub ChangeWindowStatePDF(pdfWindow As tPDF_WINDOW_STATE)
+    If flgPDFisOpen Then
+        With pdfWindow
+            If .tVisible <> 0 Then
+                If .tVisible = eVisible Then
+                    gPDFapp.Show
+                Else
+                    gPDFapp.Hide
+                End If
+            End If
+            If .tMode <> 0 Then gPDFdvDoc.SetViewMode .tMode
+            If .tZoom <> 0 Then gPDFdvPageView.ZoomTo .tZoom, 100
+            gPDFdvPageView.Goto gPDFdvPageView.GetPageNum + .tChangePage
+        End With
+    End If
+    On Error Resume Next
+    AppFocus
+    On Error GoTo 0
+    Call ResetEntryFormFocus
+End Sub
+
+
+Sub MoveCurrentPDFtoRootFolder()
+    Dim rng As Range
+    
+    If flgPDFisOpen Then
+        Select Case MsgBox("Move all " & GetPDFPAgeCountWithDialog(False) & " page(s) to the root folder?" _
+                & DBLLN & _
+                "Click 'No' to select a different folder." & vbNewLine & _
+                "Click 'Cancel' to continue working with this invoice.", vbYesNoCancel, "CONFIRM - Skip Invoice & Move to Root Folder")
+            Case vbYes
+                AskToEmailPDF "Email & Move to Root Folder"
+                MovePDFtoFolder gRootFolder, True
+                If Not gfrmVendorName Is Nothing Then
+                    With loInvoiceBatch
+                        Set rng = gfrmVendorName.GetTargetCell
+                            rng.Rows.EntireRow.Cells.ClearContents
+                            .ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(rng.Row).Select
+                    End With
+                End If
+                ClearContentsOfCurrentInvoiceLine
+                Call UnloadEntryForms
+            Case vbNo
+                AskToEmailPDF "Email & Move to Root Folder"
+                MoveCurrentPDFtoCustomFolder
+            Case vbCancel
+                AskToEmailPDF "Email & Continue Working with File", "The file will not be moved, do you want to email it?"
+        End Select
+    End If
+End Sub
+
+Sub MoveCurrentPDFtoCustomFolder()
+    Dim customFolder As String
+    Dim rng As Range
+    If GetFromFileDialogWindow(msoFileDialogFolderPicker, customFolder, ActiveFolder, "Select Folder", "Select", False) Then
+        If Not gfrmVendorName Is Nothing Then
+            With loInvoiceBatch
+                Set rng = gfrmVendorName.GetTargetCell
+                    rng.Rows.EntireRow.Cells.ClearContents
+                    .ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(rng.Row).Select
+            End With
+        End If
+        ClearContentsOfCurrentInvoiceLine
+        Call UnloadEntryForms
+        MovePDFtoFolder customFolder, True
+    End If
+End Sub
+
+Sub MoveCurrentPDFtoTrashFolder()
+    Dim rng As Range
+    Dim ans As String
+    If flgPDFisOpen Then
+        ans = MsgBox("Move all " & GetPDFPAgeCountWithDialog(False) & " page(s) to trash?" _
+                & DBLLN & _
+                "Click 'No' to select a different folder." & vbNewLine & _
+                "Click 'Cancel' to continue working with this invoice.", vbYesNoCancel, "CONFIRM - Skip Invoice & Move to Trash")
+        Select Case ans
+            Case vbYes
+                AskToEmailPDF "Email & Move to Trash"
+                If Not gfrmVendorName Is Nothing Then
+                    With loInvoiceBatch
+                        Set rng = gfrmVendorName.GetTargetCell
+                        rng.Rows.EntireRow.Cells.ClearContents
+                        .ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(rng.Row).Offset(0, -1).Select
+                    End With
+                End If
+                ClearContentsOfCurrentInvoiceLine
+                Call UnloadEntryForms
+                MovePDFtoFolder TrashFolder, False
+            Case vbNo
+                AskToEmailPDF "Email & Move to Trash"
+                MoveCurrentPDFtoCustomFolder
+            Case vbCancel
+                AskToEmailPDF "Email & Continue Working with File", "The file will not be moved, do you want to email it?"
+        End Select
+    End If
+End Sub
+Sub MassConvertPDFwithSaveAs()
+    Dim pdfPageCount As Long
+    Dim wb As Workbook
+    Dim strFileName As String
+    Dim ary() As String
+    
+    If Not GetFromFileDialogWindow(msoFileDialogFilePicker, strFileName, "C:\Users\e-aatkinson\Documents\9) Temp\premier med year", "Select FDF to Convert", "Select", True) Then GoTo SAFEEXIT
+    ary = Split(strFileName, "|")
+    Dim i As Long
+    For i = LBound(ary) To UBound(ary)
+    If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+    Set gPDFdvDoc = New PDFPlus.DVDoc
+
+    gPDFdvDoc.Open (ary(i))
+    Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+'    Debug.Print gPDFddDoc.GetFileName
+'    Debug.Print "info", gPDFddDoc.GetNumPages
+'    Debug.Print "saved", gPDFddDoc.Save(DDSaveFull + DDSaveCopy, "C:\Users\e-aatkinson\iServe\Mail Processing\190826-0907_ExtractPage2.pdf")
+    gPDFapp.MenuItemExecute "SaveAs"
+    gPDFdvDoc.Close 0
+    gPDFapp.Exit
+'    gPDFapp.MenuItemExecute "ExtractPage"
+    Next i
+SAFEEXIT:
+    Exit Sub
+NOTIFYANDEXIT:
+    MsgBox "Conflicting string"
+End Sub
+
+
+Sub ConvertPDFwithSaveAs()
+    Dim pdfPageCount As Long
+    Dim wb As Workbook
+    Dim strFileName As String
+    
+    If Not GetFromFileDialogWindow(msoFileDialogFilePicker, strFileName, gRootFolder, "Select FDF to Convert", "Select", False) Then GoTo SAFEEXIT
+
+    If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+    Set gPDFdvDoc = New PDFPlus.DVDoc
+
+    gPDFdvDoc.Open (strFileName)
+    Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+'    Debug.Print gPDFddDoc.GetFileName
+'    Debug.Print "info", gPDFddDoc.GetNumPages
+'    Debug.Print "saved", gPDFddDoc.Save(DDSaveFull + DDSaveCopy, "C:\Users\e-aatkinson\iServe\Mail Processing\190826-0907_ExtractPage2.pdf")
+    gPDFapp.MenuItemExecute "SaveAs"
+    gPDFdvDoc.Close 0
+    gPDFapp.Exit
+'    gPDFapp.MenuItemExecute "ExtractPage"
+SAFEEXIT:
+    Exit Sub
+NOTIFYANDEXIT:
+    MsgBox "Conflicting string"
+End Sub
+
+Sub PDFSaveAllOpen()
+    Dim i As Long
+    Dim savePath As String
+    Dim errorFound As Boolean
+    Dim saveAsFileName As String
+    Dim docExt As String
+    Dim fName As String
+    Dim okToRename As Boolean
+    
+    If Not GetFromFileDialogWindow(msoFileDialogFolderPicker, savePath, gRootFolder, "Select Folder to Save All PDFs", "Select", False) Then GoTo SAFEEXIT
+    
+    If Right(savePath, 1) <> "\" Then savePath = savePath & "\"
+    If Not CBool(Len(Dir(savePath, vbDirectory))) Then MkDir savePath
+    If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+    For i = 1 To gPDFapp.GetNumDVDocs
+        Set gPDFdvDoc = gPDFapp.GetActiveDoc
+        Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+        fName = gPDFddDoc.GetFileName
+        docExt = GetFileNameExtension(fName)
+        fName = Replace(fName, docExt, vbNullString)
+        If Not LCase(docExt) Like FILENAME_EXTENSION_PDF And Not okToRename Then
+            Select Case MsgBox("The file extension is " & docExt & _
+                        ", do you want to change it to " & FILENAME_EXTENSION_PDF & "?", _
+                        vbInformation + vbYesNo, "Unexpected File Extension")
+                Case vbYes
+                    okToRename = True
+                Case vbNo
+                    Select Case MsgBox("Click 'Yes' to continue" & DBLLN & _
+                                       "Click 'No' to keep files open and exit without saving", _
+                                       vbExclamation + vbYesNo, "Save and Close Files")
+                        Case vbYes
+                            'do nothing, user wants to continue
+                        Case vbNo
+                            GoTo SAFEEXIT
+                    End Select
+            End Select
+        End If
+        If okToRename Then docExt = FILENAME_EXTENSION_PDF
+        saveAsFileName = CreateUniqueName(savePath & fName & docExt)
+        If Not CBool(Len(saveAsFileName)) Then
+            MsgBox "error naming file"
+        Else
+            gPDFddDoc.Save DDSaveFull, saveAsFileName
+        End If
+        DoEvents
+        If Not CBool(Len(Dir(saveAsFileName))) Then
+            errorFound = True
+            MsgBox "error saving"
+        Else
+            If gPDFddDoc.GetFlags = 0 Then
+                gPDFdvDoc.Close 0
+            Else
+                errorFound = True
+                MsgBox "flags found, not closed"
+            End If
+        End If
+        DoEvents
+    Next i
+    If Not errorFound Then gPDFapp.Exit
+
+SAFEEXIT:
+    Exit Sub
+    
+NOTIFYANDEXIT:
+    MsgBox "Conflicting string"
+End Sub
+
+Sub AskToEmailPDF(Optional MsgBoxTitle As String, Optional ByVal msgBoxText As String)
+    Dim ol_App As Outlook.Application
+    Dim ol_Mail As Outlook.MailItem
+    Dim fso As Scripting.FileSystemObject
+    Dim attachmentFileName As String
+    Dim customName As String
+    Dim shortName As String
+    Dim docExt As String
+    Dim docPath As String
+    Dim emailBody As String
+    On Error GoTo HANDLER
+    If flgPDFisOpen Then
+        If Len(msgBoxText) = 0 Then msgBoxText = "Do you want to email this file before moving it?"
+    Select Case MsgBox(msgBoxText, vbYesNo + vbDefaultButton2, MsgBoxTitle)
+        Case vbYes
+            attachmentFileName = PDF_Array(IndexPDF)
+            docExt = Right(attachmentFileName, Len(attachmentFileName) - InStrRev(attachmentFileName, ".") + 1) '+1 for the "."
+            docPath = Left(attachmentFileName, InStrRev(attachmentFileName, ".") - 1)
+            
+            shortName = Replace(Right(docPath, Len(docPath) - InStrRev(docPath, "\")), docExt, vbNullString)
+            docPath = Left(docPath, InStrRev(docPath, "\"))
+            
+            If CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+            
+            Do
+                customName = InputBox("Rename file?", "Rename Attachment", shortName)
+                If customName <> shortName Then customName = ReplaceSpecialCharacters(customName, Chr(32), True)
+            Loop Until Len(Replace(customName, Chr(32), vbNullString)) > 0
+
+            attachmentFileName = "C:\Users\e-aatkinson\Documents\Temp\" & customName & docExt
+            Set fso = New Scripting.FileSystemObject
+            fso.CopyFile PDF_Array(IndexPDF), attachmentFileName, True 'overwrite
+            
+            On Error Resume Next
+            Set ol_App = Outlook.Application
+            
+            If Err.Number <> 0 Then
+STARTOUTLOOK:
+                Set ol_App = New Outlook.Application
+            End If
+            
+            Set ol_Mail = ol_App.CreateItem(olMailItem)
+            
+            'get outlook signature
+            If CBool(Len(Dir(mEMAILTEMPLATE_FILENAME))) Then emailBody = ReadFile(mEMAILTEMPLATE_FILENAME)
+            
+            With ol_Mail
+                .To = DefaultEmailContact
+                .CC = ""
+                .BCC = ""
+                .Subject = "Forwarding Attachment: " & customName
+                .BodyFormat = olFormatHTML
+                .HTMLBody = emailBody
+                .Attachments.Add attachmentFileName
+                '.Send
+                .Display
+            End With
+            
+        Case vbNo
+            'do nothing
+    End Select
+    
+    Set ol_Mail = Nothing
+    Set ol_App = Nothing
+ End If
+ Exit Sub
+HANDLER:
+    If Err.Number = 462 Then Resume STARTOUTLOOK 'outlook application was closed, try opening it
+    
+    
+End Sub
+
+
+Sub ManualSplitInvoices()
+Dim fpath As String
+Dim fName As String
+
+    If Not APmodExtractInvoiceDetails.pdfDoc Is Nothing Then
+
+        fName = APmodExtractInvoiceDetails.pdfName
+        
+    Else
+        If Not GetFromFileDialogWindow(msoFileDialogFilePicker, fName, "C:\Users\e-aatkinson\iServe\Active Queue\_EXTRACT", , , False) Then Exit Sub
+    End If
+
+    If GetFromFileDialogWindow(msoFileDialogFolderPicker, fpath, "C:\Users\e-aatkinson\iServe\Active Queue\_EXTRACT", , , False) Then
+            SplitAllPDF fName, fpath
+            OpenFolder fpath
+    End If
+    
+    If Not Recycle(fName) Then MsgBox "Error recycling " & fName
+    
+End Sub
+
+Sub MatchAndNamePDFtoSheet()
+    Dim strVal As String
+    Dim tgt As Range
+    
+    If Not InvoiceBatchEnvironmentWasInitialized Then LoadFrontEnd
+    Do
+        If (IndexPDF >= LBound(PDF_Array) And IndexPDF <= UBound(PDF_Array)) Then
+            On Error Resume Next
+            Set tgt = Application.InputBox("select row", Type:=8)
+            If Err.Number <> 0 Then Set tgt = Nothing
+            On Error GoTo 0
+            If Not tgt Is Nothing Then
+                strVal = APaInvoiceBatchEntry.GenerateFileName(tgt)
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row) = strVal
+                strVal = UploadFolder & Chr(92) & strVal
+            End If
+            Do
+                Sleep SLEEP_MIN
+                DoEvents
+'                If Not gPDFddDoc Is Nothing Then
+'                    gPDFddDoc.Close
+'                    Set gPDFddDoc = Nothing
+'                End If
+'                If Not gPDFapp Is Nothing Then
+'                    gPDFapp.Exit
+'                    Set gPDFapp = Nothing
+'                End If
+
+                SafelyCloseGlobalPDF
+                
+                Sleep SLEEP_MIN
+                DoEvents
+                If Not tgt Is Nothing Then Name PDF_Array(IndexPDF) As strVal
+                DoEvents
+            Loop Until Dir(strVal) <> vbNullString Or tgt Is Nothing
+            'gcAP.mainAPform.TogglePDFPanel -1
+            flgPDFisOpen = False
+            IndexPDF = IndexPDF + 1
+            AppFocus
+    
+            If IndexPDF > UBound(PDF_Array) Then
+                MsgBox "No more PDF's to open"
+                ReDim PDF_Array(0 To 0)
+                IndexPDF = 1
+                If flgPDFisOpen Then
+                    MsgBox "THE flgPDFisOpen IS TRUE, SETTING TO FALSE"
+                    'gcAP.mainAPform.TogglePDFPanel -1
+                    gcAP.mainAPform.ResetPDFPanelText
+                    flgPDFisOpen = False
+                End If
+            Else
+                Call OpenPDF_App
+            End If
+        End If
+    Loop While IndexPDF <= UBound(PDF_Array)
+End Sub
+
+Sub PDFPageDown()
+    Dim pdfWindow As tPDF_WINDOW_STATE
+    If flgPDFisOpen Then
+        pdfWindow.tChangePage = eBack
+        ChangeWindowStatePDF pdfWindow
+    End If
+End Sub
+
+Sub PDFPageUp()
+    Dim pdfWindow As tPDF_WINDOW_STATE
+    If flgPDFisOpen Then
+        pdfWindow.tChangePage = eFoward
+        ChangeWindowStatePDF pdfWindow
+    End If
+End Sub
+Sub PDFShowApp()
+    Dim pdfWindow As tPDF_WINDOW_STATE
+    pdfWindow.tVisible = eVisible
+    ChangeWindowStatePDF pdfWindow
+End Sub
+
+Sub PDFHideApp()
+    Dim pdfWindow As tPDF_WINDOW_STATE
+    pdfWindow.tVisible = eHidden
+    ChangeWindowStatePDF pdfWindow
+End Sub
+
+Sub PDFShowThumbs()
+    gPDFdefaultView.tMode = ethumbs
+    ApplyDefaultWindowStatePDF
+End Sub
+Sub PDFShownNone()
+    gPDFdefaultView.tMode = enone
+    ApplyDefaultWindowStatePDF
+End Sub
+Sub PDFShowFullScreen()
+    gPDFdefaultView.tMode = eFullScreen
+    ApplyDefaultWindowStatePDF
+End Sub
+Sub PDFFitHeight()
+    gPDFdefaultView.tZoom = efitHeight
+    ApplyDefaultWindowStatePDF
+End Sub
+Sub PDFFitWidth()
+    gPDFdefaultView.tZoom = eFitWidth
+    ApplyDefaultWindowStatePDF
+End Sub
+
+
+
+'Sub SyncShell(ByVal Cmd As String, ByVal WindowStyle As VbAppWinStyle)
+'    Static wsh As New WshShell
+'    wsh.Run Cmd, WindowStyle, True
+'End Sub
+
+
+
+
+'=========================================================================================================================='
+'   OBSOLETE - WORKAROUND THAT DOES NOT USE NUANCE REFERENCE OBJECT MODEL - HERE FOR REFERENCE ONLY                        '
+'--------------------------------------------------------------------------------------------------------------------------'
+'Sub GetPDFPageCount() 'REQUIRES 'DoFolder                                                                                 '
+'    'WORKAROUND TO COUNT THE NUMBER OF PDF PAGES IN A PDF FILE UNTIL NUANCE REFERENCE ENABLED                             '
+'    '(NOT ALWAYS ACCURATE/COMPLEX FILES HAVE INFLATED COUNTS)                                                             '
+'    Dim ws As Worksheet                                                                                                   '
+'    Dim wb As Workbook                                                                                                    '
+'    Dim xFd As FileDialog                                                                                                 '
+'    Dim fsoFileSystem As Object                                                                                           '
+'    Dim HostFolder As String                                                                                              '
+'    'let user select folder                                                                                               '
+'    Set xFd = Application.FileDialog(msoFileDialogFolderPicker)                                                           '
+'    DoEvents                                                                                                              '
+'    If xFd.Show = -1 Then                                                                                                 '
+'        HostFolder = xFd.SelectedItems(1) & Application.PathSeparator                                                     '
+'        Set fsoFileSystem = CreateObject("Scripting.FileSystemObject")                                                    '
+'        Application.ScreenUpdating = False                                                                                '
+'        Set wb = ActiveWorkbook                                                                                           '
+'        Set ws = wb.Sheets.Add                                                                                            '
+'        ws.Name = "PDF " & ws.Name                                                                                        '
+'        ws.Range("A1:C1").Font.Bold = True                                                                                '
+'        Cells(1, 1) = "Folder"                                                                                            '
+'        Cells(1, 2) = "File Name"                                                                                         '
+'        Cells(1, 3) = "Pages"                                                                                             '
+'        'step into recursion routine for finding subfolders                                                               '
+'        DoFolder fsoFileSystem.GetFolder(HostFolder), ws                                                                  '
+'        ws.Columns.AutoFit                                                                                                '
+'    End If                                                                                                                '
+'    Application.ScreenUpdating = True                                                                                     '
+'End Sub                                                                                                                   '
+'Sub DoFolder(Folder, ws As Worksheet) 'USED WITH GetPDFPageCount                                                          '
+'    Dim SubFolder, File                                                                                                   '
+'    Dim i As Long                                                                                                         '
+'    Dim r As Long                                                                                                         '
+''    Dim c As Long                                                                                                        '
+''    Dim xStr As String                                                                                                   '
+''    Dim xFileNum As Long                                                                                                 '
+''    Dim RegExp As Object                                                                                                 '
+'    For Each SubFolder In Folder.SubFolders                                                                               '
+'        DoFolder SubFolder, ws 'recursive call                                                                            '
+'        DoEvents                                                                                                          '
+'    Next                                                                                                                  '
+'    'no more subfolders at this stage                                                                                     '
+'    r = ws.UsedRange.Rows.Count + 1                                                                                       '
+'    i = r                                                                                                                 '
+'    'loop through all files in current folder                                                                             '
+'    For Each File In Folder.Files                                                                                         '
+'        Cells(i, 1) = Folder                                                                                              '
+'        Cells(i, 2) = File.Name                                                                                           '
+'        'open file and retrieve page count as string                                                                      '
+'        Cells(i, 3) = GetPageCountFromPDF(File.Path)                                                                      '
+'        DoEvents                                                                                                          '
+'        i = i + 1                                                                                                         '
+'    Next                                                                                                                  '
+'End Sub                                                                                                                   '
+'--------------------------------------------------------------------------------------------------------------------------'
+'Public Function GetPageCountFromPDF(longNameOfPDF As String) As String                                                    '
+'    Dim stringFromPDF As String                                                                                           '
+'    Dim fileNumberForPDF As Long                                                                                          '
+'    Dim vbsRegEx As Object                                                                                                '
+'    Set vbsRegEx = CreateObject("VBscript.RegExp")                                                                        '
+'    vbsRegEx.Global = True                                                                                                '
+'    vbsRegEx.Pattern = "/Type\s*/Page[^s]"                                                                                '
+'    fileNumberForPDF = FreeFile                                                                                           '
+'    Open (Replace(longNameOfPDF, """", vbNullString)) For Binary As #fileNumberForPDF                                     '
+'        stringFromPDF = Space(LOF(fileNumberForPDF))                                                                      '
+'        Get #fileNumberForPDF, , stringFromPDF                                                                            '
+'    Close #fileNumberForPDF                                                                                               '
+'    GetPageCountFromPDF = vbsRegEx.Execute(stringFromPDF).Count                                                           '
+'End Function                                                                                                              '
+'=========================================================================================================================='

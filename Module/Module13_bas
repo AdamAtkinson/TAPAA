@@ -1,0 +1,110 @@
+Attribute VB_Name = "Module13"
+Option Explicit
+
+'add deliminated string of every line in the invoice description for every invoice
+Sub Macro1()
+Attribute Macro1.VB_ProcData.VB_Invoke_Func = " \n14"
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+For i = 2 To wb.Sheets.Count
+    s = vbNullString
+    Set ws = wb.Sheets(i)
+    For Each r In ws.Range(ws.Range("B1").End(xlDown), ws.Range("B" & ws.UsedRange.Rows.Count))
+        s = s & "___" & r.Value
+    Next r
+    wb.Sheets(1).Range("H" & i) = s
+Next i
+End Sub
+
+
+'change all hyperlinks from "'Sheet42'!..." to "'The Lawn Ranger Summary'!"...
+Sub Macro2()
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+For i = 2 To wb.Sheets.Count
+    Set ws = wb.Sheets(i)
+    If ws.Range("A1").Hyperlinks.Count = 1 Then
+        With ws.Range("A1").Hyperlinks(1)
+            .SubAddress = Replace(.SubAddress, "Sheet42", "The Lawn Ranger Summary")
+        End With
+    End If
+    
+Next i
+End Sub
+
+'move all hyperlinks from column N to column A
+Sub Macro3()
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+    Set ws = wb.Sheets(1)
+    For i = 2 To ws.UsedRange.Rows.Count
+        If ws.Range(ws.Cells(i, 3).Address).Hyperlinks.Count = 1 Then
+            With ws.Cells(i, 3).Hyperlinks(1)
+                ws.Hyperlinks.Add anchor:=ws.Cells(i, 1), Address:=vbNullString, SubAddress:=.SubAddress, TextToDisplay:=ws.Cells(i, 1).Value
+            End With
+        End If
+    Next i
+End Sub
+
+'rename all worksheets from default to Invoice #
+Sub Macro4()
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+    For Each ws In wb.Worksheets
+        If Left(ws.Name, 5) = "Sheet" Then ws.Name = ws.Cells(10, 1)
+    Next ws
+End Sub
+
+
+'redirect hyperlinks to new sheet names
+Sub Macro5()
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+    Set ws = wb.Sheets(1)
+    For i = 2 To ws.UsedRange.Rows.Count
+        If ws.Range("A" & i).Hyperlinks.Count = 1 Then
+            With ws.Range("A" & i).Hyperlinks(1)
+                s = "Sheet" & i - 1
+                .SubAddress = Replace(.SubAddress, s, ws.Range("B" & i).Value)
+            End With
+        End If
+    Next i
+End Sub
+
+'change text and highlight cell to make link exceptionally obvious
+Sub Macro6()
+Dim wb As Workbook
+Set wb = Application.Workbooks("Merged.xlsx")
+Dim ws As Worksheet
+Dim r As Range
+Dim i As Long
+Dim s As String
+    For Each ws In wb.Worksheets
+        If ws.Range("A1").Hyperlinks.Count = 1 Then
+            With ws.Range("A1").Hyperlinks(1)
+                .TextToDisplay = "Click to go back to Summary"
+            End With
+            ws.Range("A1").Cells.Interior.Color = vbYellow
+        End If
+    Next ws
+End Sub

@@ -1,0 +1,10 @@
+Attribute VB_Name = "APappInitialization"
+Option Explicit
+
+Public Sub startAP()
+MsgBox "this should not be called"
+'    If gcAP Is Nothing Then
+'        Set gcAP = New APApplication.APclsMainApplication
+'        gcAP.LoadAP
+'    End If
+End Sub

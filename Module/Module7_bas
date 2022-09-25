@@ -1,0 +1,182 @@
+Attribute VB_Name = "Module7"
+Option Explicit
+
+
+
+Sub abc()
+Dim PDF As PDFPlus.App
+Dim dv As PDFPlus.DVDoc
+Dim dd As PDFPlus.DDDoc
+Dim ddpg As PDFPlus.DDPage
+
+Set PDF = New PDFPlus.App
+Set dv = PDF.GetActiveDoc
+Set dd = dv.GetDDDoc
+Set ddpg = dd.AcquirePage(0)
+Dim txt As PDFPlus.DDTextSelect
+Dim ann As PDFPlus.DDAnnot
+
+Dim cnt As Long
+
+cnt = ddpg.GetNumAnnots
+
+Dim i As Long
+
+i = 0
+Set ann = ddpg.GetAnnot(i)
+Set txt = dd.CreateTextSelect(0, ann.GetRect)
+'dbp ann.GetContents
+'dbp ann.GetTitle
+Dim a As Long
+a = txt.GetNumText
+dbP txt.GetText(i)
+
+End Sub
+
+
+'Option Explicit
+'
+'' ----==== API Declarations ====----
+'
+'Private Type GdiplusStartupInput
+'   GdiplusVersion As Long
+'   DebugEventCallback As Long
+'   SuppressBackgroundThread As Long
+'   SuppressExternalCodecs As Long
+'End Type
+'
+'Private Declare Function GdiplusStartup Lib "GDIPlus" ( _
+'   token As Long, _
+'   inputbuf As GdiplusStartupInput, _
+'   Optional ByVal outputbuf As Long = 0) As Long
+'
+'Private Declare Function GdiplusShutdown Lib "GDIPlus" ( _
+'   ByVal token As Long) As Long
+'
+'Private Declare Function GdipCreateBitmapFromFile Lib "GDIPlus" ( _
+'   ByVal filename As Long, _
+'   bitmap As Long) As Long
+'
+'Private Declare Function GdipDisposeImage Lib "GDIPlus" ( _
+'   ByVal image As Long) As Long
+'
+'Private Declare Function GdipCreateHBITMAPFromBitmap Lib "GDIPlus" ( _
+'   ByVal bitmap As Long, _
+'   hbmReturn As Long, _
+'   ByVal background As Long) As Long
+'
+'Private Type PICTDESC
+'   cbSizeOfStruct As Long
+'   picType As Long
+'   hgdiObj As Long
+'   hPalOrXYExt As Long
+'End Type
+'
+'Private Type IID
+'   Data1 As Long
+'   Data2 As Integer
+'   Data3 As Integer
+'   Data4(0 To 7)  As Byte
+'End Type
+'
+'Private Declare Sub OleCreatePictureIndirect Lib "oleaut32.dll" ( _
+'   lpPictDesc As PICTDESC, _
+'   riid As IID, _
+'   ByVal fOwn As Boolean, _
+'   lplpvObj As Object)
+'
+''------------------------------------------------------
+'' Procedure : LoadPicturePlus
+'' Purpose   : Loads an image using GDI+
+'' Returns   : The image loaded in a StdPicture object
+'' Author    : Eduardo A. Morcillo
+''------------------------------------------------------
+''
+'Public Function LoadPicturePlus( _
+'    ByVal filename As String) As StdPicture
+'Dim tSI As GdiplusStartupInput
+'Dim lGDIP As Long
+'Dim lRes As Long
+'Dim lBitmap As Long
+'
+'   ' Initialize GDI+
+'   tSI.GdiplusVersion = 1
+'   lRes = GdiplusStartup(lGDIP, tSI)
+'
+'   If lRes = 0 Then
+'
+'      ' Open the image file
+'      lRes = GdipCreateBitmapFromFile(StrPtr(filename), lBitmap)
+'
+'      If lRes = 0 Then
+'
+'         Dim hBitmap As Long
+'
+'         ' Create a GDI bitmap
+'         lRes = GdipCreateHBITMAPFromBitmap(lBitmap, hBitmap, 0)
+'
+'         ' Create the StdPicture object
+'         Set LoadPicturePlus = HandleToPicture(hBitmap, vbPicTypeBitmap)
+'
+'         ' Dispose the image
+'         GdipDisposeImage lBitmap
+'
+'      End If
+'
+'      ' Shutdown GDI+
+'      GdiplusShutdown lGDIP
+'   End If
+'
+'   If lRes Then Err.Raise 5, , "Cannot load file"
+'
+'End Function
+'
+''------------------------------------------------------
+'' Procedure : HandleToPicture
+'' Purpose   : Creates a StdPicture object to wrap a GDI
+''             image handle
+''------------------------------------------------------
+''
+'Public Function HandleToPicture( _
+'   ByVal hGDIHandle As Long, _
+'   ByVal ObjectType As PictureTypeConstants, _
+'   Optional ByVal hPal As Long = 0) As StdPicture
+'Dim tPictDesc As PICTDESC
+'Dim IID_IPicture As IID
+'Dim oPicture As IPicture
+'
+'   ' Initialize the PICTDESC structure
+'   With tPictDesc
+'      .cbSizeOfStruct = Len(tPictDesc)
+'      .picType = ObjectType
+'      .hgdiObj = hGDIHandle
+'      .hPalOrXYExt = hPal
+'   End With
+'
+'   ' Initialize the IPicture interface ID
+'   With IID_IPicture
+'      .Data1 = &H7BF80981
+'      .Data2 = &HBF32
+'      .Data3 = &H101A
+'      .Data4(0) = &H8B
+'      .Data4(1) = &HBB
+'      .Data4(3) = &HAA
+'      .Data4(5) = &H30
+'      .Data4(6) = &HC
+'      .Data4(7) = &HAB
+'   End With
+'
+'   ' Create the object
+'   OleCreatePictureIndirect tPictDesc, IID_IPicture, _
+'                            True, oPicture
+'
+'   ' Return the picture object
+'   Set HandleToPicture = oPicture
+'
+'End Function
+'
+'
+'Sub testinggrg()
+'LoadPicturePlus "C:\Users\e-aatkinson\AppData\Local\VBA\Temp\191126-2347_JWWRRC.png"
+'HandleToPicture "C:\Users\e-aatkinson\AppData\Local\VBA\Temp\191126-2347_JWWRRC.png"
+'End Sub

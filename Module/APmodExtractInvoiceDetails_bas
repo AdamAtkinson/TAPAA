@@ -1,0 +1,1474 @@
+Attribute VB_Name = "APmodExtractInvoiceDetails"
+Option Explicit
+Option Private Module
+
+
+Private Const DBLLN As String = vbNewLine & vbNewLine
+Private Const EXTRACTED_TABLE_NAME As String = "tbl_Extracted"
+Private Const mCONTINUEBUTTON_CAPTION As String = "Load PDF's"
+Private Const mCONTINUEBUTTON_NAME As String = "btn_Continue"
+Private Const mTERMINATEBUTTON_CAPTION As String = "Cancel"
+Private Const mTERMINATEBUTTON_NAME As String = "btn_Cancel"
+
+Private Type InvoiceStructure
+    invNumber As String
+    invDate As Date
+    invAmount As Double
+    invDescription As String
+    invAccount As String
+    invAlias As String
+    invPO As String
+    invSheetName As String
+    invFilename As String
+    invValidFlag As Boolean
+End Type
+
+Private mPDF As APclsPDF
+Private mPDFname As String
+Private mwsExtractionSummary As Worksheet
+Private mSupplierList() As String '(VENDOR NAME, IDENDIFYING CRITERIA)
+Private mSupplierIndex As Integer
+Private mInvoices() As Variant
+Private mInvIndex As Integer
+Private mTargetRange As Range
+Private mInvoiceCount As Long
+Private mExtractedFieldUBound As Long
+Private mloExtractedInvoices As ListObject
+Private mDoNotCloseWS As Boolean
+
+
+Public Property Get pdfDoc() As APclsPDF
+    Set pdfDoc = mPDF
+End Property
+Public Property Get pdfName() As String
+    pdfName = mPDFname
+End Property
+Sub testingthisnow()
+   
+    Dim excelState As New APclsExcelStates
+
+End Sub
+
+Sub ExtractInvoicesFromConvertedPDF(Optional wbExtractedInvoices As Workbook, Optional ByVal convertedPDFlongFilename As String)
+
+    Dim r As Range
+    Dim i As Integer
+    Dim ws As Worksheet
+    Dim flgPass As Boolean
+    Dim flgFail As Boolean
+    Dim fullWorkbookName As String
+    Dim strVal As String
+    Dim btn As button
+
+    If Not InvoiceBatchEnvironmentWasInitialized Then Call InitializeInvoiceBatchEnvironment
+    If gcIni.Configured = False Then
+        MsgBox "Initialization Failure"
+        Exit Sub
+    End If
+    
+'    Dim doNotImport As Boolean
+'    If Len(convertedPDFlongFilename) = 0 And wbExtractedInvoices Is Nothing Then
+'        Select Case MsgBox("Yes to import into active batch" & vbNewLine & _
+'                            "No to extract but not import" & vbNewLine & _
+'                            "Cancel to exit process", vbYesNoCancel + vbInformation, "Select PDF Conversion To Import")
+'            Case vbYes
+'                'do nothing
+'            Case vbNo
+'                doNotImport = True
+'            Case vbCancel
+'                Exit Sub
+'        End Select
+'    End If
+    
+    If Len(convertedPDFlongFilename) = 0 And wbExtractedInvoices Is Nothing Then
+        If Dir(ActiveFolder, vbDirectory) <> vbNullString Then strVal = ActiveFolder & "\_NUANCE MERGE DESTINATION"
+        With Application.FileDialog(msoFileDialogOpen)
+            .InitialFileName = strVal
+            .AllowMultiSelect = False
+            .Filters.Clear
+            .Filters.Add "Excel Files", "*.xlsx", 1
+            .Show
+            If .SelectedItems.Count = 1 Then
+                fullWorkbookName = .SelectedItems(1)
+            Else
+                'if selected items = 0 or > 1 then drop the job
+                MsgBox "Selected file count <> 1, exiting"
+                Exit Sub
+            End If
+        End With
+    Else
+        fullWorkbookName = convertedPDFlongFilename
+    End If
+
+    Dim excelState As New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+
+    If wbExtractedInvoices Is Nothing Then Set wbExtractedInvoices = Workbooks.Open(fullWorkbookName)
+
+    If ActiveSheet.Name <> APsheetBatch.Name Then APsheetBatch.Activate
+    loInvoiceBatch.DataBodyRange(GetLastNonEmptyListRowInTable(loInvoiceBatch).Range.Row, 1).Select
+        
+    
+'    Dim firstImportRow As Range
+'    If xGetLastRowAsINTERSECTinRange(loInvoiceBatch.Range, firstImportRow) Then firstImportRow(2).Select
+    
+    
+    'CRITERIA USED TO IDENTIFY VENDOR
+    ReDim mSupplierList(1 To loPDFVendors.ListRows.Count, 0 To 1) '(VENDOR NAME, IDENDIFYING CRITERIA)
+    For i = 1 To loPDFVendors.ListRows.Count
+        mSupplierList(i, 0) = loPDFVendors.ListColumns(sTABLE_COL_PDFVENDORS_SUPPLIERNAME).DataBodyRange(i)
+        mSupplierList(i, 1) = loPDFVendors.ListColumns(sTABLE_COL_PDFVENDORS_SEARCHKEY).DataBodyRange(i)
+    Next
+
+    mInvIndex = 0
+    mExtractedFieldUBound = 10
+    ReDim mInvoices(0 To mExtractedFieldUBound, 0 To 1)
+    mInvoices(0, mInvIndex) = "Invoice Number"        'INVOICE NUMBER COLUMN
+    mInvoices(1, mInvIndex) = "Supplier Name"         'SUPPLIER NAME COLUMN
+    mInvoices(2, mInvIndex) = "Invoice Date"          'INVOICE DATE COLUMN
+                                                      'EXP PEROD COLUMN         (EMPTY)
+    mInvoices(3, mInvIndex) = "Invoice Amount"        'INVOICE AMOUNT COLUMN
+    mInvoices(4, mInvIndex) = "Alias"                 'ALIAS COLUMN
+                                                      'FACILITY NAME COLUMN     (EMPTY)
+    mInvoices(5, mInvIndex) = "GL Account"            'GL ACCOUNT COLUMN
+    mInvoices(6, mInvIndex) = "Invoice Description"   'INVOICE DESCRIPTION COLUMN
+                                                      'FACILITY NAME            (EMPTY)
+                                                      'APPROVER NAME            (EMPTY)
+                                                      'SUPPLIER SIDE ADDRESS    (EMPTY)
+                                                      'INVOICE FILE NAME        (EMPTY)
+    mInvoices(7, mInvIndex) = "Filename"              'Filename of Invoice
+    mInvoices(8, mInvIndex) = "Invoice PO"            'INVOICE PO NUMBER COLUMN
+    mInvoices(9, mInvIndex) = "Sheet Name"            'WORKSHEE NAME COLUMN
+    mInvoices(10, mInvIndex) = "Valid Flag"           'ERROR FLAG HALTS AUTOPROCESSING
+
+
+    'open pdf containing all docs
+    mPDFname = Replace(fullWorkbookName, "xlsx", "pdf")
+    Set mPDF = New APclsPDF
+    mPDF.OpenDocumentFull mPDFname, False
+    If mPDF.ExposedDDdoc Is Nothing Then
+        MsgBox "no pdf"
+        Exit Sub
+    End If
+    For Each ws In wbExtractedInvoices.Sheets
+
+        mSupplierIndex = 1
+        
+        Do 'Until flgPass Or flgFail
+
+            Set r = ws.UsedRange.Find(mSupplierList(mSupplierIndex, 1), lookat:=xlPart, MatchCase:=False)
+            If r Is Nothing Then
+                If mSupplierIndex < UBound(mSupplierList) Then
+                    mSupplierIndex = mSupplierIndex + 1
+                    i = 1
+                Else
+                    flgFail = True
+                End If
+            Else
+                flgPass = True
+            End If
+            DoEvents
+        Loop Until flgPass Or flgFail
+    
+        If flgFail Then mSupplierIndex = -1
+        flgPass = False
+        flgFail = False
+        DoEvents
+        If mSupplierIndex > 0 And mSupplierIndex <= loPDFVendors.ListRows.Count Then
+            Application.Run "APmodExtractInvoiceDetails." & loPDFVendors.ListColumns(sTABLE_COL_PDFVENDORS_PROCEDURENAME).DataBodyRange(mSupplierIndex), ws
+        Else
+            MsgBox "UNKNOWN ERROR: Could not locate the vendor on " & ws.Name, vbExclamation
+        End If
+        DoEvents
+    Next ws
+    
+    mInvoiceCount = mInvIndex
+  
+   ' Set mwsExtractionSummary = gcAP.wbAPapp.Sheets.Add(before:=Sheets(1))
+    Set mwsExtractionSummary = wbExtractedInvoices.Sheets.Add(before:=Sheets(1))
+
+    With mwsExtractionSummary
+        .Columns("A:A").NumberFormat = "@"
+        .Columns("C:C").NumberFormat = "m/d/yyyy"
+        .Columns("D:D").Style = "Currency"
+        .Range("A1:J" & mInvIndex + 1) = Application.WorksheetFunction.Transpose(mInvoices)
+        Set mloExtractedInvoices = .ListObjects.Add(xlSrcRange, .UsedRange, , xlYes)
+        mloExtractedInvoices.Name = EXTRACTED_TABLE_NAME
+        With .Columns("A:K")
+            .EntireColumn.AutoFit
+            .HorizontalAlignment = xlCenter
+        End With
+        
+    End With
+    
+    AddWorksheetWithNoncformantInvoices
+    
+    With mwsExtractionSummary
+        .Range("D:D").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove
+        .Columns("A").HorizontalAlignment = xlLeft
+        .Columns("B").HorizontalAlignment = xlLeft
+        .Columns("H").HorizontalAlignment = xlLeft
+        .Range("I:I").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove 'yes, i really mean to do this thrice
+        .Range("I:I").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove 'yes, i really mean to do this thrice
+        .Range("I:I").Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove 'yes, i really mean to do this thrice
+        .Columns("I:M").ColumnWidth = 17
+
+        For Each r In .ListObjects(1).ListColumns(.ListObjects(1).ListColumns.Count).DataBodyRange.Rows
+
+            'ADD LINK TO PDF FILE AND PAGE
+            .Hyperlinks.Add anchor:=.Cells(r.Row, 2), Address:=vbNullString, SubAddress:="'" & r.Value2 & "'!A1", TextToDisplay:=.Cells(r.Row, 2).Value, ScreenTip:=r.Value2
+            
+            'ADD LINK BACK TO SUMMARY SHEET
+            .Hyperlinks.Add anchor:=.Parent.Worksheets(r.Value2).UsedRange.Cells(1), Address:=vbNullString, SubAddress:="'" & Replace(Split(r.Address(external:=True), "]")(1), "!", "'!")
+            
+            .Parent.Worksheets(r.Value2).Cells.EntireRow.AutoFit
+ 
+            'ADD BUTTONS TO LINK TO PDF
+            Set btn = .buttons.Add(.Cells(r.Row, 4).Left + 1, .Cells(r.Row, 4).Top + 1, 50, .Cells(r.Row, 4).height - 2)
+            btn.Name = r.Value2
+            btn.Caption = btn.Name
+            btn.OnAction = "APmodExtractInvoiceDetails.JumpToPage"
+            
+            Set btn = .buttons.Add(.Cells(r.Row, 4).Left + 55, .Cells(r.Row, 4).Top + 1, 20, .Cells(r.Row, 4).height - 2)
+            btn.Name = Replace(r.Value2, "Sheet", vbNullString)
+            btn.Caption = btn.Name
+            btn.Font.Color = vbRed
+            btn.OnAction = "APmodExtractInvoiceDetails.DeletePage"
+
+       Next r
+       
+        'ADD BUTTON TO COMMIT PAGE
+        Set btn = .buttons.Add(.Cells(1, 4).Left + 1, .Cells(1, 4).Top + 1, .Cells(1, 4).Width - 2, .Cells(1, 4).height - 2)
+        btn.Name = "Apply"
+        btn.Caption = btn.Name
+        btn.Font.Color = vbBlue
+        btn.OnAction = "APmodExtractInvoiceDetails.TransferConvertedSheetToBatch"
+        
+        Dim vFormulas As Variant
+        ResetConditionalFormatsOnBatchSheet .ListObjects(1).ListColumns(1).DataBodyRange, vFormulas
+        For i = LBound(vFormulas) To UBound(vFormulas)
+            .ListObjects(1).ListColumns.Add (.ListObjects(1).ListColumns.Count)
+            .ListObjects(1).ListColumns(.ListObjects(1).ListColumns.Count - 1).DataBodyRange(1).Formula = vFormulas(i)
+            For Each r In .ListObjects(1).ListColumns(.ListObjects(1).ListColumns.Count - 1).DataBodyRange
+                If r.Value = True Then r.EntireRow.Interior.Color = vbYellow
+            Next r
+            .ListObjects(1).ListColumns(.ListObjects(1).ListColumns.Count - 1).Delete
+        Next i
+
+        
+        
+        
+    End With
+    
+    mwsExtractionSummary.Activate
+   ' If Not doNotImport Then TransferConvertedSheetToBatch mwsExtractionSummary
+    
+'selection.onaction = "'[AP.xlsm]!apapplication.APmodExtractInvoiceDetails.testcallback ""C:\Users\e-aatkinson\iServe\Active Queue\_MAIL PROCESSING\Scanned from a Xerox Multifunction Printer.pdf#PAGE=1""'"
+        
+End Sub
+
+Public Sub JumpToPage()
+    Dim pn As Long
+    pn = CLng(Replace(Application.caller, "Sheet", vbNullString))
+    dbP Application.caller
+    mPDF.ExposedDVpageView.Goto pn - 1
+End Sub
+Public Sub DeletePage()
+    Dim excelState As New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    StopScreen
+    Select Case MsgBox("Really delete this page from the PDF and remove the row?", vbYesNo, "Confirm Delete")
+        Case vbYes
+            If mwsExtractionSummary Is Nothing Then Set mwsExtractionSummary = ActiveSheet
+            If mPDF Is Nothing Then
+                mPDFname = Replace(mwsExtractionSummary.Parent.Name, "xlsx", "pdf")
+                Set mPDF = New APclsPDF
+                mPDF.OpenDocumentFull mPDFname, False
+            End If
+            Dim pn As Long
+            pn = CLng(Application.caller)
+            Dim wsName As String
+            wsName = "Sheet" & CStr(pn)
+            Application.DisplayAlerts = False
+            mwsExtractionSummary.Parent.Worksheets(wsName).Delete
+            Application.DisplayAlerts = True
+            Dim lr As ListRow
+            Set lr = mwsExtractionSummary.ListObjects(1).ListRows(pn)
+            mPDF.ExposedDDdoc.DeletePages pn - 1, pn - 1
+            lr.Delete
+            RenameButtons
+        Case vbNo
+            'do nothing
+    End Select
+End Sub
+Private Sub RenameButtons()
+    Dim btn As button
+    For Each btn In mwsExtractionSummary.buttons
+        If btn.Name Like "Sheet#*" Then
+            Dim wsName As String
+            wsName = btn.Name
+            btn.Name = "Sheet" & btn.TopLeftCell.Row - 1
+            btn.Caption = btn.Name
+            mwsExtractionSummary.Parent.Worksheets(wsName).Name = btn.Name
+        ElseIf IsNumeric(btn.Name) Then
+            btn.Name = btn.TopLeftCell.Row - 1
+            btn.Caption = btn.Name
+        End If
+    Next btn
+End Sub
+
+Sub testcallback(Optional ByVal parm As String)
+Debug.Print Application.caller, parm
+'Debug.Print Application.caller.Parent.Name
+End Sub
+
+Sub linkpdfpage1()
+'Worksheets("Sheet1").Activate
+Shell ("C:\Program Files\Internet Explorer\iexplore.exe " + "C:\Users\e-aatkinson\iServe\Active Queue\_MAIL PROCESSING\Scanned from a Xerox Multifunction Printer.pdf#PAGE=20")
+End Sub
+
+Sub linkpdfpage()
+Worksheets("Sheet1").Activate
+Shell ("C:\Program Files\Internet Explorer\iexplore.exe " + ActiveCell.Value)
+End Sub
+
+Sub AttemptResumeAfterInteruption()
+    If gcAP Is Nothing Then LoadFrontEnd
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    Dim wbs() As Variant
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    ReDim wbs(0 To 0)
+    For Each wb In Application.Workbooks
+        With wb.Worksheets(1)
+            If .CodeName <> gcAP.wbAPapp.Worksheets(1).CodeName And .Shapes.Count > 0 Then
+                Dim sh As Shape
+                For Each sh In .Shapes
+                    If sh.Name = "Apply" Then
+                        Dim flagOK As Boolean
+                        Dim transmuteArray() As Variant
+                        transmuteArray = wbs
+                        wbs = ExpandArray(wbs, flagOK, True, 1)
+                        If Not flagOK Then MsgBox "Error resizing array"
+                        Set wbs(UBound(wbs)) = wb
+                        Exit For
+                    End If
+                Next sh
+            End If
+        End With
+    Next wb
+    
+    Select Case UBound(wbs)
+        Case 0
+            MsgBox "Worksheet not found"
+        Case 1
+            Set mwsExtractionSummary = wbs(1).Worksheets(1)
+            Set mloExtractedInvoices = mwsExtractionSummary.ListObjects(1)
+        Case Else
+            MsgBox "More than one sheet found"
+    End Select
+        
+    
+End Sub
+
+Sub TransferConvertedSheetToBatch()
+    Dim tgt As Range
+    Dim i As Long
+    
+    If mwsExtractionSummary Is Nothing Then
+        AttemptResumeAfterInteruption
+        If mwsExtractionSummary Is Nothing Then
+            MsgBox "Extraction Sheet is not set", vbExclamation, "Unable to Import Sheet"
+            Exit Sub
+        End If
+    End If
+    
+    Dim excelState As New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    
+    StopScreen
+    StopEvents
+    
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange(loInvoiceBatch.ListRows.Count) <> vbNullString _
+            Or loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange(loInvoiceBatch.ListRows.Count) <> vbNullString Then _
+            loInvoiceBatch.ListRows.Add
+            
+    i = loInvoiceBatch.Range.Rows.Count
+    Set tgt = APsheetBatch.Range("A" & i)
+    
+    APsheetBatch.Range(APsheetBatch.Cells(i, 1), APsheetBatch.Cells(i + mInvIndex - 1, mloExtractedInvoices.ListColumns.Count - 1)).Value _
+            = mwsExtractionSummary.Range(mwsExtractionSummary.Cells(2, 1), mwsExtractionSummary.Cells(mInvIndex + 1, mloExtractedInvoices.ListColumns.Count - 1)).Value
+        
+        
+    'Application.DisplayAlerts = False
+    mwsExtractionSummary.Parent.Close savechanges:=False
+
+    APsheetBatch.Activate
+    tgt.Select
+    
+    ResumeEvents
+    
+    'set module variables because this procedure is about to terminate and they will be used when worksheet buttons are pressed
+    Set mTargetRange = tgt
+    
+    If Not mPDF Is Nothing Then
+        mPDF.ExposedDDdoc.Save DDSaveFull, mPDFname
+        If mPDF.ExposedDDdoc.GetFlags <> 0 Then
+            MsgBox "Unknown Error Saving PDF"
+        Else
+            mPDF.CloseDocumentDV
+        End If
+    End If
+
+    
+End Sub
+
+Sub AddWorksheetWithNoncformantInvoices()
+    Dim i As Long
+    Dim r As Range
+    Dim wsNonconformant As Worksheet
+    Dim returnArray() As String
+    Dim info As Single: info = 0
+    Dim rown As Single: rown = 1
+    Dim filn As Single: filn = 2
+    Dim offs As Single: offs = -3
+    
+    StopEvents
+    
+    ReDim returnArray(info To filn, 0 To 0)
+    returnArray(info, info) = "Row Number"
+    returnArray(info, info) = "File Name"
+    
+    Set r = mwsExtractionSummary.Range("J2:J" & mInvoiceCount).Find(False, lookat:=xlWhole, MatchCase:=False)
+    Do While Not r Is Nothing
+        ReDim Preserve returnArray(info To filn, info To UBound(returnArray, 1) + 1)
+        returnArray(rown, UBound(returnArray, 1)) = r.Row
+        returnArray(filn, UBound(returnArray, 1)) = r.Offset(0, offs)
+        Set r = mwsExtractionSummary.Range("J2:J" & mInvoiceCount).FindNext
+    Loop
+    
+    If LBound(returnArray, 1) > 0 Then
+        Set wsNonconformant = mwsExtractionSummary.Parent.Sheets.Add(before:=Sheets(1))
+        wsNonconformant.Range("A1:B" & UBound(returnArray, 1)) = Application.WorksheetFunction.Transpose(returnArray)
+        For i = UBound(returnArray, 1) To 1 Step -1
+            wsNonconformant.Rows.EntireRow(returnArray(rown, i)).Delete
+        Next i
+    End If
+    
+    ResumeEvents
+    
+End Sub
+
+
+
+Private Function Fix1900DateError(DateToFix As Date) As Date
+    Dim strYear As String
+    Dim correctDay As String
+    Dim correctMonth As String
+    Dim correctYear As String
+    If IsDate(DateToFix) Then
+        correctDay = Day(DateToFix)
+        correctMonth = Month(DateToFix)
+        correctYear = "20" & Right(CStr(Year(DateToFix)), 2)
+        Fix1900DateError = DateValue(correctMonth & "/" & correctDay & "/" & correctYear)
+    End If
+End Function
+
+Private Sub NewFillInvoiceArray(Invoice As InvoiceStructure)
+
+    With Invoice
+        mInvIndex = mInvIndex + 1
+        If .invDate < DateSerial(2018, 1, 1) Then .invDate = Fix1900DateError(.invDate)
+        'If Now - .invDate > 180 Or Now - .invDate < -45 Then .invDate = Empty
+        ReDim Preserve mInvoices(0 To mExtractedFieldUBound, 0 To mInvIndex)
+        mInvoices(0, mInvIndex) = .invNumber
+        mInvoices(1, mInvIndex) = mSupplierList(mSupplierIndex, 0)
+        mInvoices(2, mInvIndex) = .invDate
+        mInvoices(3, mInvIndex) = .invAmount
+        mInvoices(4, mInvIndex) = .invAlias
+        mInvoices(5, mInvIndex) = .invAccount
+        mInvoices(6, mInvIndex) = .invDescription
+        If UBound(PDF_Array) > 0 Then
+            mInvoices(7, mInvIndex) = PDF_Array(mInvIndex)
+        Else
+            mInvoices(7, mInvIndex) = vbNullString 'Worksheets(.invSheetName).Parent.FullName
+        End If
+        mInvoices(8, mInvIndex) = .invPO
+        mInvoices(9, mInvIndex) = .invSheetName
+        mInvoices(10, mInvIndex) = ValidatedInvoice(Invoice)
+    End With
+End Sub
+
+Private Function ValidatedInvoice(Invoice As InvoiceStructure) As Boolean
+    Dim returnValue As Boolean: returnValue = True
+    With Invoice
+        If IsDate(.invDate) Then
+            If Abs(Now - .invDate) > LIMIT_DATEDIFFERENCE Then returnValue = False
+        Else
+            returnValue = False
+        End If
+        If Not NoNullStringValues(.invAccount, .invAlias, .invDescription, .invNumber) Then returnValue = False
+        If .invAmount = 0 Then returnValue = False
+
+    End With
+    ValidatedInvoice = returnValue
+End Function
+
+'POST ACUTE
+Private Sub POST_ACUTE_CARE_LLC(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        
+        Set r = ws.Range("A1:B100").Find("Credit Note Number", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = r.Offset(1, 0)
+            If r.Row > 1 Then
+                If r.Offset(-1, 0) Like "*????##??####" Then
+                    .invDate = Right(r.Offset(-1, 0), 12)
+                ElseIf IsDate(r.Offset(-1, 0)) Then
+                    .invDate = r.Offset(-1, 0)
+                End If
+            End If
+        Else
+            Set r = ws.Range("A1:B100").Find("Invoice Number", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invNumber = r.Offset(1, 0)
+                If r.Row > 1 Then
+                    If r.Offset(-1, 0) Like "*????##??####" Then
+                        .invDate = Right(r.Offset(-1, 0), 12)
+                    ElseIf IsDate(r.Offset(-1, 0)) Then
+                        .invDate = r.Offset(-1, 0)
+                    End If
+                End If
+            End If
+        End If
+        If Not .invDate Like "*#?*#?####" Then
+            Set r = ws.Range("B1:B100").Find("Invoice Date", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then .invDate = r.Offset(1, 0)
+        End If
+        Set r = ws.Range("C1:C100").Find("Customer No.", lookat:=xlWhole, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invDescription = r.Offset(1, 0)
+            Select Case .invDescription
+                Case Is = "CAR04"
+                    .invAlias = "143170"
+                Case Is = "CAR03"
+                    .invAlias = "143120"
+                Case Is = "CAR05"
+                    .invAlias = "143175"
+                Case Is = "COU01"
+                    .invAlias = "144400"
+                Case Is = "CAR01"
+                    .invAlias = "114035"
+                Case Else
+                    .invDescription = vbNullString
+            End Select
+        End If
+        If .invDescription <> vbNullString Then .invDescription = .invDescription & " CUST #"
+        Set r = ws.Range("E1:E100").Find("Rental", lookat:=xlPart, MatchCase:=False)
+        If r Is Nothing Then Set r = ws.Range("E1:E100").Find("Start Date", lookat:=xlPart, MatchCase:=False)
+        If r Is Nothing Then Set r = ws.Range("E1:E100").Find("End Date", lookat:=xlPart, MatchCase:=False)
+        If r Is Nothing Then
+            .invAccount = "560301"
+        Else
+            .invAccount = "560711"
+        End If
+        .invAmount = ws.UsedRange.Cells(ws.UsedRange.Cells.Count)
+        If .invAmount = 0 Then .invAmount = ws.UsedRange.Cells(ws.UsedRange.Cells.Count).End(xlUp).Value
+        If Left(.invNumber, 2) = "CN" Then .invAmount = -Abs(.invAmount)
+        If Len(.invNumber) = 12 Then .invNumber = CStr(Val(Right(.invNumber, 10)))
+        .invSheetName = ws.Name
+    End With
+
+    Call NewFillInvoiceArray(Invoice)
+
+End Sub
+
+'PREMIER MEDICAL
+Private Sub PREMIER_MEDICAL_DISTRIBUTION_LLC(ws As Worksheet)
+    Dim ary() As String
+    Dim strRange As String
+    Dim PONumber As String
+    Dim poIsValidated As Boolean
+    Dim strVal As String
+    Dim r As Range
+    Dim i As Integer
+    Dim Invoice As InvoiceStructure
+
+    With Invoice
+    
+        Set r = ws.Range("A1:B100").Find("CREDIT NOTE", lookat:=xlPart, MatchCase:=False)
+        If r Is Nothing Then
+            Set r = ws.Range("A1:B100").Find("INVOICE NO.", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invNumber = Left(r.Offset(2, 0), 7)
+                If IsDate(r.Offset(3, 0)) Then .invDate = r.Offset(3, 0)
+                If r.Row > 1 Then
+                    If r.Offset(-1, 0) Like "*????##??####" Then
+                        .invDate = Right(r.Offset(-1, 0), 12)
+                    End If
+                End If
+            End If
+        Else
+            .invNumber = Right(r.Offset(1, 0), 7)
+            .invDate = Right(Replace(r.Offset(2, 0), ".", "/"), 8)
+        End If
+        Set r = ws.Range("A1:B100").Find("CUSTOMER", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            If r.Offset(1, 0) = "J0952" Or r.Offset(1, 0) = "C0952" Then
+                .invDescription = r.Offset(1, 0) & " CUST #"
+            Else
+                .invDescription = Replace(r.Value, "CUSTOMER ", vbNullString) & " CUST #"
+            End If
+        End If
+        Set r = ws.Range("Q1:Q100").Find("MNTH", lookat:=xlPart, MatchCase:=False)
+        If r Is Nothing Then
+            .invAccount = "560301"
+        Else
+            .invAccount = "560711"
+        End If
+        .invAlias = "144400"
+        
+        strVal = "=========="
+        strRange = "R1:Z70"
+        
+        On Error GoTo CATCH
+TRYAGAIN:
+        If strVal = vbNullString Then
+            Application.ScreenUpdating = True
+            ws.Activate
+            mDoNotCloseWS = True
+            ActiveWindow.ScrollRow = ws.Cells(10, 1).End(xlDown).Row
+            MsgBox "Unable to find the amount for invoice" & .invNumber & DBLLN _
+                    & "The fallback of '==========' was not found" & DBLLN & ws.Name, _
+                    vbInformation, "Premier Distribution"
+            Application.ScreenUpdating = False
+        End If
+        Set r = ws.Range(strRange).Find(strVal, lookat:=xlPart, LookIn:=xlFormulas, MatchCase:=False, SearchFormat:=False)
+        strVal = r.Value
+        
+        On Error GoTo 0
+        
+        If strRange <> "J1:N70" Then
+            If r.Value = "==========" Then
+                If r.Offset(-1, 0).Value = vbNullString Then strVal = r.Offset(1, 0).Value
+                If r.Offset(1, 0).Value = vbNullString Then strVal = r.Offset(-1, 0).Value
+                If strVal = vbNullString Then MsgBox "Unable to continue because both sides of the terminus are null"
+            Else
+                ary = Split(r, Chr(10))
+                If ary(UBound(ary)) = "==========" Then
+                    strVal = ary(UBound(ary) - 1)
+                Else
+                    strVal = ary(UBound(ary))
+                End If
+            End If
+            
+            If Right(strVal, 1) = "-" And Left(.invNumber, 1) = "C" Then
+                .invAmount = -CDbl(Left(strVal, Len(strVal) - 1))
+            ElseIf Left(.invNumber, 1) = "C" Then
+                If strVal <> 0 Then MsgBox "Unable to continue because the invoice number designates credit but the value was found to be positive"
+                .invAmount = 0
+            ElseIf Right(strVal, 1) = "-" Then
+                MsgBox "Unable to continue because the value was found to be negative but the invoice number does not designate a credit"
+            Else
+                .invAmount = CDbl(strVal)
+            End If
+        Else
+            .invDescription = "Page 1 of 2"
+        End If
+        
+    
+        Set r = ws.Range("K1:O100").Find("PO BOX 901", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invDescription = "Check Address"
+            .invAccount = vbNullString
+            .invAmount = 0
+            mDoNotCloseWS = True
+        End If
+        
+    ''------------------------------------------------------------------------------------------------
+    ''------------------------------------------------------------------------------------------------
+    ''SPECIAL CASE - WORK WITH PO NUMBER
+    ''------------------------------------------------------------------------------------------------
+        'find po number on invoice
+        Set r = ws.Range("A1:C100").Find("CUSTOMER P.O.", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            Set r = r.Offset(1, 0)
+        Else
+            Set r = ws.Range("A1:B100").Find("LN", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then Set r = r.Offset(-1, 0)
+        End If
+        'verify po number is where it is expected
+        If Not r Is Nothing And IsDate(r.Offset(0, 1)) Then
+            PONumber = r.Value
+            poIsValidated = True
+        End If
+        If poIsValidated Then
+            PONumber = UCase(PONumber)
+           If PONumber Like "Z#######" Then .invPO = PONumber
+        End If
+    ''------------------------------------------------------------------------------------------------
+    ''------------------------------------------------------------------------------------------------
+    
+        .invSheetName = ws.Name
+        
+'       .invDate = Fix1900DateError(.invDate)
+
+    End With
+    
+    Call NewFillInvoiceArray(Invoice)
+    
+    Exit Sub
+
+CATCH:
+If strVal = "CONTINUED ON PAGE" Then strVal = vbNullString
+If strVal = "==========" Then strVal = "CONTINUED ON PAGE"
+strRange = "J1:N70"
+Resume TRYAGAIN
+
+End Sub
+
+
+
+
+'AFFINITY
+Private Sub AFFINITY_HOME_MEDICAL_LLC(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    Dim i As Long
+    Dim ary() As String
+    
+    With Invoice
+        Set r = ws.Range("A1:B100").Find("Due on receipt", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            ary = Split(r.Offset(-1, 0).Value, Chr(32))
+            If Not IsNumeric(ary(0)) Then
+                Set r = ws.Range("A1:B100").Find("DATE  TOTAL DUE", lookat:=xlPart, MatchCase:=False)
+                ary = Split(r.Offset(1, 0).Value, Chr(32))
+            End If
+            If IsNumeric(ary(0)) Then .invNumber = ary(0)
+            For i = 1 To UBound(ary)
+                If ary(i) <> vbNullString Then
+                    If IsNumeric(ary(i)) And .invDate <> 0 And .invAmount = 0 Then .invAmount = CDbl(ary(i))
+                    If IsDate(ary(i)) And .invDate = 0 Then .invDate = CDate(ary(i))
+                End If
+            Next
+        Else
+            Set r = ws.Range("A1:B100").Find("INVOICE #", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                If IsNumeric(r.Offset(1, 0)) Then .invNumber = r.Offset(1, 0)
+                If IsDate(r.Offset(1, 1)) Then .invDate = CDate(r.Offset(1, 1))
+                If IsNumeric(r.Offset(1, 2)) Then .invAmount = CDbl(r.Offset(1, 2))
+            Else
+                Set r = ws.Range("A1:B100").Find("Ticket: ", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    If r Like "Ticket: ############*" Then .invNumber = Right(Left(r, 20), 12)
+                    Set r = ws.Range("A1:B100").Find("Sales Receipt", lookat:=xlPart, MatchCase:=False)
+                    If Not r Is Nothing Then .invDate = Left(r.Offset(1, 0), 10)
+                    Set r = ws.UsedRange.Find("Account Charge", lookat:=xlPart, MatchCase:=False)
+                    If Not r Is Nothing Then
+                        If r.Offset(0, 1) = r.Offset(-1, 1) And IsNumeric(r.Offset(0, 1)) And r.Offset(0, 1) > 0 Then
+                            .invAmount = r.Offset(0, 1)
+                        ElseIf r Like "Account Charge $*#.##" Then
+                            r.Value = Replace(r, "Account Charge $", vbNullString)
+                            .invAmount = Left(r, InStr(r, ".") + 2)
+                        Else
+                            .invAmount = Application.WorksheetFunction.Max(ws.Columns(ws.UsedRange.Cells(ws.UsedRange.Cells.Count).Column))
+                        End If
+                    End If
+                End If
+            End If
+        End If
+        .invDescription = "COUNTRY LIFE CARE"
+        .invAlias = "144400"
+        .invAccount = "560711"
+        
+        .invSheetName = ws.Name
+    End With
+'    .invdate = Fix1900DateError(.invdate)
+    Call NewFillInvoiceArray(Invoice)
+
+End Sub
+'AIRTEC
+Private Sub AIRTEC_GASES_LLC(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim strVal As String
+    Dim r As Range
+    With Invoice
+        Set r = ws.Range("A1:A30").Find("INVOICE", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            If r Like "*O*R*I*G*I*N*A*L*I*N*V*O*I*C*E*" Then Set r = ws.Range("A1:A30").FindNext(r)
+            If IsNumeric(Right(r.Value, 8)) Then .invNumber = Right(r.Value, 8)
+            If r.Offset(0, 1) <> vbNullString Then
+                If .invNumber = vbNullString Then
+                    If Len(r.Offset(0, 1).Value) > Len("INVOICE: ") Then
+                        .invNumber = "0" & Right(r.Offset(0, 1).Value, 8)
+                    Else
+                        .invNumber = "0" & r.Offset(0, 1)
+                    End If
+                End If
+                If IsDate(Right(r.Offset(1, 0), 8)) Then
+                    .invDate = Right(r.Offset(1, 0), 8)
+                Else
+                    If Len(r.Offset(1, 1).Value) > Len("INV DATE: ") Then
+                        .invDate = Right(r.Offset(1, 1).Value, 8)
+                    Else
+                        .invDate = r.Offset(1, 1)
+                    End If
+                End If
+                If r.Offset(-1, 0) Like "*C*U*S*T*O*M*E*R*:*0*6*0*8*4*" Then
+                    .invDescription = "06084 CUST #"
+                    .invAlias = "143120"
+                ElseIf r.Offset(-1, 0) Like "*C*U*S*T*O*M*E*R*:*1*3*0*3*8*" Then
+                    .invDescription = "13038 CUST #"
+                    .invAlias = "143170"
+                End If
+                .invAccount = "560301"
+                Set r = ws.Range("A6:A70").Find("INVOICE AMOUNT:", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    .invAmount = Replace(r.Value, "INVOICE AMOUNT:", vbNullString)
+                End If
+            Else
+                If .invNumber = vbNullString Then .invNumber = "0" & r.Offset(1, 0)
+                strVal = r.Offset(3, 0)
+                .invDate = r.Offset(5, 0)
+                If r.Offset(7, 0) Like "*0*6*0*8*4*" Then
+                    .invDescription = "06084 CUST #"
+                    .invAlias = "143120"
+                ElseIf r.Offset(7, 0) Like "*1*3*0*3*8*" Then
+                    .invDescription = "13038 CUST #"
+                    .invAlias = "143170"
+                End If
+                .invAccount = "560711"
+                Set r = ws.Range("K1:N200").Find("TOTAL", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    If r.Offset(0, 1) = "CONTINUED" Then
+                        .invDescription = "PAGE " & strVal
+                    Else
+                        .invAmount = r.Offset(0, 1)
+                    End If
+                End If
+            End If
+        End If
+    
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'BRIDGE UTAH MEDIAL GROUP
+Private Sub BRIDGE_UTAH_MEDICAL_GROUP(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("INVOICE #", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = Replace(r.Value, "INVOICE # ", vbNullString)
+            .invDate = Replace(r.Offset(1, 0).Value, "DATE ", vbNullString)
+            If IsDate(.invDate) Then
+                Set r = ws.Range("A1:A100").Find("BALANCE DUE ", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    .invAmount = Replace(r.Value, "BALANCE DUE ", vbNullString)
+                    .invDescription = UCase(Format(Now, "MMM") & Chr(47) & Format(Now, "YY") & " PHYS & EDU FEE")
+                    .invAccount = "542008"
+                    .invAlias = "144400"
+                End If
+            End If
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'IMAGEFIRST HEALTHCARE LAUNDRY SPECIALISTS
+Private Sub IMAGEFIRST_HEALTHCARE_LAUNDRY_SPECIALISTS(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("PO  Due Date  Invoice Total", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = r.Offset(1, 0)
+            If IsNumeric(.invNumber) Then
+                .invDate = r.Offset(2, 0)
+                If IsDate(.invDate) Then
+                    .invAmount = r.Offset(4, 0)
+                    If IsNumeric(.invAmount) Then
+                        Set r = ws.Range("A1:A100").Find("Invoice", lookat:=xlWhole, MatchCase:=False)
+                        If Not r Is Nothing Then
+                            If .invNumber = r.Offset(0, 2) And .invDate = r.Offset(1, 2) And .invAmount = r.Offset(2, 2) Then
+                                Set r = ws.Range("A1:A100").Find("36-CAREM000", lookat:=xlPart, MatchCase:=False)
+                                If Not r Is Nothing Then
+                                    .invDescription = "36-CAREM000 ACCT #"
+                                    .invAccount = "560707"
+                                    .invAlias = "143170"
+                                End If
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'ROGER E. HITTLE
+Private Sub ROGER_E_HITTLE(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("Invoice #", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = Replace(Trim(r.Value), "Invoice #", vbNullString)
+            .invNumber = Replace(.invNumber, " ", vbNullString)
+            If Not .invNumber Like "####-####" Then .invNumber = r.Offset(0, 1)
+        End If
+        Set r = ws.Range("A1:A100").Find("Invoice Date", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            If IsDate(r.Offset(0, 1)) Then
+                .invDate = r.Offset(0, 1)
+            Else
+                .invDate = Replace(r.Value, "Invoice Date", vbNullString)
+                .invDate = Replace(.invDate, " ", vbNullString)
+            End If
+            .invDescription = Format(DateValue(.invDate), "MM/DD") & "-" & Format(DateValue(.invDate) + 6, "MM/DD") & " INTERIM ADMIN"
+        End If
+        Set r = ws.Range("A1:A100").Find("Total", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            If r = "Total" And IsNumeric(r.Offset(0, 1)) Then
+                .invAmount = r.Offset(0, 1)
+            ElseIf r = "Subtotal" And IsNumeric(r.Offset(1, 1)) Then
+                .invAmount = r.Offset(1, 1)
+            ElseIf Left(r.Value, 3) = "Sub" Then
+                Set r = ws.Range("A1:A100").FindNext(r)
+                If r = "Total" And IsNumeric(r.Offset(0, 1)) Then
+                    .invAmount = r.Offset(0, 1)
+                ElseIf r = "Subtotal" And IsNumeric(r.Offset(1, 1)) Then
+                    .invAmount = r.Offset(1, 1)
+                End If
+            Else
+                .invAmount = Replace(r.Value, "Total ", vbNullString)
+            End If
+        End If
+
+        .invAccount = "640701"
+        .invAlias = "183700"
+
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'ROCK CANYON FOOT & ANKLE CLINIC, LLC
+Private Sub ROCK_CANYON_FOOT_ANKLE_CLINIC_LLC(ws As Worksheet)
+
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    Dim strVal As String
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("INVOICE # ", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = Replace(r.Value, "INVOICE # ", vbNullString)
+            Set r = ws.Range("A1:A100").Find("Date : ", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invDate = Replace(r.Value, "Date : ", vbNullString)
+                Set r = ws.Range("A1:A100").Find("Total amount Due $", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    strVal = Replace(r.Value, "Total amount Due", vbNullString)
+                    strVal = Replace(strVal, "_", vbNullString)
+                    .invAmount = CDbl(strVal)
+                End If
+                Set r = ws.Range("B1:B100").Find("DATE SEEN", lookat:=xlWhole, MatchCase:=False)
+                If Not r Is Nothing Then
+                    .invDescription = Format(DateValue(r.Offset(1, 0)), "MM/DD") & " PODIATRY"
+                    .invAccount = "542004"
+                    .invAlias = "142300"
+                End If
+            End If
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'VEGAS VALLEY FIRE PROTECTION
+Private Sub VEGAS_VALLEY_FIRE_PROTECTION(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("Invoice Number", lookat:=xlWhole, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = r.Offset(1, 0)
+            .invDate = r.Offset(3, 0)
+            .invAmount = r.Offset(5, 0)
+            .invAmount = Replace(.invAmount, Chr(36), vbNullString) '$
+            .invAmount = Replace(.invAmount, Chr(32), vbNullString) 'space
+            Set r = ws.Range("A1:A100").Find("440001", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invDescription = "440001 JOB #"
+            Else
+                .invDescription = "SET RULE"
+            End If
+            Set r = ws.Range("A1:A100").Find("Oakey", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invAlias = "183700"
+            Else
+                .invAlias = "SET RULE"
+            End If
+            .invAccount = "560706"
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'LEGIONELLA SPECIALTIES LLC
+Private Sub LEGIONELLA_SPECIALTIES_LLC(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    Dim indexOffset As Long
+    
+    With Invoice
+    
+        If IsNumeric(ws.Cells(2, 1)) Then
+            indexOffset = 0
+        ElseIf IsNumeric(ws.Cells(3, 1)) Then
+            indexOffset = 1
+        End If
+        
+        .invNumber = ws.Cells(2 + indexOffset, 1)
+        If Left(.invNumber, 1) <> "0" And Len(.invNumber) = 5 Then .invNumber = "0" & .invNumber
+        .invDate = ws.Cells(5 + indexOffset, 1)
+        .invAmount = Replace(ws.Cells(22 + indexOffset, 5), "Total  $", vbNullString)
+        Select Case ws.Cells(19 + indexOffset, 6)
+            Case "Country Care Life Centers"
+                .invAlias = "144400"
+            Case "Neurorestorative Phoenix"
+                .invAlias = "141160"
+            Case "NeuroRestorative Reno"
+                .invAlias = "143175"
+            Case "Care Meridian Littleton"
+                .invAlias = "142300"
+            Case "Care Meridian Carmen"
+                .invAlias = "143120"
+            Case "Care Meridian Buffalo"
+                .invAlias = "143170"
+            Case Else
+                MsgBox "Unhandled"
+        End Select
+        .invAccount = "560706"
+        .invDescription = UCase(Format(.invDate, "mmm/yy") & " H2O MANAGEMENT")
+        .invAccount = "560706"
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'NEVADA MEDICAR
+Private Sub NEVADA_MEDICAR(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim cell As Range
+    
+    With Invoice
+        For Each cell In ws.UsedRange
+            
+            If Not CBool(Len(.invNumber)) Then
+                If InStr(cell, "0000000") Then
+                    .invNumber = Mid(cell, InStr(cell, "0000000") + 7, 5)
+                ElseIf cell.NumberFormat = "000000000000" Then
+                    .invNumber = cell
+                ElseIf cell Like "Inv*Num*" And cell.Offset(0, 1).NumberFormat = "000000000000" Then
+                    .invNumber = cell.Offset(0, 1)
+                End If
+            End If
+                
+            If Not CBool(.invDate) Then
+                If cell Like "Inv*Date*" Then
+                    If IsDate(Split(cell, " ")(UBound(Split(cell, " ")))) Then
+                        .invDate = Split(cell, " ")(UBound(Split(cell, " ")))
+                    ElseIf IsDate(cell.Offset(0, 1)) Then
+                        .invDate = cell.Offset(0, 1)
+                    End If
+                ElseIf cell.NumberFormat = "m/d/yy" Then
+                    .invDate = cell
+                End If
+            End If
+            
+            If Not CBool(Len(.invAlias)) Then
+                If cell Like "*IV61*" Then
+                    .invAlias = "143120"
+                    .invDescription = "IV61 CARE MERIDIAN CARMEN CONTRACT #"
+                ElseIf cell Like "*3600*" Then
+                    .invAlias = "143170"
+                    .invDescription = "3600 CARE MERIDIAN BUFFALO CONTRACT #"
+                End If
+            End If
+            
+            If Not CBool(.invAmount) Then
+                If cell Like "Am*Due*$*#.00*" Then
+                    .invAmount = Mid(cell, InStr(cell, "$") + 1, InStr(cell, ".") - InStr(cell, "$") - 1)
+                ElseIf cell Like "Am*Due*" And cell.Offset(0, 1).NumberFormat Like "\$*0.00" Then
+                    .invAmount = cell.Offset(0, 1)
+                ElseIf cell.NumberFormat Like "\$*0.00" Then
+                    .invAmount = cell
+                End If
+            End If
+            
+            .invAccount = "560898"
+        
+        Next cell
+        
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+'THE LAWN RANGER
+Private Sub THE_LAWN_RANGER(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    
+    With Invoice
+        Set r = ws.Range("A1:A100").Find("Invoice #", lookat:=xlWhole, MatchCase:=False)
+        If Not r Is Nothing Then
+            If r.Address = "$A$9" Then
+                .invNumber = ws.Range("A10")
+                .invDate = ws.Range("A2")
+                dbP .invDate
+                .invAlias = "142300"
+                .invAccount = "560706"
+    '            .invAmount = r.Offset(5, 0)
+    '            .invAmount = Replace(.invAmount, Chr(36), vbNullString) '$
+    '            .invAmount = Replace(.invAmount, Chr(32), vbNullString) 'space
+                Set r = ws.Range("A1:H50").Find("Total  $", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then
+                    .invAmount = Replace(r.Value, "Total  $", vbNullString)
+                Else
+                    Set r = ws.Range("A1:H50").Find("Total", lookat:=xlPart, MatchCase:=False)
+                    If Not r Is Nothing Then
+                        .invAmount = Application.WorksheetFunction.Sum(ws.Range(r.Offset(0, 1), r.Offset(0, 4)))
+                    End If
+                End If
+            End If
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+End Sub
+
+
+
+
+
+Sub CrudeHack()
+    Dim lastRow As Long
+    Dim firstRow As Long
+    Dim currentRow As Long
+    
+    firstRow = Application.WorksheetFunction.CountA(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Range) + 1
+    lastRow = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range.Rows.Count
+    
+    For currentRow = firstRow To lastRow
+        With loInvoiceBatch
+            .ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Range.Rows(currentRow).Select
+            DoEvents
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range.Rows(currentRow).Select
+            DoEvents
+        End With
+    Next currentRow
+End Sub
+
+
+
+
+
+
+Function ExtractTextFromPDF_WithNuancePowerPDF(fullPath As String)
+    Dim PowerApp As App
+    Dim PowerDVDoc As DVDoc
+    Dim PowerDDDoc As DDDoc
+    Dim jso As Object
+
+    Dim nPalabra As Integer
+    Dim iPalabra As Integer
+    Dim nPagina As Integer
+    Dim iPagina As Integer
+    Dim Palabra As String
+    Dim TextoPagina() As String
+
+    Set PowerApp = CreateObject("NuancePDF.App")
+    Set PowerDVDoc = CreateObject("NuancePDF.DVDoc")
+    PowerApp.Show
+
+    
+    If PowerDVDoc.Open(fullPath) = True Then
+        PowerDVDoc.BringToFront
+        Set PowerDDDoc = PowerDVDoc.GetDDDoc
+        Set jso = PowerDDDoc.GetJSObject
+        nPagina = PowerDDDoc.GetNumPages
+        ReDim TextoPagina(nPagina)
+        For iPagina = 0 To nPagina - 1
+            nPalabra = jso.getPageNumWords(iPagina)
+            For iPalabra = 0 To nPalabra - 1
+                Palabra = jso.getPageNthWord(iPagina, iPalabra, False) ' if the last parameter is set to True, it avoids certain characters like dash os blank spaces etc
+                TextoPagina(iPagina) = TextoPagina(iPagina) & Palabra
+            Next
+            Debug.Print TextoPagina(iPagina)
+        Next
+    End If
+    Set PowerDVDoc = Nothing
+    PowerApp.Exit
+    Set PowerApp = Nothing
+    ExtractTextFromPDF_WithNuancePowerPDF = TextoPagina
+End Function
+
+
+
+'GLOBAL PEST SERVICES
+Private Sub GLOBAL_PEST_SERVICES_indevelopment(ws As Worksheet)
+    Dim Invoice As InvoiceStructure
+    Dim r As Range
+    Dim strVal1 As String
+    Dim strVal2 As String
+    Dim strVal3 As String
+    Dim tempAmount As Double
+    
+    With Invoice
+        Set r = ws.Range("A1:B100").Find("INVOICE:", lookat:=xlPart, MatchCase:=False)
+        If Not r Is Nothing Then
+            .invNumber = Trim(Replace(r.Value, "INVOICE:", vbNullString))
+            Set r = ws.Range("A1:B100").Find("Date:", lookat:=xlPart, MatchCase:=False)
+            If Not r Is Nothing Then
+                .invDate = Trim(Replace(r.Value, "Date:", vbNullString))
+                
+                Set r = ws.Range("A1:B100").Find("AMOUNT", lookat:=xlWhole, MatchCase:=False)
+                If Not r Is Nothing Then
+                If IsNumeric(Trim(r.Offset(2, 0).Value2)) Then .invAmount = CDbl(Trim(r.Offset(2, 0).Value2))
+                
+                Set r = ws.Range("A1:B100").Find("General Pest Control Service  ", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then strVal2 = Trim(Replace(r.Value2, "General Pest Control Service", vbNullString))
+                
+                Set r = ws.Range("A1:B100").Find("Subtotal", lookat:=xlPart, MatchCase:=False)
+                If Not r Is Nothing Then strVal3 = Trim(Replace(r.Value2, "Subtotal", vbNullString))
+   
+                
+                
+                    strVal = Replace(strVal, "_", vbNullString)
+                    .invAmount = CDbl(strVal)
+                End If
+                Set r = ws.Range("B1:B100").Find("DATE SEEN", lookat:=xlWhole, MatchCase:=False)
+                If Not r Is Nothing Then
+                    .invDescription = Format(DateValue(r.Offset(1, 0)), "MM/DD") & " PODIATRY"
+                    .invAccount = "542004"
+                    .invAlias = "142300"
+                End If
+            End If
+        End If
+        .invSheetName = ws.Name
+    End With
+    Call NewFillInvoiceArray(Invoice)
+    
+End Sub
+
+
+
+Sub Example()
+
+'Dim PDFApp As PDFPlus.App
+'Dim ddDocTarget As PDFPlus.DDDoc
+'Dim ddDocSource As PDFPlus.DDDoc
+'
+'Set PDFApp = CreateObject("NuancePDF.App")
+'Set ddDocTarget = CreateObject("NuancePDF.DDDoc")
+'
+'If ddDocTarget.Open("mydoc.pdf") = False Then
+'    PDFApp.Exit
+'    Exit Sub
+'End If
+'
+'Set ddDocSource = CreateObject("NuancePDF.DDDoc")
+'
+'If ddDocSource.Open("pdfpages.pdf") = False Then
+'    ddDocTarget.Close
+'    PDFApp.Exit
+'    Exit Sub
+'End If
+'
+'If ddDocTarget.InsertPages(1, ddDocSource, 0, 2, False) = False Then
+'    ddDocSource.Close
+'    ddDocTarget.Close
+'    PDFApp.Exit
+'    Exit Sub
+'End If
+'
+'If ddDocTarget.Save(DDSaveFull, " mydoc.pdf") = False Then
+'    'Saving the file failed
+'End If
+'
+'ddDocSource.Close
+'ddDocTarget.Close
+'PDFApp.Exit
+End Sub
+
+
+
+'Sub Add_Import_ButtonToSheet()
+'    Dim ws As Worksheet: Set ws = APsheetBatch
+'    Dim btn1 As Button
+'    Dim btn2 As Button
+'    With ws
+'        With .Cells(2)
+'            Set btn1 = ws.Buttons.Add(.Left, .Top, 90, 15)
+'            Set btn2 = ws.Buttons.Add(.Left + 100, .Top, 90, 15)
+'        End With
+'    End With
+'    With btn1
+'        .Name = mCONTINUEBUTTON_NAME
+'        .OnAction = "ResumeAndLoadPDFs"
+'        .Caption = mCONTINUEBUTTON_CAPTION
+'        .Placement = xlFreeFloating
+'        .PrintObject = False
+'        With .Font
+'            .Name = "Arial Black"
+'            .Size = 12
+'            .Color = vbBlue
+'        End With
+'    End With
+'    With btn2
+'        .Name = mTERMINATEBUTTON_NAME
+'        .OnAction = "TerminateAndRemoveButtons"
+'        .Caption = mTERMINATEBUTTON_CAPTION
+'        .Placement = xlFreeFloating
+'        .PrintObject = False
+'        With .Font
+'            .Name = "Arial Black"
+'            .Size = 12
+'            .Color = vbRed
+'        End With
+'    End With
+'End Sub
+
+'Sub ResumeAndLoadPDFs()
+'    Dim adjInvoiceCount As Long
+'    APsheetBatch.Activate
+'    mTargetRange.Select
+'    Select Case MsgBox("Manually select invoices?")
+'        Case vbYes
+'            Call OpenFolderForPDFImport
+'        Case vbNo
+'            adjInvoiceCount = InputBox("Example:" & DBLLN & "If one invoice was removed use -1", "Adjust Invoice Count", 0)
+'            mInvoiceCount = mInvoiceCount + adjInvoiceCount
+'            Call CreateArrayOfSeperateFilenames(mTargetWorkbookName, mInvoiceCount)
+'            Call TurnOnPDFButton
+''            Call OpenPDF_App(mTargetRange)
+''    End Select
+''End Sub
+'
+'Private Sub TurnOnPDFButton()
+'    With gcAP.mainAPform
+'        .TogglePDFPanel 1
+'        .CommandButton_DivertFile.Visible = True
+'        .CommandButton_CancelCurrent.Visible = True
+'        .CommandButton_DeletePDF.Visible = True
+'        .CommandButton_MaximizePDF.Visible = True
+'        .CommandButton_PDFBackFullPage.Visible = True
+'        .CommandButton_PDFForwardFullPage.Visible = True
+'        With .CommandButton_GrabPDF
+'            .BackColor = ON_BACKCOLOR
+'            .ForeColor = ON_FORECOLOR
+'        End With
+'    End With
+''End Sub
+'
+'Sub TerminateAndRemoveButtons()
+'    Dim btn As Button
+'    For Each btn In APsheetBatch.Buttons
+'        If btn.Name = mCONTINUEBUTTON_NAME Then btn.Delete
+'    Next
+'    For Each btn In APsheetBatch.Buttons
+'        If btn.Name = mTERMINATEBUTTON_NAME Then btn.Delete
+'    Next
+'End Sub
+'
+'Private Sub OpenFolderForPDFImport()
+'    Dim strVal As String
+'    Dim i As Long
+'    If Dir(DefaultImportSplitPDFFolder, vbDirectory) <> vbNullString Then strVal = DefaultImportSplitPDFFolder
+'    With Application.FileDialog(msoFileDialogOpen)
+'        .InitialView = msoFileDialogViewDetails
+'        .InitialFileName = strVal
+'        .AllowMultiSelect = True
+'        .Show
+'        If .SelectedItems.Count > 0 Then
+'            ReDim PDF_Array(1 To .SelectedItems.Count)
+'            For i = 1 To .SelectedItems.Count
+'                PDF_Array(i) = .SelectedItems(i)
+'            Next
+'            Call TurnOnPDFButton
+'            IndexPDF = 1
+'            Call OpenPDF_App
+'        End If
+'    End With
+'End Sub
+
+
+'Private Sub CreateArrayOfSeperateFilenames(LongBaseName As String, InvoiceCount As Long)
+'    Dim i As Long
+'    Dim pdfIndexString As String
+'    Dim filenamePrefix As String
+'    Dim filenameSuffix As String
+'    Dim fullFileName As String
+'    filenameSuffix = " of " & Mid(LongBaseName, InStrRev(LongBaseName, "\") + 1, Len(LongBaseName))
+'    filenameSuffix = Replace(filenameSuffix, ".xlsx", ".pdf")
+'    filenamePrefix = Left(LongBaseName, InStrRev(LongBaseName, "\")) & "Segment " '001 of
+'
+'    If flgPDFisOpen Or UBound(PDF_Array) > 0 Or IndexPDF <> 1 Then
+'            MsgBox "PDF indicators were not reset, for safety I am not opening files, debug info to follow"
+'            MsgBox "IndexPDF =  " & IndexPDF & vbNewLine & "flgPDFisOpen =  " & flgPDFisOpen _
+'                    & vbNewLine & "ubound(PDF_Array =  " & UBound(PDF_Array)
+'    Else
+'        ReDim PDF_Array(1 To InvoiceCount)
+'
+'        For i = 1 To InvoiceCount
+'            If i < 100 Then pdfIndexString = "0"
+'            If i < 10 Then pdfIndexString = "00"
+'            pdfIndexString = pdfIndexString & CStr(i)
+'            fullFileName = filenamePrefix & pdfIndexString & filenameSuffix
+'            PDF_Array(i) = fullFileName
+'            pdfIndexString = Replace(pdfIndexString, CStr(i), vbNullString)
+'            If Len(pdfIndexString) > 3 Then pdfIndexString = Right(pdfIndexString, 3)
+'        Next
+'        IndexPDF = 1
+'    End If
+'End Sub
+
+
+
+''    Dim testbool As Boolean
+''    Dim i As Long
+''    Dim pageCount As Long
+''    Dim powerApp As App
+'    Dim dvDocSource As DVDoc
+'    Dim powerDDDoc As DDDoc
+'    Dim powerPageView As DVPageView
+'    Dim obj As Object
+'    Set powerApp = CreateObject("NuancePDF.App")
+'    Set dvDocSource = CreateObject("NuancePDF.DVDoc")
+'    powerApp.Hide
+'    testbool = dvDocSource.Open("C:\Users\e-aatkinson\iServe\Active Queue\_EXTRACT\new merged - Copy.pdf")
+''    dvDocSource.BringToFront
+'    Set powerDDDoc = dvDocSource.GetDDDoc
+'    Set powerPageView = dvDocSource.GetDVPageView
+'    pageCount = powerDDDoc.GetNumPages
+'    MsgBox "here"
+'    'powerPageView.Goto pagecount
+'    For i = 5 To 1 Step -1
+'    powerApp.UnlockEx
+''    powerApp.MenuItemExecute "ExtractPage"
+''    powerApp.Menu
+'    Next
+'

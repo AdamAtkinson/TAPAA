@@ -1,0 +1,456 @@
+Attribute VB_Name = "Edit_void_Reference_Notes"
+
+
+'     =========================================================================================================                                   '
+'                 LIST OF VBA ERROR CODES                                                                                                         '
+'     =========================================================================================================                                   '
+'     3           Return without GoSub (obsolete, no longer used)                                                                                 '
+'     5           Procedure call or argument is not valid (Visual Basic)                                                                          '
+'     6           Overflow(Visual Basic Error)                                                                                                    '
+'     6           Overflow (Visual Basic Run-Time Error)                                                                                          '
+'     7           Out of memory (Visual Basic Compiler Error)                                                                                     '
+'     7           Out of memory (Visual Basic Run-Time Error)                                                                                     '
+'     9           Subscript out of range (Visual Basic)                                                                                           '
+'     10          This array is fixed or temporarily locked (Visual Basic)                                                                        '
+'     11          Division by zero (Visual Basic Run-Time Error)                                                                                  '
+'     13          Type mismatch (Visual Basic)                                                                                                    '
+'     14          Out of string space (Visual Basic)                                                                                              '
+'     16          Expression too complex                                                                                                          '
+'     17          Can 't perform requested operation (Visual Basic)                                                                               '
+'     18          User interrupt occurred                                                                                                         '
+'     20          Resume without error                                                                                                            '
+'     28          Out of stack space                                                                                                              '
+'     35          Sub or function not defined                                                                                                     '
+'     47          Too many DLL application clients                                                                                                '
+'     48          Error loading DLL                                                                                                               '
+'     49          Bad DLL calling convention                                                                                                      '
+'     51          Internal error (Visual Basic)                                                                                                   '
+'     52          Bad file name or number                                                                                                         '
+'     53          File not found (Visual Basic Run-Time Error)                                                                                    '
+'     54          Bad file mode                                                                                                                   '
+'     55          File already open                                                                                                               '
+'     57          Device I/O error                                                                                                                '
+'     58          File already exists                                                                                                             '
+'     59          Bad record length                                                                                                               '
+'     61          Disk full (Visual Basic)                                                                                                        '
+'     62          Input past end of file                                                                                                          '
+'     63          Bad record number                                                                                                               '
+'     67          Too many files                                                                                                                  '
+'     68          Device unavailable                                                                                                              '
+'     70          Permission denied (Visual Basic)                                                                                                '
+'     71          Disk Not Ready                                                                                                                  '
+'     74          Cannot rename with different drive                                                                                              '
+'     75          Path/File access error                                                                                                          '
+'     76          Path Not found                                                                                                                  '
+'     91          Object variable or With block variable not set                                                                                  '
+'     92          For loop not initialized (Visual Basic)                                                                                         '
+'     93          Invalid pattern string                                                                                                          '
+'     94          Invalid use of Null (obsolete, no longer used)                                                                                  '
+'     95          Application-defined or object-defined error                                                                                     '
+'     96          Unable to sink events of object because the object is already firing events to the maximum number of event receivers it supports'
+'     97          Cannot call friend function on object which is not aninstance of defining class                                                 '
+'     98          A property or method call cannot include a reference to a private object, either as an argument or as a return value            '
+'     100         Class does not implement the System.Collections.ICollection interface                                                           '
+'     298         System resource or DLL could not be loaded                                                                                      '
+'     320         Cannot use character device names in specified file names                                                                       '
+'     321         File Not Format                                                                                                                 '
+'     322         Can 't create necessary temporary file                                                                                          '
+'     325         Format not valid in resource file                                                                                               '
+'     327         Data value named not found                                                                                                      '
+'     328         Illegal parameter; can't write arrays                                                                                           '
+'     335         Could not access system registry                                                                                                '
+'     336         ActiveX component not correctly registered                                                                                      '
+'     337         ActiveX Not Component                                                                                                           '
+'     338         ActiveX Component did not run correctly                                                                                         '
+'     360         Object already loaded                                                                                                           '
+'     361         Can 't load or unload this object                                                                                               '
+'     363         ActiveX Control specified not found                                                                                             '
+'     364         Object was unloaded                                                                                                             '
+'     365         Unable to unload within this context                                                                                            '
+'     368         The specified file is out of date                                                                                               '
+'     371         The specified object can't be used as an owner form for Show                                                                    '
+'     380         Property value is not valid                                                                                                     '
+'     381         Property array index is not valid                                                                                               '
+'     382         Set not supported at run time                                                                                                   '
+'     383         Set not supported (read-only property)                                                                                          '
+'     385         Need property array index                                                                                                       '
+'     387         Set not permitted                                                                                                               '
+'     393         Get not supported at run time                                                                                                   '
+'     394         Get not supported (write-only property)                                                                                         '
+'     400         Form already displayed; can't show modally                                                                                      '
+'     402         Code must close topmost modal form first                                                                                        '
+'     422         Property not found                                                                                                              '
+'     423         Property or method not found                                                                                                    '
+'     424         Object required (Visual Basic)                                                                                                  '
+'     429         Cannot create ActiveX Component                                                                                                 '
+'     430         Class does not support Automation or does not support expected interface                                                        '
+'     432         File name or class name not found during Automation operation (Visual Basic)                                                    '
+'     438         Object doesn 't support this property or method (Visual Basic)                                                                  '
+'     440         Automation Error                                                                                                                '
+'     442         Connection to type library or object library for remote process has been lost                                                   '
+'     443         Automation object does not have a default value                                                                                 '
+'     445         Object doesn 't support this action (Visual Basic)                                                                              '
+'     446         Object doesn 't support named arguments                                                                                         '
+'     447         Object doesn 't support current locale setting (Visual Basic)                                                                   '
+'     448         Named argument not found (Visual Basic)                                                                                         '
+'     449         Argument not optional (Visual Basic)                                                                                            '
+'     450         Wrong number of arguments or property assignment not valid                                                                      '
+'     451         Property let procedure not defined and property get procedure did not return an object                                          '
+'     452         Ordinal is not valid                                                                                                            '
+'     453         Specified DLL function not found                                                                                                '
+'     454         Code Not resource                                                                                                               '
+'     455         Code resource lock error                                                                                                        '
+'     457         This key is already associated with an element of this collection                                                               '
+'     458         Variable uses an Automation type not supported in Visual Basic                                                                  '
+'     459         Object or class does not support the set of events                                                                              '
+'     460         Clipboard Format Is Not Valid                                                                                                   '
+'     461         Method or data member not found                                                                                                 '
+'     462         The remote server machine does not exist or is unavailable (Visual Basic)                                                       '
+'     463         Class not registered on local machine                                                                                           '
+'     481         Picture is not valid                                                                                                            '
+'     482         Printer Error                                                                                                                   '
+'     735         Cannot save file to TEMP                                                                                                        '
+'     744         Search Not Text                                                                                                                 '
+'     746         Replacements too long                                                                                                           '
+'     999         Stop statement encountered                                                                                                      '
+'     32768       Feature not yet implemented                                                                                                     '
+                                                                                                                                              
+                                                                                                                                              
+                                                                                                                                              
+'     =========================================================================================================                                   '
+'                                                                                                                                                 '
+'     ENVIRON(Index)                                                                                                                              '
+'                                                                                                                                                 '
+'     Index       String                                                                                                                          '
+'     =========================================================================================================                                   '
+'     1           ALLUSERSPROFILE=C:\ProgramData                                                                                                  '
+'     2           APPDATA=C:\Users\e-aatkinson\AppData\Roaming                                                                                    '
+'     3           CommonProgramFiles=C:\Program Files (x86)\Common Files                                                                          '
+'     4           CommonProgramFiles(x86)=C:\Program Files (x86)\Common Files                                                                     '
+'     5           CommonProgramW6432=C:\Program Files\Common Files                                                                                '
+'     6           COMPUTERNAME = CA206222                                                                                                         '
+'     7           ComSpec=C:\windows\system32\cmd.exe                                                                                             '
+'     8           configsetroot=C:\windows\ConfigSetRoot                                                                                          '
+'     9           deployment.expiration.check.Enabled = False                                                                                     '
+'     10          DriverData=C:\Windows\System32\Drivers\DriverData                                                                               '
+'     11          FPS_BROWSER_APP_PROFILE_STRING=Internet Explorer                                                                                '
+'     12          FPS_BROWSER_USER_PROFILE_STRING = Default                                                                                       '
+'     13          HOMEDRIVE = H:                                                                                                                  '
+'     14          HOMEPATH=\                                                                                                                      '
+'     15          HOMESHARE=\\Alica002\Home\E-AAtkinson                                                                                           '
+'     16          LOCALAPPDATA=C:\Users\e-aatkinson\AppData\Local                                                                                 '
+'     17          LOGONSERVER=\\TMNAI022                                                                                                          '
+'     18          NUMBER_OF_PROCESSORS = 6                                                                                                        '
+'     19          OneDrive=C:\Users\Administrator\OneDrive                                                                                        '
+'     20          OS = Windows_NT                                                                                                                 '
+'     21          Path=C:\Program Files (x86)\Microsoft Office\Office15\;C:\Program Files (x86)\Common Files\Oracle\Java\javapath;                '
+'                                             C:\windows\system32;C:\windows;C:\windows\System32\Wbem;C:\windows\System32\WindowsPowerShell\v1.0\;'
+'                                             C:\windows\System32\OpenSSH\;C:\Users\e-aatkinson\AppData\Local\Microsoft\WindowsApps;              '
+'     22          PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC                                                                   '
+'     23          PROCESSOR_ARCHITECTURE = x86                                                                                                    '
+'     24          PROCESSOR_ARCHITEW6432 = AMD64                                                                                                  '
+'     25          PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 158 Stepping 10, GenuineIntel                                                       '
+'     26          PROCESSOR_LEVEL = 6                                                                                                             '
+'     27          PROCESSOR_REVISION=9e0a                                                                                                         '
+'     28          ProgramData=C:\ProgramData                                                                                                      '
+'     29          ProgramFiles=C:\Program Files (x86)                                                                                             '
+'     30          ProgramFiles(x86)=C:\Program Files (x86)                                                                                        '
+'     31          ProgramW6432=C:\Program Files                                                                                                   '
+'     32          PSModulePath=C:\Program Files\WindowsPowerShell\Modules;C:\windows\system32\WindowsPowerShell\v1.0\Modules                      '
+'     33          PUBLIC=C:\Users\Public                                                                                                          '
+'     34          SESSIONNAME = Console                                                                                                           '
+'     35          SystemDrive = c:                                                                                                                '
+'     36          SystemRoot=C:\windows                                                                                                           '
+'     37          TEMP=C:\Users\E-AATK~1\AppData\Local\Temp                                                                                       '
+'     38          TMP=C:\Users\E-AATK~1\AppData\Local\Temp                                                                                        '
+'     39          USERDNSDOMAIN = TMN.Int                                                                                                         '
+'     40          USERDOMAIN = TMN                                                                                                                '
+'     41          USERDOMAIN_ROAMINGPROFILE = TMN                                                                                                 '
+'     42          UserName = e - aatkinson                                                                                                        '
+'     43          USERPROFILE=C:\Users\e-aatkinson                                                                                                '
+'     44          windir=C:\windows                                                                                                               '
+
+
+'============================================
+'   APPLICATION.INPUTBOX TYPES              '
+'============================================
+'    Value Description                      '
+'    0   a Formula                          '
+'    1   a Number                           '
+'    2   Text (a string)                    '
+'    4   A logical value (True or False)    '
+'    8   A cell reference, as a Range object'
+'    16  An error value, such as #N/A       '
+'    64  An array of values                 '
+
+
+
+
+'     =======================================================================================================
+'     VARTYPE(x)                                                                                            '
+'     Value       Constant            Description                                                           '
+'     =======================================================================================================
+'     0           vbEmpty             Empty (uninitialized)                                                 '
+'     1           vbNull              Null (no valid data)                                                  '
+'     2           vbInteger           Integer                                                               '
+'     3           vbLong              Long integer                                                          '
+'     4           vbSingle            Single-precision floating-point number                                '
+'     5           vbDouble            Double-precision floating-point number                                '
+'     6           vbCurrency          Currency value                                                        '
+'     7           vbDate              Date value                                                            '
+'     8           vbString            String                                                                '
+'     9           vbObject            Object                                                                '
+'     10          vbError             Error value                                                           '
+'     11          vbBoolean           Boolean value                                                         '
+'     12          vbVariant           Variant (used only with arrays of variants)                           '
+'     13          vbDataObject        A data access object                                                  '
+'     14          vbDecimal           Decimal value                                                         '
+'     17          vbByte              Byte value                                                            '
+'     20          vbLongLong          LongLong integer (valid on 64-bit platforms only)                     '
+'     36          vbUserDefinedType   Variants that contain user-defined types                              '
+'     8192        vbArray             Array (always added to another constant when returned by this function)
+'                                       example: Range = 8204 = vbArray + vbVariant                         '
+
+'============================================
+'   APPLICATION.ONKEY KEYCODES              '
+'============================================
+'BACKSPACE              {BACKSPACE} or {BS} '
+'BREAK                  {BREAK}             '
+'CAPS LOCK              {CAPSLOCK}          '
+'CLEAR                  {CLEAR}             '
+'DELETE or DEL          {DELETE} or {DEL}   '
+'DOWN ARROW             {DOWN}              '
+'END                    {END}               '
+'ENTER (numeric keypad) {ENTER}             '
+'ENTER                  ~ (tilde)           '
+'ESC { ESCAPE} or       {ESC}               '
+'HELP                   {HELP}              '
+'HOME                   {HOME}              '
+'INS                    {INSERT}            '
+'LEFT ARROW             {LEFT}              '
+'NUM LOCK               {NUMLOCK}           '
+'PAGE DOWN              {PGDN}              '
+'PAGE UP                {PGUP}              '
+'RETURN                 {RETURN}            '
+'RIGHT ARROW            {RIGHT}             '
+'SCROLL LOCK            {SCROLLLOCK}        '
+'TAB                    {TAB}               '
+'UP ARROW               {UP}                '
+'F1 through F15         {F1} through {F15}  '
+'-------------------------------------------'
+'Shift                  + (plus sign)       '
+'Ctrl                   ^ (caret)           '
+'Alt                    % (percent sign)    '
+'-------------------------------------------'
+'To assign a procedure to one of the special'
+'characters (+, ^, %, and so on), enclose the
+'character in braces {+}, {^}, {%} and so on'
+'-------------------------------------------'
+
+'           from http://www.jasinskionline.com/windowsapi/ref/s/setwindowpos.html          '
+'           SetWindowPos moves a window to a new location on the screen.                   '
+'           Its physical coordinates, dimensions, and Z-order position '                   '
+'           (the Z-order determines which windows are on top of others) can be set.        '
+'           The function returns 0 if an error occured or 1 if successful.                 '
+'                                                                                          '
+'hWnd                           The handle of the window to move.                                                                   '
+'hWndInsertAfter                Either the handle of the window to position this window behind,                                     '
+'                                           or exactly one of the following flags stating where in the Z-order to put the window:   '
+'HWND_BOTTOM = 1                Put the window at the bottom of the Z-order.                                                        '
+'HWND_NOTOPMOST = -2            Put the window below all topmost windows and above all non-topmost windows.                         '
+'HWND_TOP = 0                   Put the window at the top of the Z-order.                                                           '
+'HWND_TOPMOST = -1              Make the window topmost (above all other windows) permanently.                                      '
+'X                              The x coordinate of where to put the upper-left corner of the window.                               '
+'Y                              The y coordinate of where to put the upper-left corner of the window.                               '
+'cx                             The x coordinate of where to put the lower-right corner of the window.                              '
+'cy                             The y coordinate of where to put the lower-right corner of the window.                              '
+'wFlags                         Zero or more of the following flags stating how to move the window:                                 '
+'SWP_DRAWFRAME = &H20           Same as SWP_FRAMECHANGED.                                                                           '
+'SWP_FRAMECHANGED = &H20        Fully redraw the window in its new position.                                                        '
+'SWP_HIDEWINDOW = &H80          Hide the window from the screen.                                                                    '
+'SWP_NOACTIVATE = &H10          Do not make the window active after moving it unless it was already the active window.              '
+'SWP_NOCOPYBITS = &H100         Do not redraw anything drawn on the window after it is moved.                                       '
+'SWP_NOMOVE = &H2               Do not move the window.                                                                             '
+'SWP_NOSIZE = &H1               Do not resize the window.                                                                           '
+'SWP_NOREDRAW = &H8             Do not remove the image of the window in its former position,                                       '
+'                                           effectively leaving a ghost image on the screen.                                        '
+'SWP_NOZORDER = &H4             Do not change the window's position in the Z-order.                                                 '
+'SWP_SHOWWINDOW = &H40          Show the window if it is hidden.                                                                    '
+'                                                                                                                                   '
+'                                                                                                                                   '
+'Example: Move window Form1 to the upper-left corner of the screen and make at appear above all other windows permanently.          '
+'         Note how the function is told not to resize the window, so we don't have to worry about the lower-right coordinate.               '
+'Dim flags As Long                                                          the flags specifying how to move the window                     '
+'Dim retval As Long                                                         return value                                                    '
+'flags = SWP_NOSIZE Or SWP_DRAWFRAME                                        Do not resize the window, redraw the window in its new location '
+'retval = SetWindowPos(Form1.hWnd, HWND_TOPMOST, 0, 0, 1, 1, flags)         move the window                                                 '
+'                                                                                                                                           '
+
+
+'=================================================================================.
+'                                          KeyA through KeyZ                      :
+'    KEY CODE CONSTANTS             NOTE:  and Key0 through Key9                  :
+'                                          are equivalent to ASCII                :
+'=================================================================================:
+'       CONSTANT                VALUE             DESCRIPTION                     :
+'---------------------------------------------------------------------------------:
+'       vbKeyA                     65             A key                           :
+'       vbKeyB                     66             B key                           :
+'       vbKeyC                     67             C key                           :
+'       vbKeyD                     68             D key                           :
+'       vbKeyE                     69             E key                           :
+'       vbKeyF                     70             F key                           :
+'       vbKeyG                     71             G key                           :
+'       vbKeyH                     72             H key                           :
+'       vbKeyI                     73             I key                           :
+'       vbKeyJ                     74             J key                           :
+'       vbKeyK                     75             K key                           :
+'       vbKeyL                     76             L key                           :
+'       vbKeyM                     77             M key                           :
+'       vbKeyN                     78             N key                           :
+'       vbKeyO                     79             O key                           :
+'       vbKeyP                     80             P key                           :
+'       vbKeyQ                     81             Q key                           :
+'       vbKeyR                     82             R key                           :
+'       vbKeyS                     83             S key                           :
+'       vbKeyT                     84             T key                           :
+'       vbKeyU                     85             U key                           :
+'       vbKeyV                     86             V key                           :
+'       vbKeyW                     87             W key                           :
+'       vbKeyX                     88             X key                           :
+'       vbKeyY                     89             Y key                           :
+'       vbKeyZ                     90             Z key                           :
+'---------------------------------------------------------------------------------:
+'       vbKey0                     48             0 key                           :
+'       vbKey1                     49             1 key                           :
+'       vbKey2                     50             2 key                           :
+'       vbKey3                     51             3 key                           :
+'       vbKey4                     52             4 key                           :
+'       vbKey5                     53             5 key                           :
+'       vbKey6                     54             6 key                           :
+'       vbKey7                     55             7 key                           :
+'       vbKey8                     56             8 key                           :
+'       vbKey9                     57             9 key                           :
+'---------------------------------------------------------------------------------:
+'       vbKeyNumpad0               96             0 key                           :
+'       vbKeyNumpad1               97             1 key                           :
+'       vbKeyNumpad2               98             2 key                           :
+'       vbKeyNumpad3               99             3 key                           :
+'       vbKeyNumpad4              100             4 key                           :
+'       vbKeyNumpad5              101             5 key                           :
+'       vbKeyNumpad6              102             6 key                           :
+'       vbKeyNumpad7              103             7 key                           :
+'       vbKeyNumpad8              104             8 key                           :
+'       vbKeyNumpad9              105             9 key                           :
+'       vbKeyMultiply             106             MULTIPLICATION SIGN (*) key     :
+'       vbKeyAdd                  107             PLUS SIGN (+) key               :
+'       vbKeySeparator            108             ENTER (keypad) key              :
+'       vbKeySubtract             109             MINUS SIGN (-) key              :
+'       vbKeyDecimal              110             DECIMAL POINT(.) key            :
+'       vbKeyDivide               111             DIVISION SIGN (/) key           :
+'---------------------------------------------------------------------------------'
+'       vbKeyF1                   112             F1 key                          :
+'       vbKeyF2                   113             F2 key                          :
+'       vbKeyF3                   114             F3 key                          :
+'       vbKeyF4                   115             F4 key                          :
+'       vbKeyF5                   116             F5 key                          :
+'       vbKeyF6                   117             F6 key                          :
+'       vbKeyF7                   118             F7 key                          :
+'       vbKeyF8                   119             F8 key                          :
+'       vbKeyF9                   120             F9 key                          :
+'       vbKeyF10                  121             F10 key                         :
+'       vbKeyF11                  122             F11 key                         :
+'       vbKeyF12                  123             F12 key                         :
+'       vbKeyF13                  124             F13 key                         :
+'       vbKeyF14                  125             F14 key                         :
+'       vbKeyF15                  126             F15 key                         :
+'       vbKeyF16                  127             F16 key                         :
+'---------------------------------------------------------------------------------:
+'       vbKeyLButton                1             Left mouse button               :
+'       vbKeyRButton                2             Right mouse button              :
+'       vbKeyCancel                 3             CANCEL key                      :
+'       vbKeyMButton                4             Middle mouse button             :
+'       vbKeyBack                   8             BACKSPACE key                   :
+'       vbKeyTab                    9             TAB key                         :
+'       vbKeyClear                 12             CLEAR key                       :
+'       vbKeyReturn                13             ENTER key                       :
+'       vbKeyShift                 16             SHIFT key                       :
+'       vbKeyControl               17             CTRL key                        :
+'       vbKeyMenu                  18             MENU key                        :
+'       vbKeyPause                 19             PAUSE key                       :
+'       vbKeyCapital               20             CAPS LOCK key                   :
+'       vbKeyEscape                27             ESC key                         :
+'       vbKeySpace                 32             SPACEBAR key                    :
+'       vbKeyPageUp                33             PAGE UP key                     :
+'       vbKeyPageDown              34             PAGE DOWN key                   :
+'       vbKeyEnd                   35             END key                         :
+'       vbKeyHome                  36             HOME key                        :
+'       vbKeyLeft                  37             LEFT ARROW key                  :
+'       vbKeyUp                    38             UP ARROW key                    :
+'       vbKeyRight                 39             RIGHT ARROW key                 :
+'       vbKeyDown                  40             DOWN ARROW key                  :
+'       vbKeySelect                41             SELECT key                      :
+'       vbKeyPrint                 42             PRINT SCREEN key                :
+'       vbKeyExecute               43             EXECUTE key                     :
+'       vbKeySnapshot              44             SNAPSHOT key                    :
+'       vbKeyInsert                45             INS key                         :
+'       vbKeyDelete                46             DEL key                         :
+'       vbKeyHelp                  47             HELP key                        :
+'       vbKeyNumlock              144             NUM LOCK key                    :
+'================================================================================='
+
+
+
+
+'=================================================================================.
+'                                                                                 :
+'    Using dbP: Spc() vs Tab()                                                    :
+'                                                                                 :
+'=================================================================================:
+'   With no other inputs,  Spc(10) and Tab(11) are functionally identical         :
+'                          they both put the curosr on the 11th column            :
+'                          The different is that Spc fills the area with spaces   :
+'                          and Tab places the cursor direction on the column      :
+'                                                                                 :
+'   With other inputs, Tab(11) will create a single column providing no preceding :
+'                          character exceeds 10 columns.  Wheres Spc(10) will     :
+'                          ensure there are exactly 10 speaces between inputs     :
+'                          and will not result in alligned columns.               :
+'=================================================================================:
+'    Sub IllegibleTable()                                                         :
+'        Dim cb As CommandBar                                                     :
+'        For Each cb In Application.CommandBars                                   :
+'              Debug.Print cb.Name; Spc(5); cb.Index; Spc(5); cb.BuiltIn; Spc(5); _
+'                   cb.Enabled; Spc(5); cb.Visible; Spc(5); cb.Controls.Count: '  :
+'        Next                                                                     :
+'        Set cb = Nothing                                                         :
+'    End Sub                                                                      :
+'  -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   - -:
+'    Worksheet Menu Bar      1      True     True     True      7                 :
+'    Chart Menu Bar      2      True     True     False      9                    :
+'    WordArt      3      True     True     False      9                           :
+'    Picture      4      True     True     False      13                          :
+'    Drawing Canvas      5      True     True     False      3                    :
+'    Organization Chart      6      True     True     False      5                :
+'    Diagram      7      True     True     False      7                           :
+'    Ink Drawing and Writing      8      True     False     False      6          :
+'    Ink Annotations      9      True     False     False      7                  :
+'--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=:
+'    Sub PerfectTable()                                                           :
+'        Dim cb As CommandBar                                                     :
+'        For Each cb In Application.CommandBars                                   :
+'           Debug.Print cb.Name; Tab(27); cb.Index; Tab(33); cb.BuiltIn; Tab(41); _
+'                     cb.Enabled; Tab(49); cb.Visible; Tab(57); cb.Controls.Count':
+'        Next                                                                     :
+'        Set cb = Nothing                                                         :
+'    End Sub                                                                      :
+'  -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   - -:
+'    Worksheet Menu Bar         1    True    True    True     7                   :
+'    Chart Menu Bar             2    True    True    False    9                   :
+'    WordArt                    3    True    True    False    9                   :
+'    Picture                    4    True    True    False    13                  :
+'    Drawing Canvas             5    True    True    False    3                   :
+'    Organization Chart         6    True    True    False    5                   :
+'    Diagram                    7    True    True    False    7                   :
+'    Ink Drawing and Writing    8    True    False   False    6                   :
+'=================================================================================:

@@ -1,0 +1,131 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsBatchEvents"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = True
+Option Explicit
+
+    Public Event BeforeInvoiceNumber(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterInvoiceNumber(ByVal target As Range)
+    Public Event BeforeSupplierName(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterSupplierName(ByVal target As Range)
+    Public Event BeforeInvoiceDate(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterInvoiceDate(ByVal target As Range)
+    Public Event BeforeExpensePeriod(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterExpensePeriod(ByVal target As Range)
+    Public Event BeforeInvoiceAmount(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterInvoiceAmount(ByVal target As Range)
+    Public Event BeforeAliasNumber(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterAliasNumber(ByVal target As Range)
+    Public Event BeforeAccountNumber(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterAccountNumber(ByVal target As Range)
+    Public Event BeforeLineDescription(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterLineDescription(ByVal target As Range)
+    Public Event BeforeFacilityName(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterFacilityName(ByVal target As Range)
+    Public Event BeforeApproverName(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterApproverName(ByVal target As Range)
+    Public Event BeforeSupplierSite(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterSupplierSite(ByVal target As Range)
+    Public Event BeforeInvoiceFileName(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterInvoiceFileName(ByVal target As Range)
+    Public Event BeforePONumber(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterPONumber(ByVal target As Range)
+    Public Event BeforeSplitLine(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterSplitLine(ByVal target As Range)
+    Public Event BeforeRemitInfo(ByVal target As Range, ByRef CancelAction As Boolean)
+    Public Event AfterRemitInfo(ByVal target As Range)
+
+    Private WithEvents mBatch As Worksheet
+Attribute mBatch.VB_VarHelpID = -1
+    
+    Private WithEvents frmSupplierAddress As APinputformVendorName
+Attribute frmSupplierAddress.VB_VarHelpID = -1
+    Private WithEvents frmInvoiceDate As APinputformDate
+Attribute frmInvoiceDate.VB_VarHelpID = -1
+    Private WithEvents frmExpensePeriod As APinputformExpensePeriod
+Attribute frmExpensePeriod.VB_VarHelpID = -1
+    Private WithEvents frmInvoiceAmount As APinputformAmount
+Attribute frmInvoiceAmount.VB_VarHelpID = -1
+    Private WithEvents frmMultiList As APinputformMultiList
+Attribute frmMultiList.VB_VarHelpID = -1
+
+
+Private Sub Class_Initialize()
+    Set mBatch = APsheetBatch
+End Sub
+
+
+Sub kaka()
+    Dim CancelAction As Boolean
+    If target.Cells.Count = 1 Then
+        Select Case target.Column
+        
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Index
+                RaiseEvent BeforeInvoiceNumber(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterInvoiceNumber(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index
+                RaiseEvent BeforeSupplierName(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterSupplierName(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Index
+                RaiseEvent BeforeInvoiceDate(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterInvoiceDate(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Index
+                RaiseEvent BeforeExpensePeriod(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterExpensePeriod(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Index
+                RaiseEvent BeforeInvoiceAmount(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterInvoiceAmount(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Index
+                RaiseEvent BeforeAliasNumber(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterAliasNumber(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Index
+                RaiseEvent BeforeAccountNumber(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterAccountNumber(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDESCRIPTION).Index
+                RaiseEvent BeforeLineDescription(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterLineDescription(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FACILITYNAME).Index
+                RaiseEvent BeforeFacilityName(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterFacilityName(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_APPROVERNAME).Index
+                RaiseEvent BeforeApproverName(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterApproverName(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Index
+                RaiseEvent BeforeSupplierSite(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterSupplierSite(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Index
+                RaiseEvent BeforeInvoiceFileName(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterInvoiceFileName(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Index
+                RaiseEvent BeforePONumber(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterPONumber(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Index
+                RaiseEvent BeforeSplitLine(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterSplitLine(target)
+                
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Index
+                RaiseEvent BeforeRemitInfo(target, CancelAction)
+                If Not CancelAction Then RaiseEvent AfterRemitInfo(target)
+                
+        End Select
+    End If
+End Sub
+

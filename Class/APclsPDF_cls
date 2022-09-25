@@ -1,0 +1,270 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsPDF"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+Private mApp As PDFPlus.App                     'controls the PDF application                                       '
+Private mDDDoc As PDFPlus.DDDoc                 'controls the PDF documents                                         '
+Private mDVDoc As PDFPlus.DVDoc                 'controls the view of PDF documents                                 '
+Private mDDPage As PDFPlus.DDPage               'controls the pages of the PDF ( accessible through DDDoc interface)'
+Private mDDAnnot As PDFPlus.DDAnnot             'accessible through DVDDoc interface controlls and AP               '
+Private mDVPageView As PDFPlus.DVPageView       'controls viewing PDF pages, (accessible through DVDDoc interface)  '
+Private mHiliteList As PDFPlus.HiliteList
+Private mDDTextSelect As PDFPlus.DDTextSelect   'setup and create images                                            '
+
+Private mJSO  As Object
+Private mDefaultWindowState As tPDF_WINDOW_STATE
+Private mCurrentWindowState As tPDF_WINDOW_STATE
+Private mCloseDocumentWithClass As Boolean
+Private mReadableText() As String
+Private mPageCount As Long
+
+Private Sub Class_Initialize()
+    If mApp Is Nothing Then Set mApp = New PDFPlus.App
+    
+    With mDefaultWindowState
+        .tMode = ethumbs 'eFullScreen
+        .tZoom = eFitPage
+        .tVisible = eVisible
+    End With
+'    If Not mApp Is Nothing Then Set mDVDoc = New pdfplus.DVDoc
+'    If Not mDVDoc Is Nothing Then Set mDDDoc = mDVDoc.GetDDDoc
+End Sub
+
+Private Sub Class_Terminate()
+    If mCloseDocumentWithClass Then
+        If Not mDDDoc Is Nothing Then
+            mDDDoc.Close
+            Set mDDDoc = Nothing
+        End If
+        If Not mDVDoc Is Nothing Then
+            mDVDoc.Close 1
+            Set mDVDoc = Nothing
+        End If
+        If Not mApp Is Nothing Then
+            If mApp.GetNumDVDocs = 0 Then
+                mApp.Exit
+                Set mApp = Nothing
+            End If
+        End If
+    End If
+End Sub
+
+Public Property Get ExposedDDdoc() As PDFPlus.DDDoc
+    Set ExposedDDdoc = mDDDoc
+End Property
+
+Public Property Get ExposedDVdoc() As PDFPlus.DVDoc
+    Set ExposedDVdoc = mDVDoc
+End Property
+Public Property Get ExposedDVpageView() As PDFPlus.DVPageView
+    Set ExposedDVpageView = mDVPageView
+End Property
+
+Public Property Let CloseDocumentWithClass(p As Boolean)
+    mCloseDocumentWithClass = p
+End Property
+
+Public Property Get CloseDocumentWithClass() As Boolean
+    CloseDocumentWithClass = mCloseDocumentWithClass
+End Property
+
+Public Property Get TextArray() As String()
+    TextArray = mReadableText
+End Property
+
+Public Property Get pageCount() As Long
+    mPageCount = pageCount
+End Property
+Public Property Get ViewMode() As ePDF_VIEW_MODES
+    ViewMode = mCurrentWindowState.tMode
+End Property
+Public Property Get WindowVisibility() As ePDF_WINDOW_VISIBILITY
+    WindowVisibility = mCurrentWindowState.tVisible
+End Property
+Public Property Get ZoomMode() As ePDF_ZOOM_MODES
+    ZoomMode = mCurrentWindowState.tZoom
+End Property
+
+Public Sub OpenDocumentFull(fullFilename As String, closeWithClass As Boolean)
+    If CBool(Len(Dir(fullFilename))) Then
+    mCloseDocumentWithClass = closeWithClass
+    Set mDVDoc = New PDFPlus.DVDoc
+    
+    If mDVDoc.Open(fullFilename) = False Then
+        MsgBox "could not open PDF"
+    Else
+        Set mDDDoc = mDVDoc.GetDDDoc
+          Set mDVPageView = mDVDoc.GetDVPageView
+        
+        mDVPageView.Goto 0
+        Dim apphandle As Long
+        apphandle = FindWindow(vbNullString, mDDDoc.GetFileName & sAPP_TITLE_SUFFIX_NUANCE)
+        
+        '                                                           '
+        'Open New PDF Window                                        '
+        SetWindowPos apphandle, 0, -1900, 20, 1000, 1000, &H20 '    '
+        'SetWindowPos(hWnd, zOrder, xPos, yPos, Width, Height, Flags)
+        '                       see reference notes for more API info
+ 
+        mCurrentWindowState = mDefaultWindowState
+ 
+        SetWindowToWindowState mCurrentWindowState
+        DoEvents
+        mDVDoc.Maximize 1
+        mDVDoc.BringToFront
+       
+    End If
+    Else
+        MsgBox "PDF not found"
+    End If
+End Sub
+
+Public Sub SetWindowToWindowState(pdfWindowState As tPDF_WINDOW_STATE)
+    With pdfWindowState
+        If .tVisible <> 0 Then
+            If .tVisible = eVisible Then
+                mApp.Show
+            Else
+                mApp.Hide
+            End If
+        End If
+        If .tMode <> 0 Then mDVDoc.SetViewMode .tMode
+        If .tZoom <> 0 Then mDVPageView.ZoomTo .tZoom, 100
+        mDVPageView.Goto mDVPageView.GetPageNum + .tChangePage
+    End With
+End Sub
+
+
+'    '===================================================.
+'    '   FRAMEWORK FOR PDF                               '
+'    '- - - - - - - - - - - - - - - - - - - - - -.       '
+'    Public Enum ePDF_WINDOW_VISIBILITY           '       '
+'        eHidden = -2                            '       '
+'        eVisible = 1                            '       '
+'    End Enum                                    '       '
+'                                                '       '
+'    Public Enum ePDF_VIEW_MODES                  '       '
+'        enone = 1                               '       '
+'        ethumbs = 2                             '       '
+'        eFullScreen = 4                         '       '
+'    End Enum                                    '       '
+'                                                '       '
+'    Public Enum ePDF_ZOOM_MODES                  '       '
+'        eFitPage = 1                            '       '
+'        eFitWidth = 2                           '       '
+'        efitHeight = 3                          '       '
+'    End Enum                                    '       '
+'                                                '       '
+'    Public Enum ePDF_PAGE_CHANGE                 '       '
+'        eBack = 1                               '       '
+'        eFoward = -1                            '       '
+'    End Enum                                    '       '
+'                                                '       '
+'    '- - - - - - - - - - - - - - - - - - - - - -        '
+'    Public Type tPDF_WINDOW_STATE                '       '
+'        tVisible As ePDF_WINDOW_VISIBILITY       '       '
+'        tMode As ePDF_VIEW_MODES                 '       '
+'        tZoom As ePDF_ZOOM_MODES                 '       '
+'        tChangePage As ePDF_PAGE_CHANGE          '       '
+'    End Type                                    '       '
+'                                                '       '
+'    Public gPDFdefaultView As tPDF_WINDOW_STATE  '       '
+'    '- - - - - - - - - - - - - - - - - - - - - -'       '
+
+
+Public Sub CloseDocumentDV()
+    If Not mDVDoc Is Nothing Then
+        mDVDoc.Close 1
+        Set mDVDoc = Nothing
+    End If
+End Sub
+Public Sub CloseDocumentDD()
+    If Not mDDDoc Is Nothing Then
+        mDDDoc.Close
+        Set mDDDoc = Nothing
+    End If
+End Sub
+Public Sub ExitApplication()
+    If Not mApp Is Nothing Then
+        mApp.Exit
+        Set mApp = Nothing
+    End If
+End Sub
+
+
+
+'If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+'    Set gPDFdvDoc = New PDFPlus.DVDoc
+'
+'    If gPDFdvDoc.Open(PDF_Array(IndexPDF)) = False Then
+'        MsgBox "could not open PDF"
+'    End If
+'    Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+'    Set gPDFdvPageView = gPDFdvDoc.GetDVPageView
+'
+'     gPDFdvPageView.Goto 0
+'        appHandle = FindWindow(vbNullString, gPDFddDoc.GetFileName & sAPP_TITLE_SUFFIX_NUANCE)
+'
+'        '                                                           '
+'        'Open New PDF Window                                        '
+'        SetWindowPos appHandle, 0, -1900, 20, 1000, 1000, &H20 '    '
+'        'SetWindowPos(hWnd, zOrder, xPos, yPos, Width, Height, Flags)
+'        '                       see reference notes for more API info
+'
+'
+'        ApplyDefaultWindowStatePDF
+'
+'        DoEvents
+'
+'        gPDFdvDoc.BringToFront
+'        pdfPageCount = gPDFddDoc.GetNumPages
+'
+'        AppActivate wb.Windows(1).Caption
+'        If pdfPageCount <> 1 Then MsgBox "File contained " & pdfPageCount & " pages", vbExclamation, "WARNING !!"
+'    End If
+
+Function GetAllTextInPDF(fullPath As String) As String()
+
+
+
+    Dim nWord As Integer
+    Dim iWord As Integer
+    Dim nPage As Integer
+    Dim iPage As Integer
+    Dim strWord As String
+    Dim pageText() As String
+
+    'SetPDFPlusApplication
+    
+    Set mDVDoc = New PDFPlus.DVDoc
+    mApp.Show
+
+    If mDVDoc.Open(fullPath) = True Then
+        mDVDoc.BringToFront
+        Set mDDDoc = mDVDoc.GetDDDoc
+        Set mJSO = mDDDoc.GetJSObject
+        nPage = mDDDoc.GetNumPages
+        ReDim pageText(nPage)
+        For iPage = 0 To nPage - 1
+            nWord = mJSO.getPageNumWords(iPage)
+            For iWord = 0 To nWord - 1
+                strWord = mJSO.getPageNthWord(iPage, iWord, False) ' if the last parameter is set to True, it avoids certain characters like dash os blank spaces etc
+                pageText(iPage) = pageText(iPage) & strWord
+            Next
+            Debug.Print pageText(iPage)
+        Next
+    End If
+    Set mDVDoc = Nothing
+    mApp.Exit
+    Set mApp = Nothing
+    GetAllTextInPDF = pageText
+End Function
+
+

@@ -1,0 +1,85 @@
+Attribute VB_Name = "iServeTestModule"
+Option Explicit
+
+'Public sf As iServeTestClass
+Public sfeo As ChromeDriver
+
+Private mUserQuit As Boolean
+
+Sub OpenSalesforce()
+
+    If Not InitializedClass Then
+        MsgBox "failed to initialize and expose class"
+        Stop
+    End If
+    
+    If Not SalesForceLogin Then
+        MsgBox "failed logon"
+        Stop
+    End If
+
+    
+    GoToInvoiceEntryPage
+
+    GoToUploadAttachmentPage
+    
+End Sub
+
+Function InitializedClass() As Boolean
+    If sf Is Nothing Then Set sf = New iServeTestClass
+    If Not sf Is Nothing Then
+        Set sfeo = sf.ExposedIserveObject
+        If Not sfeo Is Nothing Then InitializedClass = True
+    End If
+End Function
+
+Function SalesForceLogin() As Boolean
+    SalesForceLogin = sf.ExposedLoginSuccess
+End Function
+
+Sub CloseSalesforce()
+    sf.CloseIserve False, True
+    Set sfeo = Nothing
+    Set sf = Nothing
+End Sub
+
+
+Sub GoToInvoiceEntryPage()
+    sfeo.Get sWEBPAGE_URL_INVOICEENTRY
+    WaitForInvoiceEntryPage
+End Sub
+Sub WaitForInvoiceEntryPage()
+    Dim strVal As String
+    strVal = sf.ExposedSetFieldNameString(sLOCATOR_BUTTON_ADD_INVOICELINE, "0")
+    Do
+        ToggleBetweenFrames
+    Loop Until sfeo.FindElementsById(strVal).Count > 0
+End Sub
+
+Sub GoToUploadAttachmentPage()
+    Dim strVal As String
+    strVal = sf.ExposedSetFieldNameString(sLOCATOR_BUTTON_ADD_ATTACHMENTS, "0")
+    Do
+        ToggleBetweenFrames
+    Loop Until sfeo.FindElementsByName(strVal).Count > 0
+    sfeo.FindElementsByName(strVal).item(1).Click
+End Sub
+
+
+Private Sub ToggleBetweenFrames()
+    DoEvents
+    If sfeo.FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).Count = 0 Then
+        If sfeo.FindElementsById(sLOCATOR_DIV_ID_BRAND).Count = 1 Then
+            If sfeo.FindElementsById(sLOCATOR_DIV_ID_BRAND).item(1).FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).Count = 1 Then
+                sfeo.SwitchToFrame sfeo.FindElementsById(sLOCATOR_DIV_ID_BRAND).item(1).FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).item(1).Attribute(sLOCATOR_CSS_NAME)
+            End If
+        Else
+            sfeo.SwitchToDefaultContent
+        End If
+    Else
+        sfeo.SwitchToFrame sfeo.FindElementsById(sLOCATOR_DIV_ID_BRAND).item(1).FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).item(1).Attribute(sLOCATOR_CSS_NAME)
+    End If
+End Sub
+
+
+End Sub

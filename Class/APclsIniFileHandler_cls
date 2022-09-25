@@ -1,0 +1,307 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsIniFileHandler"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+    Private Const CONFIGFILE As String = "iServeBatch.ini"
+    Private Const ROOTDIR As String = "LOCALAPPDATA"
+    Private Const HOMEDIR As String = "\VBA"
+
+Private Type IniValues
+    Section As String
+    Key As String
+    Value As String
+End Type
+Private ini As IniValues
+
+Private RegisteredUser As String
+Private ConfigFound As Boolean
+Private FieldList() As String
+Private fName As String
+
+Private Declare Function GetPrivateProfileString Lib "kernel32" Alias _
+    "GetPrivateProfileStringA" (ByVal lpApplicationName As String, ByVal lpKeyName As Any, _
+    ByVal lpDefault As String, ByVal lpReturnedString As String, ByVal nSize As Long, _
+    ByVal lpFileName As String) As Long
+
+Private Declare Function WritePrivateProfileString Lib "kernel32" Alias _
+    "WritePrivateProfileStringA" (ByVal lpApplicationName As String, ByVal lpKeyName As Any, _
+    ByVal lpString As Any, ByVal lpFileName As String) As Long
+ 
+Public Property Let longFilename(strVal As String)
+    If Dir(strVal) <> vbNullString Then
+        fName = strVal
+    Else
+        fName = vbNullString
+    End If
+End Property
+Public Property Get longFilename() As String
+    longFilename = fName
+End Property
+
+Public Property Get SectionID() As String
+    SectionID = ini.Section
+End Property
+Public Property Let SectionID(strVal As String)
+    ini.Section = strVal
+End Property
+
+Public Property Get keyID() As String
+    keyID = ini.Key
+End Property
+Public Property Let keyID(strVal As String)
+    ini.Key = strVal
+End Property
+
+Public Property Get KeyValue() As String
+    KeyValue = ini.Value
+End Property
+Public Property Let KeyValue(strVal As String)
+    ini.Value = strVal
+End Property
+
+Public Property Get UserFullName() As String
+    UserFullName = RegisteredUser
+End Property
+
+Public Property Get ListOfFields() As String()
+    ListOfFields = FieldList
+End Property
+
+Public Property Get FoundConfigFile() As Boolean
+    FoundConfigFile = ConfigFound
+End Property
+Public Property Get Configured() As Boolean
+    If Replace(RegisteredUser, Chr(32), vbNullString) = vbNullString Then
+        Configured = False
+    Else
+        Configured = True
+    End If
+End Property
+
+'reads an Ini string
+Public Function ReadKey() As String
+    If fName <> vbNullString And ini.Section <> vbNullString And ini.Key <> vbNullString Then
+        ini.Value = ReadIniKey(fName, ini.Section, ini.Key)
+    Else
+        ini.Value = vbNullString
+    End If
+    ReadKey = ini.Value
+End Function
+Private Function ReadIniKey(fileName As String, Section As String, Key As String) As String
+    Dim retval As String
+    Dim v As Long
+    Dim retLen As Long
+    Do
+        retLen = retLen + 260 ' arbitrary - can be set higher/lower if desired
+        retval = Space(retLen)
+        v = GetPrivateProfileString(Section, Key, "", retval, retLen, fileName)
+    Loop Until v < retLen - 1
+    ReadIniKey = Left$(retval, v)
+End Function
+
+'writes an Ini string
+Public Function WriteKey()
+    If fName <> vbNullString And ini.Section <> vbNullString And ini.Key <> vbNullString And ini.Value <> vbNullString Then
+        Call WriteIniKey(fName, ini)
+        If ini.Value = ReadIniKey(fName, ini.Section, ini.Key) Then
+            WriteKey = ini.Value
+        Else
+            WriteKey = vbNullString
+        End If
+    Else
+        WriteKey = vbNullString
+    End If
+End Function
+Private Sub WriteIniKey(fileName As String, iniWrite As IniValues)
+    WritePrivateProfileString iniWrite.Section, iniWrite.Key, iniWrite.Value, fileName
+End Sub
+
+Private Sub Class_Initialize()
+    Dim i As Integer
+    Dim x As Integer
+    Dim strVar As String
+    Dim IFile As Integer
+    fName = Environ(ROOTDIR) & HOMEDIR & Chr(92)
+    If Dir(fName & CONFIGFILE) = vbNullString Then
+        Call SetupNewEnvironment
+    Else
+        ConfigFound = True
+        fName = fName & CONFIGFILE
+    End If
+    If ConfigFound Then
+        IFile = FreeFile
+        Open fName For Input As #IFile
+        FieldList = Split(Input$(LOF(IFile), #IFile), vbNewLine)
+        Close #IFile
+        For i = LBound(FieldList) To UBound(FieldList)
+            x = InStr(FieldList(i), "=")
+            If x > 0 Then FieldList(i) = Left(FieldList(i), x - 1)
+        Next
+        RegisteredUser = ReadIniKey(fName, "Registered User", "First") & Chr(32) & ReadIniKey(fName, "Registered User", "Last")
+    End If
+End Sub
+
+Public Function ChangeKeyValue(ByVal inSection As String, ByVal newKeyName As String, Optional ByVal customTitle As String) As Boolean
+    Dim newKey As IniValues
+    If Not CBool(Len(customTitle)) Then customTitle = "Change Key Value"
+    If CBool(Len(inSection)) And CBool(Len(newKeyName)) Then
+        With newKey
+            .Section = inSection
+            .Key = newKeyName
+            .Value = InputBox("Section = " & .Section & vbNewLine & "Key = " & .Key & vbNewLine & "Value = " & ReadIniKey(fName, .Section, .Key) & DBLLN & "New value = ", customTitle)
+            Call WriteIniKey(fName, newKey)
+            ChangeKeyValue = (.Value = ReadIniKey(fName, .Section, .Key)) And CBool(Len(.Value))
+        End With
+    End If
+End Function
+
+Private Sub AddNewSection(ByVal newSection As String)
+    If CBool(Len(newSection)) Then
+    End If
+End Sub
+
+Private Sub SetupNewEnvironment()
+    Dim fso As New FileSystemObject
+    Dim oText As TextStream
+    Dim ans As Long
+    Dim strVal As String
+    Dim NewConfig As IniValues
+    Dim AllWritesConfirmed As Boolean
+
+    ans = MsgBox("Configuration file was not detected, create one now?", vbYesNo, "Setup Required")
+    Select Case ans
+        Case vbYes
+            If Dir(fName, vbDirectory) = vbNullString Then MkDir fName
+            fName = fName & CONFIGFILE
+            Set oText = fso.CreateTextFile(fName)
+            oText.Close
+            
+            With NewConfig
+            
+                .Section = "Registered User"
+                .Key = "First"
+                .Value = InputBox("First Name = ", "Personal Information")
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Last"
+                .Value = InputBox("Last Name = ", "Personal Information")
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "eMail"
+                .Value = InputBox("iServe Username (Email) = ", "iServe Login")
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Access Code"
+                .Value = InputBox("iServe Password (optional) = ", "iServe Login")
+                If .Value <> vbNullString Then
+                    Call WriteIniKey(fName, NewConfig)
+                End If
+                
+                .Section = "Batch Defaults"
+                .Key = "AutoRun"
+                ans = MsgBox("Start data entry assistant by default? [NO]", vbYesNo, "Default Preferences")
+                Select Case ans
+                    Case vbYes
+                        .Value = "True"
+                    Case vbNo
+                        .Value = "False"
+                End Select
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Rename PDF"
+                ans = MsgBox("Rename PDF files when data entry assistant is on? [YES]", vbYesNo, "Default Preferences")
+                Select Case ans
+                    Case vbYes
+                        .Value = "True"
+                    Case vbNo
+                        .Value = "False"
+                End Select
+                Call WriteIniKey(fName, NewConfig)
+    
+                .Key = "Prompt On Replace"
+                ans = MsgBox("Prompt before overwrite when updating? [YES]", vbYesNo, "Default Preferences")
+                Select Case ans
+                    Case vbYes
+                        .Value = "True"
+                    Case vbNo
+                        .Value = "False"
+                End Select
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Caps Lock"
+                ans = MsgBox("Keep Caps Lock on? [YES]", vbYesNo, "Default Preferences")
+                Select Case ans
+                    Case vbYes
+                        .Value = "True"
+                    Case vbNo
+                        .Value = "False"
+                End Select
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Num Lock"
+                ans = MsgBox("Keep Num Lock on? [YES]", vbYesNo, "Default Preferences")
+                Select Case ans
+                    Case vbYes
+                        .Value = "True"
+                    Case vbNo
+                        .Value = "False"
+                End Select
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Key = "Region"
+                Do
+                strVal = InputBox("Region Filter (CA, NONCA, ALL) = ", "Default Preferences")
+                strVal = UCase(strVal)
+                Loop Until strVal = "CA" Or strVal = "NONCA" Or strVal = "ALL"
+                .Value = strVal
+                Call WriteIniKey(fName, NewConfig)
+                            
+                .Section = "Local Environment"
+                .Key = "Environ"
+                .Value = "LOCALAPPDATA"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "Root"
+                .Value = "\VBA"
+                Call WriteIniKey(fName, NewConfig)
+                
+                .Section = "iServe Environment"
+                .Key = "Environ"
+                .Value = "USERPROFILE"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "Root"
+                .Value = "\iServe"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "Upload"
+                .Value = "\Batched"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "Trash"
+                .Value = "\Trash"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "Complete"
+                .Value = "S:\ACCOUNTING 1\Accounts Payable\Spreadsheets - ALL\2019\NONCA Invoices"
+                Call WriteIniKey(fName, NewConfig)
+                .Key = "URL"
+                .Value = "https://login.salesforce.com/"
+                Call WriteIniKey(fName, NewConfig)
+            
+            End With
+            
+            ConfigFound = True
+            
+        Case vbNo
+            ConfigFound = False
+            
+    End Select
+End Sub
+
+Private Sub Class_Terminate()
+    MsgBox "INI READ/WRITE CLASS INITIALIZED FOR THE AP BATCH ENVIRONMENT WAS TERMINATED"
+    InvoiceBatchEnvironmentWasInitialized = False
+End Sub

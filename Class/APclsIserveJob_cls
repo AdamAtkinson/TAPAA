@@ -1,0 +1,2022 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsIserveJob"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+Public Event AfterLoadingInitializationFile(ByVal success As Boolean)
+Public Event BeforeModeChange(ByRef Cancel As Boolean)
+Public Event ModeChangeDenied()
+Public Event BeforeTerminate(ByVal iServeMode As eISERVECLASSMODE)
+Public Event BeforeCloseWindows()
+Public Event BeforeActivateUploadForm()
+Public Event BeforeActivateAddressForm()
+Public Event iServeClosed(ByVal iServeMode As eISERVECLASSMODE)
+Public Event BeforeiServeClose(ByVal iServeMode As eISERVECLASSMODE, ByVal showPrompt As Boolean, ByRef Cancel As Boolean)
+Public Event TimedOut(ByVal ActiveMode As eISERVECLASSMODE, ByVal ProcDescription As String, ByRef ExtendTimer As Boolean)
+
+    
+
+        Private Const mWINDOWSIZE_X As Long = 900
+        Private Const mWINDOWSIZE_Y As Long = 1000
+    #If forDom Then
+        Private Const mWINDOWPOS_X As Long = 10
+        Private Const mWINDOWPOS_Y As Long = 10
+    #Else
+        Private Const mWINDOWPOS_Y As Long = 25
+        Private Const mWINDOWPOS_X As Long = 200
+        Private enableUploadTest As Boolean
+    #End If
+
+        
+        Private Const mCLASSMODE_INVOICE As String = "Upload Invoice"
+        Private Const mCLASSMODE_ADDRESS As String = "Address Query"
+        Private Const mCLASSMODE_NOTHING As String = "Not Set"
+
+'    Public Enum eISERVECLASSMODE
+'        NotSet = 0
+'        InvoiceMode = 1
+'        AddressMode = 2
+'    End Enum
+    Private mCurrentMode As eISERVECLASSMODE
+
+'   MODULE SCOPED CONSTANTS                                                                                                                         '
+'    numerical constraints / max values                                                                                                             '
+        Private Const mDRIVER_TIMEOUT_ms As Integer = 10000            'implicit timeout for all iserve interactions
+        Private Const mTIMER_LOOP_TIMEOUT_s As Integer = 10
+        Private Const mATTEMPTS_BEFORE_ABORT As Integer = 10
+        Private Const TimeOutThreshold As Integer = 300             'selenium actions will be tried this many times before timing out                       '
+        Private Const maxInvoicesInGroup As Integer = 50            'the maximum number of invoice lines allowed in an invoice group                        '
+        Private Const maxGroupsInBatch  As Integer = 5              'the maximum number of invoice groups allowed in a batch                                '
+        Private Const maxFileNameLength As Integer = 27             'max length allowed when renaming invoice files, based on "Invoice (99) 1234567890.pdf" '
+        Private Const mFILE_EXTENSION As String = ".pdf"            'invoices are saved as this file type (include the period)                              '
+        Private Const mSECONDS_PER_INVOICE As Integer = 13          'approximate timed averages                                                             '
+        Private Const mITERATIONSUNTILRETRYURL As Integer = 20      'number of loop iterations until retry loading page
+    
+'MODULE SCOPED VARIABLES
+    'data strings
+        Private urlLogin As String          'probably https://login.salesforce.com/
+        Private pw As String                'NOT SECURE - pw for iserve user account (read from ini or entered in input box and sent to chrome with selenium.keys method)
+        Private Login As String             'iserve user account
+        Private mUploadQueueFolder As String         'folder holding invoices that will be uploaded to iserve with subfolder holding invoices that have been renamed
+        Private mArchiveFolder As String   'invoices renamed by this program are moved to this subfolder = mUploadQueueFolder(full path) & inMoveToFolder
+        Private AddressArray() As String    'used for the vendor inquirie mode
+        
+    'indexes
+        Private mLoopCounter As Integer              'index for the timeout timer
+        Private mRow As Integer        'the current invoice row (the worksheet row - NOT table row!!)
+        Private maryRows() As Integer       'holds the umarked row numbers for the entire batch (mRow will always be equal to an element of this array)
+        Private miRows As Integer           'the index of maryRows (mRow is equal to maryrows(miRow))
+        
+    'flags
+        Private mflagUserQuit As Boolean
+        'Private mflagFrameExpected As Boolean
+        Private mflagIsReady As Boolean
+        Private mflagAllowModeChange As Boolean
+        Private mflagIsJobRunning As Boolean
+
+        
+    'numerical
+        Private mInvoiceCount As Long
+        Private mStartTime As Single
+        Private mElapsedTime As Single
+        Private mEstimatedFinishTime As Single
+        
+        
+
+'MODULE SCOPED OBJECTS
+    'selenium objects
+        Private moVerify As New Selenium.Verify
+        Private moAssert As New Selenium.Assert 'halts program if the chrome object doesn't hold the value we was sent to it
+        Private moWaiter As New Selenium.Waiter 'don't believe i use this
+        Private moKeys As New Selenium.Keys 'passes data to chrome object
+        Private moDriver As New Selenium.ChromeDriver 'the chrome object
+        
+Private Sub Class_Initialize()
+    Dim iniIsLoaded As Boolean
+    mCurrentMode = NotSet
+    mflagAllowModeChange = True
+    'moDriver.Timeouts.ImplicitWait = mDRIVER_TIMEOUT_ms
+    mflagIsReady = VerifyInitializationFileLoaded
+    
+    RaiseEvent AfterLoadingInitializationFile(mflagIsReady)
+End Sub
+
+Private Sub Class_Terminate()
+    RaiseEvent BeforeTerminate(mCurrentMode)
+End Sub
+'Sub userQuit()
+'    CloseIserve
+'End Sub
+Sub CloseIserve(cancelClose As Boolean, showPrompt As Boolean)
+    Dim Cancel As Boolean
+    RaiseEvent BeforeiServeClose(mCurrentMode, showPrompt, Cancel)
+    cancelClose = CBool(Cancel)
+    If Not Cancel Then
+        mflagUserQuit = True
+        moDriver.Quit
+        Set moDriver = Nothing
+        RaiseEvent iServeClosed(mCurrentMode)
+    End If
+End Sub
+Public Property Get IsJobRunning() As Boolean
+    IsJobRunning = mflagIsJobRunning
+End Property
+Public Property Get AllowModeChange() As Boolean
+    AllowModeChange = mflagAllowModeChange
+End Property
+
+Public Property Get ExposedIserveObject() As Selenium.ChromeDriver
+    Set ExposedIserveObject = moDriver
+End Property
+
+Public Property Let ChangeMode(p_NewMode As eISERVECLASSMODE)
+    Dim Cancel As Boolean
+    If Not mflagAllowModeChange Or mCurrentMode = p_NewMode Then Exit Property
+    RaiseEvent BeforeModeChange(Cancel)
+    mCurrentMode = p_NewMode
+    If Not Cancel Then
+        Select Case p_NewMode
+            Case InvoiceMode
+'            MsgBox "mode change to invoice upload was blocked by adam"
+                RaiseEvent BeforeActivateUploadForm
+'                If gcAP.iServeInvoiceUpload.uploadForm Is Nothing Then Set gcAP.iServeInvoiceUpload.uploadForm = New APformiServeUploadStatus
+'                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = False
+'                gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit = mAllowSubmitInvoice
+'                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = True
+                mflagIsReady = True
+                
+                
+            Case AddressMode
+                RaiseEvent BeforeActivateAddressForm
+                mflagIsReady = True
+            Case NotSet
+                RaiseEvent BeforeCloseWindows
+                mflagIsReady = True
+                mflagAllowModeChange = True
+                mflagIsJobRunning = False
+        End Select
+        
+    Else
+        RaiseEvent ModeChangeDenied
+        p_NewMode = mCurrentMode
+    End If
+        mCurrentMode = p_NewMode
+End Property
+Public Property Get AddressList() As String()
+    AddressList = AddressArray
+End Property
+Public Property Get SelectedAddress() As String
+    SelectedAddress = AddressArray(-gcAP.iServeAddressQuery.addressForm.SpinButton_SelectAddress.Value)
+End Property
+
+Public Property Get CurrentMode() As String
+    CurrentMode = mCurrentMode
+End Property
+
+
+
+Private Function ConvertClassModeEnumToString(ByVal classMode As eISERVECLASSMODE) As String
+    If classMode = AddressMode Then ConvertClassModeEnumToString = mCLASSMODE_ADDRESS
+    If classMode = InvoiceMode Then ConvertClassModeEnumToString = mCLASSMODE_INVOICE
+    If classMode = NotSet Then ConvertClassModeEnumToString = mCLASSMODE_NOTHING
+End Function
+Private Function InInvoiceMode(Optional ByVal RaiseAlert As Boolean) As Boolean
+    If mCurrentMode = InvoiceMode Then InInvoiceMode = True
+    If RaiseAlert And Not InInvoiceMode Then RaiseAlertWrongMode InvoiceMode
+End Function
+Private Function InAddressMode(Optional ByVal RaiseAlert As Boolean) As Boolean
+    If mCurrentMode = AddressMode Then InAddressMode = True
+    If RaiseAlert And Not InAddressMode Then RaiseAlertWrongMode AddressMode
+End Function
+Private Function NotInAnyMode(Optional ByVal RaiseAlert As Boolean) As Boolean
+    If mCurrentMode = NotSet Then NotInAnyMode = True
+    If RaiseAlert And Not NotInAnyMode Then RaiseAlertWrongMode NotSet
+End Function
+Private Sub RaiseAlertWrongMode(ByVal classMode As eISERVECLASSMODE)
+    MsgBox "Wrong mode for operation.  Expecting " & ConvertClassModeEnumToString(classMode) _
+                            & " but is currently " & ConvertClassModeEnumToString(mCurrentMode)
+End Sub
+Private Function IsInitialized(Optional ByVal RaiseAlert As Boolean) As Boolean
+    If RaiseAlert And Not mflagIsReady Then MsgBox "Failed to initialize required parameters", vbCritical
+    IsInitialized = mflagIsReady
+End Function
+
+
+Private Function VerifyInitializationFileLoaded() As Boolean
+    Dim strVal As String
+    Dim FailedConfig As Boolean
+    On Error GoTo HANDLER
+    
+    If gcIni Is Nothing Then Set gcIni = New APclsIniFileHandler
+    If gcIni.Configured = False Then Exit Function
+    gcIni.SectionID = "iServe Environment"
+    gcIni.keyID = "URL"
+    urlLogin = gcIni.ReadKey
+    gcIni.keyID = "Environ"
+    strVal = gcIni.ReadKey
+    If strVal <> vbNullString Then mUploadQueueFolder = Environ(strVal)
+    gcIni.keyID = "Root"
+    mUploadQueueFolder = mUploadQueueFolder & gcIni.ReadKey
+    If mUploadQueueFolder <> vbNullString Then
+        gcIni.keyID = "Complete"
+        mArchiveFolder = gcIni.ReadKey
+        If Not mArchiveFolder Like "*:\*" Then mArchiveFolder = mUploadQueueFolder & gcIni.ReadKey
+        If Right(mArchiveFolder, 1) <> Chr(92) Then mArchiveFolder = mArchiveFolder & Chr(92)
+        If Dir(mArchiveFolder, vbDirectory) = vbNullString Then
+            strVal = MsgBox("Missing the destination folder." _
+                    & vbCr & vbCr & _
+                    "Do you want to make the folder now?", vbYesNo, "Missing folder")
+            Select Case strVal
+                Case vbYes
+                    MkDir mArchiveFolder
+                    If Dir(mArchiveFolder, vbDirectory) = vbNullString Then
+                        MsgBox "Operation Failed.  Please try again."
+                        FailedConfig = True
+                    Else
+                        MsgBox "New folder created:  " & mArchiveFolder
+                    End If
+                Case vbNo
+                    MsgBox "Unable to continue without a folder to hold invoices."
+                    FailedConfig = True
+            End Select
+        End If
+        If Not FailedConfig Then
+            strVal = Format(Now, "yyyy") & Format(Now, "mm") & Format(Now, "dd") & Chr(92)
+            mArchiveFolder = mArchiveFolder & strVal
+            If Dir(mArchiveFolder, vbDirectory) = vbNullString Then MkDir mArchiveFolder
+            gcIni.keyID = "Upload"
+            mUploadQueueFolder = mUploadQueueFolder & gcIni.ReadKey & Chr(92)
+            If Dir(mUploadQueueFolder, vbDirectory) = vbNullString Then
+                strVal = MsgBox("Missing the source folder." _
+                        & vbCr & vbCr & _
+                        "Do you want to make the folder now?", vbYesNo, "Missing folder")
+                Select Case strVal
+                    Case vbYes
+                        MkDir mUploadQueueFolder
+                        If Dir(mUploadQueueFolder, vbDirectory) = vbNullString Then
+                            MsgBox "Operation Failed.  Please try again."
+                            FailedConfig = True
+                        Else
+                            MsgBox "New folder created:  " & mUploadQueueFolder
+                        End If
+                    Case vbNo
+                        MsgBox "Unable to continue without a folder to hold invoices."
+                        FailedConfig = True
+                End Select
+            End If
+        End If
+    End If
+    If Not FailedConfig Then
+        gcIni.SectionID = "Registered User"
+        gcIni.keyID = "eMail"
+        Login = gcIni.ReadKey
+        gcIni.keyID = "Access Code"
+        pw = gcIni.ReadKey
+        
+        If Login = vbNullString Or urlLogin = vbNullString Or mUploadQueueFolder = vbNullString Or mArchiveFolder = vbNullString Then
+            MsgBox "Missing or corrupt configuration file.  Program terminated"
+            End
+        End If
+        If pw = vbNullString Then
+            pw = InputBox("Password: ", "iServe / Salesforce Password")
+        End If
+        If pw = vbNullString Then
+            MsgBox "Invalid login.  Program terminated"
+            End
+        End If
+        
+        VerifyInitializationFileLoaded = Login <> vbNullString And pw <> vbNullString _
+                And mUploadQueueFolder <> vbNullString And mArchiveFolder <> vbNullString
+    End If
+    Exit Function
+HANDLER:
+    Resume
+End Function
+
+
+
+Sub UploadInvoiceBatchToIserve()
+
+    On Error GoTo MAINHANDLER
+    Dim ans As Integer
+    Dim elapsedMinutes As Single
+    Dim elapsedSeconds As Single
+    Dim estimatedMinutes As Single
+    Dim estimatedSeconds As Single
+    Dim zycusPO As Boolean
+    Dim i As Long
+    Dim errorCount As Long
+
+    If Not IsInitialized(True) Then Exit Sub
+    If Not InInvoiceMode(True) Then Exit Sub
+    
+    #If Debugging Then
+        Select Case MsgBox("DEBUGGING IS ENABLED, INVOICE SUBMISSION IS DISABLED" & DBLLN _
+                            & "Enable Upload Testing (files are not renamed and moved)?", _
+                            vbYesNo + vbCritical, "DEBUGGING MODE IS ON")
+            Case vbYes
+                enableUploadTest = True
+            Case Is = vbNo
+                'do nothing
+        End Select
+        gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = False
+        gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit.Value = False
+        gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = True
+    #End If
+
+'    gcAP.iServeInvoiceUpload.uploadForm.Show
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Setting Options ..."
+    
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Building Indexes ..."
+    
+    Call CreateUploadIndexes: If mflagUserQuit Then GoTo USEREXIT
+    
+'    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Logging in ..."
+'    Call iServe_Login
+    
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Navigating to invoice entry ..."
+    
+    Call GoToInvoiceEntryScreen: If mflagUserQuit Then GoTo USEREXIT
+
+    ModifyFormButton gcAP.mainAPform.CommandButton_iServeInvoiceUpload, styleOn
+
+    mStartTime = Timer
+    mInvoiceCount = Application.WorksheetFunction.CountA(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range)
+    Dim virginWebForm As Boolean
+    virginWebForm = True
+    'loop through every row in the worksheet
+    ReDim maryRows(0 To 0)
+    For i = 2 To mInvoiceCount
+        If Not loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(i).Cells.Font.Strikethrough Then
+            If UBound(maryRows) > 0 Then
+                ReDim Preserve maryRows(1 To UBound(maryRows) + 1)
+            Else
+                ReDim maryRows(1 To 1)
+            End If
+            maryRows(UBound(maryRows)) = i
+        End If
+    Next i
+    For miRows = LBound(maryRows) To UBound(maryRows)
+        mRow = maryRows(miRows)
+        
+        mElapsedTime = Int(Timer - mStartTime)
+        elapsedMinutes = Int(mElapsedTime / 60)
+        elapsedSeconds = Int(mElapsedTime - elapsedMinutes * 60)
+        mEstimatedFinishTime = Int(mInvoiceCount * mSECONDS_PER_INVOICE - mElapsedTime) '(mElapsedTime * mInvoiceCount / RowIndex)
+        If mEstimatedFinishTime < mSECONDS_PER_INVOICE Then
+            mEstimatedFinishTime = Int((mElapsedTime * mInvoiceCount / mRow) - mElapsedTime)
+        End If
+        estimatedMinutes = Int(mEstimatedFinishTime / 60)
+        estimatedSeconds = Int(mEstimatedFinishTime - estimatedMinutes * 60)
+        
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_Timer = "Elapsed: " & elapsedMinutes & "m " & elapsedSeconds _
+                & "s   Est finish: " & estimatedMinutes & "m " & estimatedSeconds & "s"
+        
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_VendorName.Caption = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_ApproverName = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_APPROVERNAME).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_BatchNumber = "Batch # " & loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_LineNumber = "Line # " & loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_GroupNumber = "Grp # " & loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceAmount = FormatCurrency(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Range(mRow), 2)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceDate = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceDescription = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDESCRIPTION).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_Site = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceNumber = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(mRow)
+        gcAP.iServeInvoiceUpload.uploadForm.lbl_ExcelRow = "Processing row " & mRow & " of " & mInvoiceCount
+
+        Dim flagStartBatch As Boolean
+        Dim flagEndBatch As Boolean
+        Dim flagAddGroup As Boolean
+        
+        With loInvoiceBatch
+            If miRows > LBound(maryRows) Then
+                With .ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER)
+                    If .Range(maryRows(miRows - 1)) < .Range(maryRows(miRows)) Then
+                        flagStartBatch = True 'the batch sequence incremented, this is a new batch
+                    End If
+                    If miRows < UBound(maryRows) Then
+                        If .Range(maryRows(miRows)) < .Range(maryRows(miRows + 1)) Then
+                            flagEndBatch = True 'the next row in the batch table is incremented, this is the end of this batch
+                        End If
+                    End If
+                End With
+                With .ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER)
+                    If .Range(maryRows(miRows - 1)) < .Range(maryRows(miRows)) And Not flagStartBatch Then
+                        flagAddGroup = True 'the group sequence incremented, it is a new group in the same batch
+                    End If
+                End With
+            Else 'this is the first row in the batch table, always a new batch
+                flagStartBatch = True
+            End If
+        End With
+        
+
+        
+        If flagAddGroup Then
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Group complete, adding another group ..."
+            AddInvoiceGroup
+        End If
+        flagAddGroup = False
+        
+        zycusPO = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Range(mRow) Like "Z#######"
+        
+        If flagStartBatch Then
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering supplier name ..."
+            EnterSupplierName
+            If zycusPO Then
+                gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Checking the Zycus PO box ..."
+                CheckZycusPO
+            Else
+                gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering approver name ..."
+                EnterApproverName
+            End If
+        End If
+        flagStartBatch = False
+        
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Adding invoice line to group ..."
+        AddInvoiceLine
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering date ..."
+        EnterInvoiceDate
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice number ..."
+        EnterInvoiceNumber
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice amount ..."
+        EnterInvoiceAmount
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice description ..."
+        EnterInvoiceDescription
+        If mflagUserQuit Then GoTo USEREXIT
+        
+        If zycusPO Then
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice Zycus PO number ..."
+            EnterZycusPoNumber
+            If mflagUserQuit Then GoTo USEREXIT
+        Else
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice expense period ..."
+            SelectExpensePeriod
+            If mflagUserQuit Then GoTo USEREXIT
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice alias ..."
+            EnterInvoiceAlias
+            If mflagUserQuit Then GoTo USEREXIT
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Entering invoice GL account ..."
+            EnterInvoiceGLAccount
+            If mflagUserQuit Then GoTo USEREXIT
+        End If
+               
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(mRow) = True Then
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Checking the remittance required box ..."
+            CheckRemittanceRequired
+            If mflagUserQuit Then GoTo USEREXIT
+        End If
+        
+        #If Debugging Then
+            If enableUploadTest Then
+                gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Attaching the invoice ..."
+                AttachInvoiceFile
+                If mflagUserQuit Then GoTo USEREXIT
+            End If
+        #Else
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Attaching the invoice ..."
+            AttachInvoiceFile
+            If mflagUserQuit Then GoTo USEREXIT
+        #End If
+
+
+        Do While moDriver.Title <> sWEBPAGE_TITLE_INVOICE
+            DoEvents
+            Application.Wait 1
+            DoEvents
+        Loop
+        
+        If mflagUserQuit Then GoTo USEREXIT
+
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) = 1 _
+                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) = 1 Then
+            If PassedDataValidation(zycusPO) Then
+                'do something good
+            Else
+                If mflagUserQuit Then GoTo USEREXIT
+                MsgBox "Failed Validation - code will continue when this window is closed"
+                'do something bad
+            End If
+
+        End If
+
+        zycusPO = False
+        
+        If flagEndBatch Or miRows = UBound(maryRows) Then
+            gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Batch finished ... "
+            If gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit.Value Then
+                SubmitBatchForApproval
+            Else
+                SaveBatchAsDraft
+            End If
+            GoToInvoiceEntryScreen
+        End If
+        flagEndBatch = False
+        
+
+    Next miRows
+    
+'    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Almost done, working with the last invoice..."
+'    Select Case gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit.Value
+'        Case Is = True
+'            SubmitBatchForApproval
+'        Case Is = False
+'            SaveBatchAsDraft
+'    End Select
+    
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Done with invoices, navigating home..."
+'    GoToInvoiceEntryScreen
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Finished"
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_VendorName.Caption = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_ApproverName = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_BatchNumber = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_GroupNumber = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_GroupNumber = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceAmount = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceDate = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceDescription = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_InvoiceNumber = vbNullString
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_ExcelRow = vbNullString
+    mElapsedTime = Int(Timer - mStartTime)
+    gcAP.iServeInvoiceUpload.uploadForm.lbl_Timer = "Finished: " & mElapsedTime & "s     Est: " & mEstimatedFinishTime & "s"
+    gcAP.iServeInvoiceUpload.uploadForm.Caption = "Finished"
+    
+'    Do
+        Dim cancelClose As Boolean
+        CloseIserve cancelClose, True
+        Select Case cancelClose
+            Case True
+                gcAP.iServeInvoiceUpload.uploadForm.tgl_Pause = True
+                gcAP.iServeInvoiceUpload.uploadForm.Show
+            Case False
+                gcAP.iServeInvoiceUpload.uploadForm.Hide
+'                Exit Sub
+        End Select
+            
+    
+MAINEXIT:
+'    MsgBox "Exiting iServe automation."
+    CloseIserve cancelClose, False
+    Exit Sub
+    
+USEREXIT:
+'    On Error Resume Next
+'    MsgBox "Program terminated early by user."
+'    gcAP.iServeInvoiceUpload.uploadForm.Hide
+    Exit Sub
+
+MAINHANDLER:
+    If mflagUserQuit Then
+        Resume USEREXIT
+    Else
+        Select Case Err.Number
+            Case Is = 999
+                MsgBox "Error initializing program." & vbCr & vbCr & "Unable to continue"
+            Case 57
+                MsgBox "Error - User Quit"
+                mflagUserQuit = True
+                Resume USEREXIT
+            Case 7
+                Select Case MsgBox("Error # 7" & DBLLN & Err.Description & DBLLN & _
+                        Err.Source & DBLLN & "(Last dll error: " & Err.LastDllError & ")" & _
+                        DBLLN & "Manual recovery advised.  Continue running application?", _
+                        vbCritical + vbYesNo, "Likely an iFrame Error")
+                    Case vbYes
+                        Resume Next
+                    Case vbNo
+                        mflagUserQuit = True
+                        Resume USEREXIT
+                End Select
+            Case -2146233080
+                Select Case MsgBox("Error # -2146233080" & DBLLN & Err.Description & DBLLN & _
+                        Err.Source & DBLLN & "(Last dll error: " & Err.LastDllError & ")" & _
+                        DBLLN & "Manual recovery advised.  Continue running application?", _
+                        vbCritical + vbYesNo, "Likely an iFrame Error")
+                    Case vbYes
+                        Resume Next
+                    Case vbNo
+                        mflagUserQuit = True
+                        Resume USEREXIT
+                End Select
+
+            Case Else
+                Select Case MsgBox("Error # " & Err.Number & DBLLN & Err.Description & DBLLN & _
+                        Err.Source & DBLLN & "(Last dll error: " & Err.LastDllError & ")" & _
+                        DBLLN & "Manual recovery advised.  Continue running application?", _
+                        vbCritical + vbYesNo, "Unknown Error In iServe Class Module")
+                    Case vbYes
+                        Resume Next
+                    Case vbNo
+                        mflagUserQuit = True
+                        Resume USEREXIT
+                End Select
+        End Select
+    End If
+    Resume MAINEXIT
+End Sub
+
+
+Private Function PassedDataValidation(zycusPO As Boolean) As Boolean
+    On Error GoTo HANDLER
+    Dim i As Long
+    Dim x As Long
+    Dim ele As WebElement
+    Dim strTemp As String
+    Dim strArray() As String
+    
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Performing a quick validation check ... "
+
+    strArray = CreateStringArrayFromParameters(sTABLE_COL_BATCH_SUPPLIERNAME, _
+                                               sTABLE_COL_BATCH_APPROVERNAME, _
+                                               sTABLE_COL_BATCH_ALIAS, _
+                                               sTABLE_COL_BATCH_ACCOUNTNUMBER)
+
+    If mflagUserQuit Then Exit Function
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(mRow) = True Then
+        strTemp = SetFieldNameString(sLOCATOR_CHECKBOX_REMITTANCEREQUIRED, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+        If Not ValidateAndSwitchFrames("Name", strTemp) Then Err.Raise 999, "error with frames"
+        Set ele = moDriver.FindElementByName(strTemp)
+        If Not ele.IsSelected Then
+                CheckRemittanceRequired
+        End If
+        If Not ele.IsSelected Then MsgBox "Expected remittance checkbox to be checked but it was not." & DBLLN _
+                                & "Program will resume immediately after this window is closed.", _
+                                vbCritical, "ERROR FOUND - DO NOT CLOSE THIS WINDOW UNTIL CORRECTED"
+    End If
+
+    If zycusPO Then
+        x = LBound(strArray) 'because the only field to check is the supplier name                                    '
+    Else
+        x = UBound(strArray) 'because we're looking at 4 elements                                                     '
+    End If
+    For i = LBound(strArray) To x
+
+        If mflagUserQuit Then Exit Function
+        If Not ValidateAndSwitchFrames("Class", sLOCATOR_FIELD_SELECT2_SELECTION, i + 1) Then Err.Raise 999, "error with frames"
+        Set ele = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_SELECTION).item(i + 1) 'webelement has base 1, array has base 0
+        If ele Is Nothing Then
+            MsgBox "THE FINAL FAIL SAFE FAILED", vbCritical, "Could not set element when validating " & strArray(i) _
+                    & DBLLN & "Autosubmit has been disabled as a precaution."
+            gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit = False
+        Else
+            If ele.Text <> loInvoiceBatch.ListColumns(strArray(i)).Range(mRow) Then
+                gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Attempting to fix an error with the " & strArray(i) & "..."
+                Select Case strArray(i)
+                    Case sTABLE_COL_BATCH_SUPPLIERNAME
+                        EnterSupplierName
+                    Case sTABLE_COL_BATCH_APPROVERNAME
+                        EnterApproverName
+                    Case sTABLE_COL_BATCH_ALIAS
+                        EnterInvoiceAlias
+                    Case sTABLE_COL_BATCH_ACCOUNTNUMBER
+                        EnterInvoiceGLAccount
+                End Select
+                
+                If mflagUserQuit Then Exit For
+                
+                If Not ValidateAndSwitchFrames("Class", sLOCATOR_FIELD_SELECT2_SELECTION, i + 1) Then Err.Raise 999, "error with frames"
+                Set ele = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_SELECTION).item(i + 1) 'webelement has base 1, array has base 0
+                If ele Is Nothing Then
+                    MsgBox "THE FINAL FAIL SAFE FAILED", vbCritical, "Could not set element when validating " & strArray(i) _
+                            & DBLLN & "Autosubmit has been disabled as a precaution."
+                    gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit = False
+                Else
+                    If ele.Text <> loInvoiceBatch.ListColumns(strArray(i)).Range(mRow) Then
+                        MsgBox "Expected " & strArray(i) & vbNewLine & loInvoiceBatch.ListColumns(strArray(i)).Range(mRow) _
+                                & DBLLN & "Current " & strArray(i) & vbNewLine & ele.Text & DBLLN _
+                                & "Program will resume immediately after this window is closed.", _
+                                vbCritical, "ERROR FOUND - DO NOT CLOSE THIS WINDOW UNTIL CORRECTED"
+                    Else
+                        gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Error was automatically corrected..."
+                    End If
+                End If
+            End If
+        End If
+        If mflagUserQuit Then Exit For
+    Next i
+    PassedDataValidation = True
+    Exit Function
+HANDLER:
+    MsgBox "error in validation" & DBLLN & Err.Description
+    Resume Next
+End Function
+
+Private Sub ToggleBetweenFrames()
+'Dim startTime As Single
+'startTime = Timer
+'On Error GoTo HANDLER
+
+TRYAGAIN:
+    DoEvents
+    If moDriver.FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).Count = 0 Then
+        If moDriver.FindElementsById(sLOCATOR_DIV_ID_BRAND).Count = 1 Then
+            If moDriver.FindElementsById(sLOCATOR_DIV_ID_BRAND).item(1).FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).Count = 1 Then
+                moDriver.SwitchToFrame moDriver.FindElementsById(sLOCATOR_DIV_ID_BRAND).item(1).FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).item(1).Attribute(sLOCATOR_CSS_NAME)
+            End If
+        Else
+            moDriver.SwitchToDefaultContent
+        End If
+    Else
+        moDriver.SwitchToFrame moDriver.FindElementsByCss(sLOCATOR_FRAME_PARTIAL_NAME).item(1).Attribute(sLOCATOR_CSS_NAME)
+    End If
+    DoEvents
+    Exit Sub
+'HANDLER:
+'If Int(Timer - startTime) < mDRIVER_TIMEOUE_s Then Resume TRYAGAIN
+
+End Sub
+Private Function ValidateAndSwitchFrames(ByVal findBy As String, _
+                                        ByVal findElement As String, _
+                                        Optional ByVal elementIndex As Long = 1, _
+                                        Optional ByVal allowRecursion As Boolean = True _
+                                        ) As Boolean
+    On Error GoTo HANDLER
+    Dim tmr As Single
+    tmr = Timer
+TRYAGAIN:
+    Sleep SLEEP_MIN
+    Do While Not FindElementInFrame(findBy, findElement, elementIndex) And Not mflagUserQuit
+        DoEvents
+        ToggleBetweenFrames
+    Loop
+    If Not mflagUserQuit Then ValidateAndSwitchFrames = True
+    Exit Function
+HANDLER:
+    If Int(Timer - tmr) < mTIMER_LOOP_TIMEOUT_s Then Resume TRYAGAIN
+    MsgBox "error with frames" & DBLLN & Err.Description
+    Resume Next
+End Function
+
+
+
+Private Sub GoToInvoiceEntryScreen()
+    On Error GoTo HANDLER
+
+TRYAGAIN:
+    If moDriver.Title <> sWEBPAGE_TITLE_HOME Then moDriver.Get sWEBPAGE_URL_INVOICEENTRY
+    
+     If Not ValidateAndSwitchFrames("Name", sLOCATOR_BUTTON_SUBMIT_BATCH) Then Err.Raise 999, "error with frames"
+'    Do
+'        ToggleBetweenFrames
+'    Loop Until moDriver.FindElementsByName(sLOCATOR_BUTTON_SUBMIT_BATCH).Count > 0 Or mflagUserQuit
+'
+
+    Exit Sub
+HANDLER:
+    If Not mflagUserQuit Then
+        Select Case MsgBox("Error going to invoice entry" & Err.Number, vbYesNo, "Try Again?")
+            Case vbYes
+                Resume TRYAGAIN 'infinite loop requires user to quit
+            Case vbNo
+                mflagUserQuit = True
+        End Select
+    End If
+End Sub
+
+
+Private Function FindElementInFrame(ByVal findBy As String, _
+                                        ByVal findElement As String, _
+                                        Optional ByVal elementIndex As Long = 1 _
+                                        ) As Boolean
+'error handling bubbles up to the timer in "validateandswithframes"
+    Dim findIndex As Long
+    findIndex = elementIndex
+    Select Case findBy
+        Case "Class"
+            If findElement = sLOCATOR_FIELD_SELECT2_SEARCH Then findIndex = 1
+            FindElementInFrame = moDriver.FindElementsByClass(findElement).Count >= findIndex
+        Case "Id"
+            FindElementInFrame = moDriver.FindElementsById(findElement).Count >= findIndex
+        Case "Name"
+            FindElementInFrame = moDriver.FindElementsByName(findElement).Count >= findIndex
+        Case "PartialCss"
+            FindElementInFrame = moDriver.FindElementsByPartialCss(findElement).Count >= findIndex
+        Case Else
+            Err.Raise 999, , "findBy string not sent as parameter"
+    End Select
+End Function
+
+
+
+
+
+
+Function LoginSuccess() As Boolean
+    On Error GoTo HANDLER
+    
+    Dim usernameValue As String
+    usernameValue = Login
+    Dim passwordValue As String
+    passwordValue = pw
+    
+    If Not CBool(Len(usernameValue)) Then
+        usernameValue = InputBox("User name: ", "iServe / Salesforce Login Name")
+    End If
+    Dim usernameIsNotNull As Boolean
+    If CBool(Len(usernameValue)) Then usernameIsNotNull = True
+    If usernameIsNotNull And Not CBool(Len(passwordValue)) Then
+        passwordValue = InputBox("Password: ", "iServe / Salesforce Password")
+    End If
+    Dim passwordIsNotNull As Boolean
+    If CBool(Len(passwordValue)) Then passwordIsNotNull = True
+
+    Dim returnValue As Boolean
+    Dim failMessage As String
+    If usernameIsNotNull And passwordIsNotNull Then
+        Application.StatusBar = "Please wait while iServe opens..."
+        moDriver.AddArgument "--disable-notifications"
+        moDriver.Get urlLogin
+        moDriver.Window.SetSize mWINDOWSIZE_X, mWINDOWSIZE_Y
+        moDriver.Window.SetPosition mWINDOWPOS_X, mWINDOWPOS_Y
+        Dim ele As WebElement
+        Set ele = moDriver.FindElementById("username")
+        ele.SendKeys usernameValue
+        Dim eleUsernameValue As String
+        eleUsernameValue = ele.Value
+        failMessage = "The webpage did not recieve the expected username"
+        moAssert.Equals usernameValue, eleUsernameValue
+        Set ele = moDriver.FindElementById("password")
+        ele.SendKeys passwordValue
+        Dim elePasswordValue As String
+        elePasswordValue = ele.Value
+        failMessage = "The webpage did not recieve the expected password"
+        moAssert.Equals passwordValue, elePasswordValue
+        Dim btn As WebElement
+        Set btn = moDriver.FindElementById("Login")
+        btn.Click
+        Application.StatusBar = CBool(eTRUTHINESS.isfalse)
+        Do While moDriver.Title = "Login | Salesforce"
+            DoEvents
+            Application.Wait 1
+            DoEvents
+        Loop
+        returnValue = True
+        LoginSuccess = returnValue
+NORMALEXIT:
+        Exit Function
+        
+    Else
+        failMessage = "Missing username or password"
+    End If
+    
+HANDLER:
+    On Error GoTo 0
+    returnValue = False
+    LoginSuccess = returnValue
+    If Not CBool(Len(failMessage)) Then failMessage = "Unknown error while logging in"
+    MsgBox failMessage & DBLLN & Err.Description, vbOKOnly, "Cannot Continue With iServe"
+End Function
+
+
+Private Sub TimeOutThresholdExceeded(Optional strVal As String = "Timed out: operation paused")
+    On Error GoTo 0
+    Dim ExtendTimer As Boolean
+    RaiseEvent TimedOut(mCurrentMode, strVal, ExtendTimer)
+    
+        Select Case mCurrentMode
+            Case InvoiceMode
+                gcAP.iServeInvoiceUpload.uploadForm.Frame_CurrentOperation.Caption = strVal
+                gcAP.iServeInvoiceUpload.uploadForm.tgl_Pause = True
+                gcAP.iServeInvoiceUpload.uploadForm.Show
+            Case AddressMode
+                SetFormTag 1
+        End Select
+    mLoopCounter = 0
+End Sub
+
+
+Private Sub PauseAndOverwriteCurrentOperationWithMessage(strVal As String)
+    On Error GoTo 0
+    Dim ExtendTimer As Boolean
+    RaiseEvent TimedOut(mCurrentMode, strVal, ExtendTimer)
+    If Not ExtendTimer Then
+        Select Case mCurrentMode
+            Case InvoiceMode
+                gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = strVal
+                gcAP.iServeInvoiceUpload.uploadForm.tgl_Pause = True
+                gcAP.iServeInvoiceUpload.uploadForm.Show
+            Case AddressMode
+        End Select
+    End If
+    mLoopCounter = 0
+End Sub
+
+Private Function GetFormTag(Optional ByVal RaiseAlert As Boolean) As Long
+    On Error GoTo 0
+    Select Case mCurrentMode
+        Case AddressMode
+            If Not gcAP.iServeAddressQuery.addressForm Is Nothing Then
+                GetFormTag = gcAP.iServeAddressQuery.addressForm.Tag
+            Else
+                If RaiseAlert Then MsgBox "address query form not set, cannot get tag value"
+            End If
+        Case InvoiceMode
+            If Not gcAP.iServeInvoiceUpload.uploadForm Is Nothing Then
+                GetFormTag = gcAP.iServeInvoiceUpload.uploadForm.Tag
+            Else
+                If RaiseAlert Then MsgBox "upload details form not set, cannot get tag value"
+            End If
+        Case NotSet
+            If RaiseAlert Then MsgBox "mode not set, cannot determine which which form value to get"
+    End Select
+End Function
+Private Sub SetFormTag(ByVal NewTagValue As Long, Optional ByVal RaiseAlert As Boolean)
+    On Error GoTo 0
+    Select Case mCurrentMode
+        Case AddressMode
+            If Not gcAP.iServeAddressQuery.addressForm Is Nothing Then
+                gcAP.iServeAddressQuery.addressForm.Tag = NewTagValue
+            Else
+                If RaiseAlert Then MsgBox "address query form not set, cannot change tag"
+            End If
+        Case InvoiceMode
+            If Not gcAP.iServeInvoiceUpload.uploadForm Is Nothing Then
+                gcAP.iServeInvoiceUpload.uploadForm.Tag = NewTagValue
+            Else
+                If RaiseAlert Then MsgBox "upload details form not set, cannot change tag"
+            End If
+        Case NotSet
+            If RaiseAlert Then MsgBox "mode not set, cannot determine which form to change"
+    End Select
+End Sub
+
+
+Private Sub EnterSupplierName(Optional ByVal SupplierName As String)
+    On Error GoTo HANDLER
+    Dim i As Integer
+    mLoopCounter = 0
+    Select Case mCurrentMode
+        Case AddressMode
+            i = 1
+        Case InvoiceMode
+            SetFormTag 0, True
+            SupplierName = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(mRow)
+            'assumes each group has 5 lines
+            'each line has 2 selection boxes (alias and account) and each group has 2 (vendor name and approver name)
+            i = (loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1) * 10 _
+                + (loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1) * 2 _
+                + 1 ' note: +1 = supplier, +2 = approver
+    End Select
+    
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SELECTION, SupplierName, i)
+    
+    Sleep SLEEP_MAX
+
+    If Not mflagUserQuit Then Call FindAddressInList(SupplierName)
+    
+    If InInvoiceMode And Not mflagUserQuit Then Call AssertElementValuesByClass(sLOCATOR_FIELD_SELECT2_SELECTION, 1, SupplierName, "Supplier Name")
+    If InAddressMode And GetFormTag = 1 Then Call SendToElementByClass(sLOCATOR_FIELD_SELECT2_SELECTION, "moKeys.Escape")
+    
+    Exit Sub
+HANDLER:
+    MsgBox "Error entering supplier name", Err.Description
+    Resume Next
+End Sub
+
+Private Sub EnterApproverName()
+    On Error GoTo HANDLER
+    Dim i As Integer
+    SetFormTag 0, True
+    mLoopCounter = 0
+    'assumes each group has 5 lines
+    'each line has 2 selection boxes (alias and account) and each group has 2 (vendor name and approver name)
+    i = (loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1) * 10 _
+        + (loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1) * 2 _
+        + 2 ' note: +1 = supplier, +2 = approver
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SELECTION, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_APPROVERNAME).Range(mRow), i)
+
+Sleep SLEEP_MAX
+DoEvents
+Sleep SLEEP_MED
+    
+    mLoopCounter = 0
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH, "moKeys.Enter")
+    If Not mflagUserQuit Then Call AssertElementValuesByClass(sLOCATOR_FIELD_SELECT2_SELECTION, 2, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_APPROVERNAME).Range(mRow), "Approver Name")
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub AddInvoiceLine()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_BUTTON_ADD_INVOICELINE, CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByID(strVal)
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceDate()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_INVOICEDATE, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+                            
+    If Year(DateValue(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(mRow))) < 2000 Then
+            MsgBox "Found a date from 1900s"
+            gcAP.iServeInvoiceUpload.uploadForm.tgl_Pause = True
+            gcAP.iServeInvoiceUpload.uploadForm.Show
+    End If
+            
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByID(strVal, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(mRow))
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceNumber()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_INVOICENUMBER, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByID(strVal, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(mRow))
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceAmount()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_INVOICEAMOUNT, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByID(strVal, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Range(mRow))
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceDescription()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_INVOICEDESCRIPTION, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByID(strVal, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDESCRIPTION).Range(mRow))
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterZycusPoNumber()
+    Dim errorCount As Long
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_ZYCUSPO, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByID(strVal, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Range(mRow))
+    Exit Sub
+HANDLER:
+    errorCount = errorCount + 1
+    If errorCount < mATTEMPTS_BEFORE_ABORT Then
+        Resume
+    Else
+        MsgBox "error entering zycus po number"
+    End If
+End Sub
+
+
+Private Sub SelectExpensePeriod()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    Dim myVal As String
+    strVal = SetFieldNameString(sLOCATOR_DROPDOWN_SELECT_EXPENSEPERIOD, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    myVal = Left(MonthName(Month(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Range(mRow))), 3) & _
+          "-" & _
+          Right(Year(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Range(mRow)), 2)
+    If Not mflagUserQuit Then Call LoopUntilSelectedElementByName(strVal, myVal)
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceAlias()
+    On Error GoTo HANDLER
+    Dim fieldIndex As Long
+    Dim strVal As String
+    
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_ALIAS, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    fieldIndex = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) * 2 + 1
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByID(strVal)
+'    Sleep SLEEP_MED
+Sleep SLEEP_MIN
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(mRow))
+    Sleep SLEEP_MAX
+'Sleep SLEEP_MED
+    If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH, "moKeys.Enter")
+    If Not mflagUserQuit Then Call AssertElementValuesByClass(sLOCATOR_FIELD_SELECT2_SELECTION, fieldIndex, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(mRow), "Alias")
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub EnterInvoiceGLAccount()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    Dim ele As WebElement
+    Dim useDefaultFieldValue As Boolean
+    Dim fieldIndex As Long
+    strVal = SetFieldNameString(sLOCATOR_FIELD_ENTER_ACCOUNT, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    fieldIndex = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) * 2 + 2
+    useDefaultFieldValue = False
+    'for the sake of developmental time, this is a shortcut that only takes the short cut on the first line of the first invoice
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) = 1 _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) = 1 Then
+        If Not ValidateAndSwitchFrames("Class", sLOCATOR_FIELD_SELECT2_SELECTION, fieldIndex) Then Err.Raise 999, "Could not validate frame"
+        Set ele = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_SELECTION).item(fieldIndex) 'grab the default selection of the field
+        If ele.Text = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(mRow) Then useDefaultFieldValue = True
+    End If
+
+    If Not useDefaultFieldValue Then
+        If Not mflagUserQuit Then Call LoopUntilClickedElementByID(strVal)
+
+        Sleep SLEEP_MIN
+        If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(mRow))
+        Sleep SLEEP_MAX
+
+        If Not mflagUserQuit Then Call LoopUntilSentToElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH, "moKeys.Enter")
+        If Not mflagUserQuit Then Call AssertElementValuesByClass(sLOCATOR_FIELD_SELECT2_SELECTION, fieldIndex, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(mRow), "Account")
+    End If
+    Exit Sub
+HANDLER:
+    MsgBox "error entering GL account" & DBLLN & Err.Description
+    Resume Next
+End Sub
+
+Private Sub CheckZycusPO()
+    Dim errorCount As Long
+    On Error GoTo HANDLER
+    Dim strVal As String
+    strVal = SetFieldNameString(sLOCATOR_CHECKBOX_ZYCUSPO, _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                            CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByName(strVal)
+    Application.Wait 1
+    If Not mflagUserQuit Then Call AssertElementAttributeByName(strVal, "checked", "true", "Zycus PO Checkbox")
+    DoEvents
+    Exit Sub
+HANDLER:
+    errorCount = errorCount + 1
+    If errorCount > mATTEMPTS_BEFORE_ABORT Then
+        Resume
+    Else
+        MsgBox "Error with Zycus checkbox"
+    End If
+End Sub
+
+
+Private Sub CheckRemittanceRequired()
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    Dim strVal As String
+        strVal = SetFieldNameString(sLOCATOR_CHECKBOX_REMITTANCEREQUIRED, _
+                                CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1), _
+                                CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(mRow) - 1))
+        If Not ValidateAndSwitchFrames("Name", strVal) Then Err.Raise 999, "error with frame"
+        Set ele = moDriver.FindElementByName(strVal)
+        If Not ele.IsSelected Then
+            Do
+                If Not mflagUserQuit Then Call LoopUntilClickedElementByName(strVal)
+                DoEvents
+            Loop Until ele.IsSelected
+        End If
+        '        Sleep SLEEP_MED
+        Sleep SLEEP_MIN
+        If Not mflagUserQuit Then Call AssertElementAttributeByName(strVal, "checked", "true", "Remittance Required Checkbox")
+        Exit Sub
+HANDLER:
+    MsgBox "error with the remittance required checkbox" & DBLLN & Err.Description
+    Resume Next
+End Sub
+
+Private Sub AddInvoiceGroup()
+    On Error GoTo HANDLER
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByID(sLOCATOR_BUTTON_ADDGROUP)
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub SaveBatchAsDraft()
+    On Error GoTo HANDLER
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByName(sLOCATOR_BUTTON_SAVEASDRAFT)
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub SubmitBatchForApproval()
+    On Error GoTo HANDLER
+    If Not mflagUserQuit Then Call LoopUntilClickedElementByName(sLOCATOR_BUTTON_SUBMIT_BATCH)
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub ScrollToBottomOfPage()
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    Set ele = moDriver.FindElementByClass(sLOCATOR_JUMPTO_PAGEBOTTOM)
+    ele.ScrollIntoView
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+
+Private Sub AttachInvoiceFile()
+    On Error GoTo HANDLER
+    Dim strVal As String
+    Dim fDesc As String
+    Dim fName As String
+    Dim tempFname As String
+    Dim fNewName As String
+    Dim fex As String
+    Dim i As Long
+
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(mRow - 1) <> vbNullString _
+    And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(mRow - 1) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(mRow) _
+    Then
+        'invoice line is split, we don't want to upload a second file
+    Else
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow) = vbNullString Then
+            PauseAndOverwriteCurrentOperationWithMessage "No file name listed.  AFile name is missing, cannot upload the file."
+        Else
+               
+            If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks.Count = 1 Then
+                fName = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks(1).Address
+                fDesc = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(mRow).Value2
+            End If
+        End If
+
+        strVal = SetFieldNameString(sLOCATOR_BUTTON_ADD_ATTACHMENTS, CStr(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(mRow) - 1))
+             If Not ValidateAndSwitchFrames("Name", strVal) Then Err.Raise 999, "error with frames"
+'        Do
+'            ToggleBetweenFrames
+'        Loop Until moDriver.FindElementsByName(strVal).Count > 0 Or mflagUserQuit
+        If Not mflagUserQuit Then moDriver.FindElementsByName(strVal).item(1).Click
+'        If Not mflagUserQuit Then Call LoopUntilClickedElementByName(strVal) 'click button to navigate to attachment screen
+'
+'        Do While moDriver.Title <> sWEBPAGE_TITLE_UPLOAD
+'            Application.Wait 1
+'            DoEvents
+'        Loop
+        
+        If Not mflagUserQuit Then Call LoopUntilSentToElementByID(sLOCATOR_FIELD_ENTER_FILENAME, fName)          'send the attachment's file name to the element
+        If Not mflagUserQuit Then Call LoopUntilSentToElementByName(sLOCATOR_FIELD_ENTER_FILEDESCRIPTION, fDesc) 'send the description
+        If Not mflagUserQuit Then Call LoopUntilClickedElementByName(sLOCATOR_BUTTON_UPLOAD)               'click the upload button
+        
+        Do While Not ValidateAndSwitchFrames("Id", sLOCATOR_TABLEFIELD_VALIDATE_ATTACHMENT)
+            DoEvents
+            Application.Wait 1
+            DoEvents
+        Loop
+        If moDriver.FindElementById(sLOCATOR_TABLEFIELD_VALIDATE_ATTACHMENT).Text <> fDesc Then
+            Err.Raise 999, "attachment not found in iserve"
+        End If
+        
+        If Not mflagUserQuit Then Call LoopUntilClickedElementByName(sLOCATOR_BUTTON_DONE) 'click the done button (returns back to invoice page)
+
+        Do While moDriver.Title = sWEBPAGE_TITLE_UPLOAD
+            DoEvents
+            Application.Wait 1
+            DoEvents
+        Loop
+
+        'RENAME AND MOVE FILE
+        #If Not Debugging Then
+            
+            tempFname = GetShortNameFromLongFileName(fName, True) & Format(Now, "_yymmdd-hhnn")
+            fex = GetFileNameExtension(fName)
+            
+            strVal = vbNullString
+            i = 0
+            Do
+                fNewName = mArchiveFolder & tempFname & strVal & fex
+                If Dir(fNewName) <> vbNullString Then
+                    i = i + 1
+                    strVal = "_" & i
+                End If
+            Loop Until Dir(fNewName) = vbNullString
+            Name fName As fNewName    'move invoice from the upload folder to the completed folder
+            DoEvents
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks(1).Address = fNewName
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks(1).ScreenTip = fNewName
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow) = Replace(fNewName, mArchiveFolder, vbNullString)
+        #End If
+        
+    End If
+    Exit Sub
+HANDLER:
+    MsgBox "error with attachment" & DBLLN & Err.Description
+    Resume Next
+    Resume
+End Sub
+
+
+
+
+
+Private Sub LoopUntilSelectedElementByName(elementID As String, myVal As String)
+    On Error GoTo HANDLER
+    mLoopCounter = 0
+    SetFormTag 0, True
+    Do
+        dbP "LoopUntilSelectedElementByName", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until SelectElementByName(elementID, myVal) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+Private Sub LoopUntilSentToElementByClass(elementClass As String, myVal As String, Optional itemIndex As Integer = -1)
+    On Error GoTo HANDLER
+    SetFormTag 0, True
+    mLoopCounter = 0
+    Do
+        dbP "LoopUntilSentToElementByClass", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until SendToElementByClass(elementClass, myVal, itemIndex) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+Private Sub LoopUntilClickedElementByID(elementID As String)
+    On Error GoTo HANDLER
+    SetFormTag 0, True
+    mLoopCounter = 0
+    Do
+        dbP "LoopUntilClickedElementByID", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until ClickElementByID(elementID) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+Private Sub LoopUntilSentToElementByID(elementID As String, myVal As String)
+    On Error GoTo HANDLER
+    mLoopCounter = 0
+    SetFormTag 0, True
+    Do
+        dbP "LoopUntilSentToElementByID", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until SendToElementByID(elementID, myVal) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+Private Sub LoopUntilClickedElementByName(elementName As String)
+    On Error GoTo HANDLER
+'    Dim ele As WebElement
+    mLoopCounter = 0
+    SetFormTag 0, True
+    Do
+        dbP "LoopUntilClickedElementByName", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until ClickElementByName(elementName) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Sub
+HANDLER:
+    Resume
+End Sub
+Private Function LoopUntilSentToElementByName(elementName As String, myVal As String)
+    On Error GoTo HANDLER
+    mLoopCounter = 0
+    SetFormTag 0, True
+    Do
+        dbP "LoopUntilSentToElementByName", mLoopCounter
+        DoEvents
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until SendToElementByName(elementName, myVal) = True Or GetFormTag = 1 Or mflagUserQuit = True
+    Exit Function
+HANDLER:
+    Resume
+End Function
+
+Private Function ClickElementByID(elementID As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    If Not ValidateAndSwitchFrames("Id", elementID) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementById(elementID)
+    Sleep SLEEP_MIN
+    ele.Click
+    ClickElementByID = True
+    Exit Function
+HANDLER:
+    If Err.Number = 0 And Err.Description Like "*element click intercepted*" Then
+        DoEvents
+        Resume
+    End If
+    If Err.Number = 999 Then
+        MsgBox "error clicking element" & DBLLN & Err.Description
+        Resume Next
+    End If
+    Resume
+    ClickElementByID = False
+End Function
+
+Private Function SendToElementByID(elementID As String, myVal As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    Dim ar1() As String
+    Dim ar2() As String
+    Dim assertText As String
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("Id", elementID) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementById(elementID)
+    If myVal = "moKeys.Enter" Then
+        ele.SendKeys (moKeys.Enter)
+    Else
+        ele.SendKeys (myVal)
+    End If
+    
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks.Count = 1 Then
+        If myVal = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(mRow).Hyperlinks(1).Address Then
+            assertText = "C:\fakepath\" & GetShortNameFromLongFileName(myVal)
+        End If
+    End If
+    If Not CBool(Len(assertText)) Then assertText = myVal
+    moAssert.Equals assertText, ele.Value
+    SendToElementByID = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Or Err.Number = 0 Then
+        MsgBox "error sending to element" & Err.Description
+        Resume Next
+    End If
+    Resume
+    SendToElementByID = False
+End Function
+
+Private Function SendToElementByName(elementName As String, myVal As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("Name", elementName) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementByName(elementName)
+    If myVal = "moKeys.Enter" Then
+        ele.SendKeys (moKeys.Enter)
+    Else
+        ele.SendKeys (myVal)
+    End If
+    moAssert.Equals myVal, ele.Value
+    SendToElementByName = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Or Err.Number = 0 Then MsgBox "error sending to element" & DBLLN & Err.Description
+    Resume
+    SendToElementByName = False
+End Function
+
+
+Private Function ClickElementByName(elementName As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As WebElement
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("Name", elementName) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementByName(elementName)
+    Sleep SLEEP_MIN
+    ele.Click
+    ClickElementByName = True
+    Exit Function
+HANDLER:
+    If Err.Number = 0 And Err.Description Like "*element click intercepted*" Then
+        DoEvents
+        Resume
+    End If
+    If Err.Number = 999 Then MsgBox "error clicking element" & DBLLN & Err.Description
+    Resume
+    ClickElementByName = False
+End Function
+
+
+Private Function SendToElementByClass(elementClass As String, myVal As String, Optional itemIndex As Integer = -1) As Boolean
+    On Error GoTo HANDLER
+    'smart lookups will be sending "select2-selection"
+    Dim s As String
+    Dim ele As WebElement
+'    Dim eleSelection As WebElement
+    'the first word (or the only word if vendorname is a single word) is being dropped from every string
+    'sent to the vendor name or approve name field
+    'we retain the full vendor/approver name by addding a dumbie string to the front
+    'the dumbie string gets dropped but the full name remains
+    'NOTE !!!!! this function is also called for alias and gl numbers but those fields do not drop the first word
+    'so we test for numerical values to avoid creating an invalid alias/gl account entry
+    
+    'the current value does not match the desired value, update the field
+    If IsNumeric(myVal) Then
+        s = myVal
+    Else
+        s = "foo " & myVal ' the space is required to make it a seperate word
+    End If
+    
+
+    If itemIndex >= 0 Then
+        DoEvents: Sleep SLEEP_MIN
+        If Not ValidateAndSwitchFrames("Class", elementClass, itemIndex) Then Err.Raise 999, "error with frames"
+        Set ele = moDriver.FindElementsByClass(elementClass).item(itemIndex)
+    Else
+        DoEvents: Sleep SLEEP_MIN
+        If Not ValidateAndSwitchFrames("Class", elementClass) Then Err.Raise 999, "error with frames"
+        Set ele = moDriver.FindElementByClass(elementClass)
+    End If
+            
+'            Sleep SLEEP_MED
+Sleep SLEEP_MIN
+    If myVal = "moKeys.Enter" Then
+        ele.SendKeys (moKeys.Enter)
+    ElseIf myVal = "moKeys.Escape" Then
+        ele.SendKeys (moKeys.ESCAPE)
+        Exit Function
+    Else
+        ele.SendKeys (s) 'cannot send myVal, must send s because of 'foo '
+
+        If elementClass = sLOCATOR_FIELD_SELECT2_SELECTION Then
+'            If itemIndex >= 0 Then
+'                If Not ValidateAndSwitchFrames("Class", sLOCATOR_FIELD_SELECT2_SEARCH) Then Err.Raise 999, "error with frames"
+'                Set ele = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_SEARCH)
+'            Else
+                DoEvents: Sleep SLEEP_MIN
+                If Not ValidateAndSwitchFrames("Class", sLOCATOR_FIELD_SELECT2_SEARCH) Then Err.Raise 999, "error with frames"
+                Set ele = moDriver.FindElementByClass(sLOCATOR_FIELD_SELECT2_SEARCH)
+'            End If
+        End If
+    moAssert.Equals myVal, ele.Value
+    End If
+    SendToElementByClass = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Or Err.Number = 0 Then
+        MsgBox "error sending to element" & DBLLN & Err.Description
+        Resume Next
+    End If
+    Resume
+    SendToElementByClass = False
+End Function
+
+
+Private Function SelectElementByName(strVal As String, myVal As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As SelectElement
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("Name", strVal) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementByName(strVal).AsSelect
+    ele.SelectByValue (myVal)
+    SelectElementByName = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Then
+        MsgBox "error selecting element" & DBLLN & Err.Description
+        Resume Next
+    End If
+    Resume
+    SelectElementByName = False
+End Function
+
+Private Function SelectElementByID(strVal As String, myVal As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As SelectElement
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("Id", strVal) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementById(strVal).AsSelect
+    ele.SelectByValue (myVal)
+    SelectElementByID = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Then
+        MsgBox "error selecting element" & DBLLN & Err.Description
+        Resume Next
+    End If
+    Resume
+    SelectElementByID = False
+End Function
+
+Private Function SelectElementByPartialCSS(strVal As String, myVal As String) As Boolean
+    On Error GoTo HANDLER
+    Dim ele As SelectElement
+    Dim s As String
+    s = "[id$=" & strVal & "]"
+    DoEvents: Sleep SLEEP_MIN
+    If Not ValidateAndSwitchFrames("PartialCss", s) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementByCss(s).AsSelect
+    ele.SelectByValue (myVal)
+    SelectElementByPartialCSS = True
+    Exit Function
+HANDLER:
+    If Err.Number = 999 Then
+        MsgBox "error selecting element" & DBLLN & Err.Description
+        Resume Next
+    End If
+    Resume
+    SelectElementByPartialCSS = False
+End Function
+
+
+Private Sub WriteValueFromSpinnerIndex(indx As Long)
+    loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(mRow) = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).item(-indx).Text
+End Sub
+
+
+Private Sub FindAddressInList(Optional ByVal SupplierName As String)
+    Dim i As Integer
+    Dim indx As Integer
+    Dim cnt As Integer
+    Dim FoundAddress As Boolean
+
+    On Error GoTo HANDLER
+    mLoopCounter = 0
+    SetFormTag 0, True
+    
+    Do
+        DoEvents
+        cnt = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).Count
+        mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+    Loop Until cnt > 0 Or GetFormTag = 1 Or mflagUserQuit = True
+    
+    If InAddressMode And cnt > 0 Then
+        gcAP.iServeAddressQuery.addressForm.AddressCount = cnt
+        ReDim AddressArray(0 To cnt)
+        AddressArray(0) = "Searched for:  " & SupplierName
+    ElseIf InAddressMode And GetFormTag = 1 Then
+        Exit Sub
+    End If
+    
+    For i = 1 To cnt
+        Select Case mCurrentMode
+            Case AddressMode
+                AddressArray(i) = moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).item(i).Text
+                If i = cnt Then FoundAddress = True
+            Case InvoiceMode
+                If moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).item(i).Text = _
+                                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(mRow) Then
+                    indx = i
+                    FoundAddress = True
+                End If
+        End Select
+    Next i
+
+    If FoundAddress = True Then
+        mLoopCounter = 0
+        Do
+            DoEvents
+            Select Case mCurrentMode
+                Case AddressMode 'reset field by pressing escape
+                    moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_SELECTION).item(1).SendKeys moKeys.ESCAPE
+                Case InvoiceMode ' accept the field by clicking it
+                    moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).item(indx).Click
+            End Select
+            Sleep SLEEP_MIN
+            mLoopCounter = mLoopCounter + 1: If mLoopCounter > TimeOutThreshold Then TimeOutThresholdExceeded
+        Loop Until moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).Count = 0 Or GetFormTag = 1 Or mflagUserQuit = True
+    Else
+        Select Case mCurrentMode
+            Case AddressMode
+                MsgBox "did not find address"
+            Case InvoiceMode
+                Select Case MsgBox("The expected address was not selected.  Do you want to select it manually and continue?" _
+                            & vbCr & vbCr _
+                            & moDriver.FindElementsByClass(sLOCATOR_FIELD_SELECT2_RESULT).item(indx).Text _
+                            , vbYesNo + vbExclamation _
+                            , Title:="Warning")
+                    Case vbYes
+                            Call PauseAndOverwriteCurrentOperationWithMessage("Click 'SKIP' after manually changing the vendor in iServe")
+                    Case vbNo
+                        mflagUserQuit = True
+                End Select
+        End Select
+    End If
+          
+    Exit Sub
+HANDLER:
+    MsgBox "Error finding address", Err.Description
+    Resume Next
+End Sub
+
+
+Private Sub CreateUploadIndexes()
+    Dim i As Integer
+    Dim x As Integer
+    Dim c As Range
+    Dim r As Range
+    Dim flgIndexIsNotEmpty As Boolean
+    Dim ans As Long
+    On Error GoTo HANDLER
+    If loInvoiceBatch Is Nothing Then Call InitializeInvoiceBatchEnvironment
+
+    x = Application.WorksheetFunction.CountA(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range)
+    
+    loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(2) = 1
+    loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(2) = 1
+    loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(2) = 1
+
+    For i = 3 To x
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(i - 1) <> vbNullString _
+        And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(i - 1) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(i) _
+        And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(i - 1) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(i) _
+        Then
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(i) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(i - 1) + 1
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(i) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(i - 1)
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(i) = 1
+        Else
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_LINESEQUENCENUMBER).Range(i) = 1
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(i) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_BATCHSEQUENCENUMBER).Range(i - 1) + 1
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_GROUPSEQUENCENUMBER).Range(i) = 1
+        End If
+    Next
+    
+    Exit Sub
+HANDLER:
+    MsgBox "Error creating indexes"
+    Resume Next
+End Sub
+
+Private Function CleanString(strVal As String) As String
+    Dim i As Integer
+    For i = 1 To Len(strVal)
+        Select Case Asc(Mid(strVal, i, 1))
+            Case 45, 48 To 57, 65 To 90, 97 To 122
+                CleanString = CleanString & Mid(strVal, i, 1)
+        End Select
+    Next
+End Function
+
+Private Function RenameFile(strVal As String) As String
+    Dim nName As String
+    Dim str1 As String
+    Dim DestFolder As String
+    Dim x As Integer
+    Dim i As Integer
+    On Error GoTo HANDLER
+    gcAP.iServeInvoiceUpload.uploadForm.Label_CurrentOperation_Text.Caption = "Renaming and moving file ..."
+    DestFolder = mUploadQueueFolder & mArchiveFolder
+    
+    If Dir(strVal) = vbNullString Then
+        MsgBox "cannot upload file - doesn't exist"
+        RenameFile = vbNullString
+        Exit Function
+    End If
+    str1 = Left(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(mRow), 10) & "-" & loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(mRow)
+    nName = DestFolder & Left(CleanString(str1), 10) & mFILE_EXTENSION
+    Do
+        nName = Replace(nName, DestFolder, vbNullString)
+        x = InStr(nName, "(")
+        If x > 0 Then
+            i = CInt(Mid(nName, x + 1, Len(nName) - x - (Len(mFILE_EXTENSION) + 1)))
+            i = i + 1
+            nName = Left(nName, x) & i & ")" & mFILE_EXTENSION
+        Else
+            nName = Left(nName, Len(nName) - Len(mFILE_EXTENSION)) & " (1)" & mFILE_EXTENSION
+        End If
+        nName = DestFolder & nName
+    Loop Until Dir(nName) = vbNullString
+    Name strVal As nName
+    RenameFile = nName
+    Exit Function
+HANDLER:
+    RenameFile = vbNullString
+    MsgBox "problem renaming file"
+    Resume Next
+End Function
+
+Private Function SetFieldNameString(strVal As String, _
+                            Optional strIndx1 As String = vbNullString, _
+                            Optional strIndx2 As String = vbNullString, _
+                            Optional delim As String = ",") As String
+    On Error GoTo HANDLER
+    Dim ary() As String
+    Dim i As Long
+    Dim s As String
+    ary = Split(strVal, delim)
+    For i = 0 To UBound(ary)
+        Select Case i
+            Case 0
+                s = ary(i)
+            Case 1
+                s = s & strIndx1 & ary(i)
+            Case 2
+                s = s & strIndx2 & ary(i)
+            Case Else
+                s = vbNullString
+        End Select
+    Next i
+
+NORMALEXIT:
+    SetFieldNameString = s
+    Exit Function
+HANDLER:
+    s = vbNullString
+    Resume NORMALEXIT
+End Function
+
+Private Sub AssertElementValuesByID(ele As WebElement, expectedValue As String)
+    On Error GoTo HANDLER
+    moAssert.Equals expectedValue, ele.Value
+    Exit Sub
+HANDLER:
+    On Error GoTo -1
+    Application.Wait 1
+    moAssert.Contains expectedValue, ele.Value
+    If CBool(Len(Err.Description)) Then MsgBox "error asserting values" & DBLLN & Err.Description
+End Sub
+
+Private Sub AssertElementValuesByClass(elementClass As String, elementIndex As Long, expectedValue As String, Optional failMessage As String = "Drop down combo list")
+    Dim ele As WebElement
+    On Error GoTo HANDLER
+    If Not ValidateAndSwitchFrames("Class", elementClass) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementsByClass(elementClass).item(elementIndex)
+    Sleep SLEEP_MIN
+    moAssert.Equals expectedValue, ele.Text, failMessage
+    Exit Sub
+HANDLER:
+    On Error GoTo -1
+    Application.Wait 1
+    Set ele = moDriver.FindElementsByClass(elementClass).item(elementIndex)
+    moAssert.Contains expectedValue, ele.Text, failMessage
+    If CBool(Len(Err.Description)) Then MsgBox "error asserting values" & DBLLN & Err.Description
+End Sub
+
+Private Sub AssertElementAttributeByName(elementName As String, elementAttribute As String, expectedValue As String, Optional failMessage As String = "Element Attribute by Name")
+    Dim ele As WebElement
+    On Error GoTo HANDLER
+    If Not ValidateAndSwitchFrames("Name", elementName) Then Err.Raise 999, "error with frames"
+    Set ele = moDriver.FindElementByName(elementName)
+    Sleep SLEEP_MIN
+    moAssert.Equals expectedValue, ele.Attribute(elementAttribute), failMessage
+    Exit Sub
+HANDLER:
+    On Error GoTo -1
+    Application.Wait 1
+    Set ele = moDriver.FindElementByName(elementName)
+    moAssert.Contains expectedValue, ele.Attribute(elementAttribute), failMessage
+    If CBool(Len(Err.Description)) Then MsgBox "Error asserting values" & DBLLN & Err.Description
+End Sub
+
+
+
+
+
+Sub PopulateAddresses()
+    Dim SupplierName As String
+    If InAddressMode(True) Then
+        If Not CBool(InStr(1, moDriver.Title, sWEBPAGE_TITLE_HOME)) Then GoToInvoiceEntryScreen
+        SupplierName = ActiveCell.Value
+        EnterSupplierName SupplierName
+   
+        Call GetValueAfterChange(-1)
+    End If
+End Sub
+
+Sub GetValueAfterChange(indx As Long)
+    Dim ary() As String
+    Dim i As Long
+    indx = -indx
+    If GetFormTag = 0 Then
+    If indx > UBound(AddressArray) Then
+        gcAP.iServeAddressQuery.addressForm.Label_SupplierAddress.Caption = vbNullString
+        gcAP.iServeAddressQuery.addressForm.CommandButton_AddVendorDetails.Visible = False
+        gcAP.iServeAddressQuery.addressForm.CommandButton_PopulateBatch.Visible = False
+        gcAP.iServeAddressQuery.addressForm.CommandButton_WriteList.Visible = False
+        gcAP.iServeAddressQuery.addressForm.Label_SupplierAddress.Visible = False
+        gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName.Visible = False
+        gcAP.iServeAddressQuery.addressForm.CommandButton_SendAddressToCell.Visible = False
+    Else
+        ary = Split(AddressArray(indx), Chr(10))
+        gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName.Text = ary(0)
+        gcAP.iServeAddressQuery.addressForm.Label_SupplierAddress.Caption = AddressArray(indx)
+        gcAP.iServeAddressQuery.addressForm.Label_SelectAddressIndex.Caption = "Showing " & indx & " of " & gcAP.iServeAddressQuery.addressForm.AddressCount & " addresses"
+        gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName.Visible = True
+        gcAP.iServeAddressQuery.addressForm.CommandButton_PopulateBatch.Visible = True
+        gcAP.iServeAddressQuery.addressForm.CommandButton_WriteList.Visible = True
+        gcAP.iServeAddressQuery.addressForm.Label_SupplierAddress.Visible = True
+        gcAP.iServeAddressQuery.addressForm.CommandButton_SendAddressToCell.Visible = True
+        gcAP.iServeAddressQuery.addressForm.CommandButton_AddVendorDetails.Visible = True
+    End If
+    Else
+        MsgBox "address not found"
+    End If
+End Sub
+
+'==========================================================================================================================================
+'==========================================================================================================================================
+' used in address mode
+Sub PopulateBatch(indx As Long)
+    With loInvoiceBatch
+        indx = -indx
+        If AddressArray(indx) Like "*" & ActiveCell & "*" And Len(.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(ActiveCell.Row)) = 0 Then
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(ActiveCell.Row) = gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(ActiveCell.Row) = AddressArray(indx)
+        ElseIf Len(.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).DataBodyRange(.ListRows.Count)) = 0 _
+                And AddressArray(indx) Like "*" & .ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange(.ListRows.Count) & "*" _
+                Or Len(.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange(.ListRows.Count)) = 0 Then
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange(.ListRows.Count) = gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).DataBodyRange(.ListRows.Count) = AddressArray(indx)
+        Else
+            .ListRows.Add
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange(.ListRows.Count) = gcAP.iServeAddressQuery.addressForm.ComboBox_SupplierName
+            .ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).DataBodyRange(.ListRows.Count) = AddressArray(indx)
+        End If
+    End With
+End Sub
+'==========================================================================================================================================
+'==========================================================================================================================================
+' used in address mode
+Sub SendAddressToCell(indx As Long)
+    indx = -indx
+    If indx > UBound(AddressArray) Then
+        MsgBox "No Results To Select"
+    Else
+        If TypeName(Selection) <> "Range" Then
+            MsgBox "A cell must be selected to export the address."
+            Exit Sub
+        End If
+        
+        If ActiveCell.Value = vbNullString Then
+            ActiveCell.Value = AddressArray(indx)
+        Else
+            Select Case MsgBox("Overwrite contents of current cell?" & DBLLN & "This cannot be undone.", vbYesNo + vbCritical, "Selected Cell Not Empty")
+                Case vbYes
+                    ActiveCell.Value = AddressArray(indx)
+                Case vbNo
+                    'do nothing
+            End Select
+        End If
+    End If
+End Sub
+'==========================================================================================================================================
+'==========================================================================================================================================
+' used in address mode
+Sub WriteList()
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim strVal() As String
+    
+    Set wb = Application.Workbooks.Add
+    Set ws = wb.Worksheets(1)
+    ws.Range("A1:A" & UBound(AddressArray) + 1) = Application.WorksheetFunction.Transpose(AddressArray)
+    ws.Range("B1") = "Name"
+    ws.Range("C1") = "Address"
+    ws.Range("D1") = "Type"
+    For i = 1 To UBound(AddressArray)
+        strVal = Split(AddressArray(i), Chr(10))
+        ws.Range("B1").Offset(i, 0) = strVal(0)
+        ws.Range("B1").Offset(i, 1) = strVal(2)
+        ws.Range("B1").Offset(i, 2) = strVal(1)
+    Next
+    
+    With ws.Cells
+        .EntireColumn.AutoFit
+        .EntireRow.AutoFit
+        .HorizontalAlignment = xlGeneral
+        .VerticalAlignment = xlCenter
+        .Orientation = 0
+        .AddIndent = False
+        .IndentLevel = 0
+        .ShrinkToFit = False
+        .ReadingOrder = xlContext
+        .MergeCells = False
+    End With
+
+    ws.ListObjects.Add(xlSrcRange, ws.UsedRange, , xlYes).Name = _
+        "AddressList_Table"
+    ws.ListObjects(1).TableStyle = "TableStyleMedium1"
+    
+    ws.Rows(1).HorizontalAlignment = xlCenter
+    
+End Sub
+
+
+
+
+

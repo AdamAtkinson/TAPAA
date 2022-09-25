@@ -1,0 +1,37 @@
+Attribute VB_Name = "TEST_Events"
+'Option Explicit
+'
+'
+'
+'Sub tryingthigns()
+'    Dim cls As AP_Event_Handler_Class
+'    Set cls = New AP_Event_Handler_Class
+'
+'    Dim ev As AP_Events_Class
+'    Set ev = New AP_Events_Class
+'
+'
+'    'these raise events
+'    cls.testcancel
+'    cls.test
+'
+'
+'    'these do not raise events
+'    ev.RaiseAndCancelAnEvent
+'    ev.ThisRaisesAnEvent
+'
+'End Sub
+
+Sub fixit()
+Dim i As Long
+Dim rng As Range
+
+Dim ws As Worksheet
+Set ws = Sheets(4)
+
+For Each rng In ws.ListObjects(1).ListColumns(5).DataBodyRange.SpecialCells(xlCellTypeFormulas)
+    If Left(rng.Formula, 6) = "=UPPER" Then rng.Formula = Replace(rng.Formula, "=UPPER", "=IFERROR(UPPER") & ","""")"
+Next
+
+
+End Sub

@@ -1,0 +1,235 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsOutlookApplication"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+Private Const mSearchFolderName As String = "Rejected Invoice"
+
+Private mOL As Outlook.Application
+
+Private Sub Class_Initialize()
+    On Error Resume Next
+    Set mOL = Outlook.Application
+    If Err.Number <> 0 Then
+        Set mOL = New Outlook.Application
+    End If
+    On Error GoTo 0
+End Sub
+
+
+Public Sub DisplayRejectedNotice(ByVal SearchTerm As String)
+    Dim oSearchFolder As Outlook.Folder
+    If GetDesiredSearchFolder(mSearchFolderName, oSearchFolder) Then
+        Dim oTable As Outlook.Table
+        If GetFilteredTableFromSearchFolder(SearchTerm, oSearchFolder, oTable) Then
+            Dim oRow As Outlook.Row
+            Do Until oTable.EndOfTable
+                Set oRow = oTable.GetNextRow
+                If oRow("MessageClass") = "IPM.Note" Then
+                    With mOL.Session
+                        Dim eID As String
+                        eID = oRow("EntryID")
+                        ShowMailItemFromEntryID eID
+                    End With
+                End If
+            Loop
+        End If
+    End If
+End Sub
+
+
+Private Sub ShowMailItemFromEntryID(ByVal mailItemEntryID As String)
+    With mOL.Session
+        If .GetItemFromID(mailItemEntryID).Class = olMail Then .GetItemFromID(mailItemEntryID).Display
+    End With
+End Sub
+
+
+ Private Function GetFilteredTableFromSearchFolder(ByVal SearchTerm As String, ByVal SearchFolder As Outlook.Folder, ByRef returnTable As Outlook.Table) As Boolean
+    Dim strFilter As String
+    'Create DASL query for Body using content indexing phrase match for 'office'
+    strFilter = "@SQL=" & Chr(34) & "urn:schemas:httpmail:textdescription" & Chr(34) & " ci_phrasematch '" & SearchTerm & "'"
+    Set returnTable = SearchFolder.GetTable(strFilter)
+    If Not returnTable Is Nothing Then GetFilteredTableFromSearchFolder = True
+End Function
+
+Private Function GetDesiredSearchFolder(ByVal FolderName As String, ByRef returnFolderObject As Outlook.Folder) As Boolean
+    Dim oFolder As Outlook.Folder
+    On Error Resume Next
+    For Each oFolder In mOL.Session.Stores.item(1).GetSearchFolders
+        If oFolder.Name = FolderName Then
+            Set returnFolderObject = oFolder
+            GetDesiredSearchFolder = True
+            Exit For
+        End If
+    Next
+    On Error GoTo 0
+End Function
+
+
+
+
+
+
+
+
+
+
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+'++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sub GetCollectionOfEmailsWithSearchTerm()
+ Dim strFilter As String
+ Dim oRow As Row
+ 'Create DASL query for Body using content indexing phrase match for 'office'
+ strFilter = "@SQL=" & Chr(34) & "urn:schemas:httpmail:textdescription" & Chr(34) & " ci_phrasematch '" & pSearchTerm & "'"
+ Set mOT = mOL.ActiveExplorer.CurrentFolder.GetTable(strFilter)
+ '\\Adam.Atkinson@neurorestorative.com\search folders\Rejected Invoice
+ 'Print subject line of each mail item in current folder that contains 'office' in the body
+End Sub
+ 
+Sub OpenEmailsInCollection()
+ Dim appNameSpace As Outlook.Namespace
+ Set appNameSpace = Application.Session
+ Dim m As MailItem
+ Do Until mOT.EndOfTable
+ Set oRow = mOT.GetNextRow
+ Debug.Print mOT.GetRowCount
+' Set m = appNameSpace.GetItemFromID(oRow("EntryID"))
+' m.Display
+' Debug.Print oRow("Subject")
+' Debug.Print oRow("EntryID")
+ Loop
+End Sub
+'---------------------------------------------------------------------------------------
+' Procedure : EnumerateSearchFolderItems
+' Author    : Daniel Pineault, CARDA Consultants Inc.
+' Website   : http://www.cardaconsultants.com
+' Purpose   : Demonstration sub to illustrate how one can bind and work with the items
+'               in an Outlook Search Folder
+' Copyright : The following is release as Attribution-ShareAlike 4.0 International
+'             (CC BY-SA 4.0) - https://creativecommons.org/licenses/by-sa/4.0/
+' Req'd Refs: Uses Late Binding, so none required
+'
+' Input Variables:
+' ~~~~~~~~~~~~~~~~
+' sSearchFolderName : The name of the Search Folder you wish to work with
+'
+' Usage:
+' ~~~~~~
+' Call EnumerateSearchFolderItems("YourSearchFolderName")
+'
+' Revision History:
+' Rev       Date(yyyy/mm/dd)        Description
+' **************************************************************************************
+' 1         2019-06-18              Initial Release (Forum Help)
+'---------------------------------------------------------------------------------------
+Sub EnumerateSearchFolderItems(ByVal sSearchFolderName As String)
+    Dim oOutlook              As Object    'Outlook.Application
+    Dim oNameSpace            As Object    'Outlook.Namespace
+    Dim oStores               As Object    'Outlook.Stores
+    Dim oStore                As Object    'Outlook.Store
+    Dim oFolder               As Object    'Outlook.folder
+    Dim i                     As Long
+ 
+    On Error Resume Next
+    Set oOutlook = GetObject(, "Outlook.Application")        'Bind to existing instance of Outlook
+    If Err.Number <> 0 Then        'Could not get instance, so create a new one
+        Err.Clear
+        Set oOutlook = CreateObject("Outlook.Application")
+    End If
+    On Error GoTo Error_Handler
+    Set oNameSpace = oOutlook.GetNamespace("MAPI")
+    Set oStores = oNameSpace.Session.Stores
+    For Each oStore In oStores
+        Set oFolder = oStore.GetSearchFolders.item(sSearchFolderName)
+        If Not oFolder Is Nothing Then
+            With oFolder.Items
+                For i = 1 To .Count
+                    Debug.Print i, .item(i).SenderName, .item(i).Subject, .item(i).ReceivedTime, .item(i).Categories
+                Next i
+            End With
+            Exit For
+        End If
+    Next
+Error_Handler_Exit:
+    On Error Resume Next
+    If Not oFolder Is Nothing Then Set oFolder = Nothing
+    If Not oStore Is Nothing Then Set oStore = Nothing
+    If Not oStores Is Nothing Then Set oStores = Nothing
+    If Not oNameSpace Is Nothing Then Set oNameSpace = Nothing
+    If Not oOutlook Is Nothing Then Set oOutlook = Nothing
+    Exit Sub
+ 
+Error_Handler:
+    MsgBox "The following error has occurred" & vbCrLf & vbCrLf & _
+           "Error Number: " & Err.Number & vbCrLf & _
+           "Error Source: EnumerateSearchFolderItems" & vbCrLf & _
+           "Error Description: " & Err.Description & _
+           Switch(Erl = 0, "", Erl <> 0, vbCrLf & "Line No: " & Erl) _
+           , vbOKOnly + vbCritical, "An Error has Occurred!"
+    Resume Error_Handler_Exit
+End Sub
+
+
+Sub EnumerateFolder()
+    Dim oOutlook              As Object    'Outlook.Application
+    Dim oNameSpace            As Object    'Outlook.Namespace
+    Dim oStores               As Object    'Outlook.Stores
+    Dim oStore                As Object    'Outlook.Store
+    Dim oFolders              As Object    'Outlook.folders
+    Dim oFolder               As Object    'Outlook.folder
+ 
+    On Error Resume Next
+    Set oOutlook = GetObject(, "Outlook.Application")        'Bind to existing instance of Outlook
+    If Err.Number <> 0 Then        'Could not get instance, so create a new one
+        Err.Clear
+        Set oOutlook = CreateObject("Outlook.Application")
+    End If
+    On Error GoTo Error_Handler
+    Set oNameSpace = oOutlook.GetNamespace("MAPI")
+    Set oStores = oNameSpace.Session.Stores
+    For Each oStore In oStores
+        Debug.Print oStore.DisplayName, oStore.filepath, oStore.Class
+        Set oRoot = oStore.GetRootFolder
+        Debug.Print , oRoot.Name, oRoot.folderPath
+        Call EnumerateFolders(oRoot)
+    Next
+Error_Handler_Exit:
+    On Error Resume Next
+    If Not oFolder Is Nothing Then Set oFolder = Nothing
+    If Not oFolders Is Nothing Then Set oFolders = Nothing
+    If Not oStore Is Nothing Then Set oStore = Nothing
+    If Not oStores Is Nothing Then Set oStores = Nothing
+    If Not oNameSpace Is Nothing Then Set oNameSpace = Nothing
+    If Not oOutlook Is Nothing Then Set oOutlook = Nothing
+    Exit Sub
+ 
+Error_Handler:
+    MsgBox "The following error has occurred" & vbCrLf & vbCrLf & _
+           "Error Number: " & Err.Number & vbCrLf & _
+           "Error Source: EnumerateFolder" & vbCrLf & _
+           "Error Description: " & Err.Description & _
+           Switch(Erl = 0, "", Erl <> 0, vbCrLf & "Line No: " & Erl) _
+           , vbOKOnly + vbCritical, "An Error has Occurred!"
+    Resume Error_Handler_Exit
+End Sub
+ 
+

@@ -1,0 +1,377 @@
+Attribute VB_Name = "Module8"
+Option Explicit
+Private nuanceApp As PDFPlus.App
+
+Public Sub SimpleRename()
+Dim srcFolder As String
+Dim dstFolder As String
+Dim invNumber As String
+Dim preFix As String
+Dim ext As String
+
+Dim PDF As String
+srcFolder = "C:\Users\e-aatkinson\Downloads\prem\"
+dstFolder = "C:\Users\e-aatkinson\Downloads\prem\New folder\"
+PDF = Dir(srcFolder & "*.*")
+preFix = "PREMIER"
+ext = ".pdf"
+
+Dim newname As String
+    Do While Len(PDF) > 0
+        Dim pdfText() As String
+        pdfText = GetTextFromPDF(srcFolder & PDF)
+        
+        newname = Replace(PDF, ext, vbNullString) & " - "
+        newname = newname & Mid(pdfText(0), InStr(pdfText(0), "INVOICE DATE ") + Len("INVOICE DATE "), 8) & ext
+        
+
+        
+'        Dim textAnchor As Long
+'        textAnchor = InStr(pdfText(0), "INVOICE DATE")
+'        If CBool(textAnchor) Then
+'            invNumber = Mid(pdfText(0), textAnchor - 7 - 1, 7)
+'            dbp invNumber
+'            newname = preFix & invNumber & ext
+'
+'        Else
+'        newname = pdf
+'
+'
+'        End If
+'
+'
+
+        
+        
+        
+        
+        
+        
+        
+        
+        'destinationFolder = GetDestinationFolder(pdfText(0))
+        Name (srcFolder & PDF) As (dstFolder & newname)
+        PDF = Dir
+    Loop
+
+End Sub
+
+
+
+Public Sub GetTextFromSinglePDF()
+Dim strFileName As String
+    Set nuanceApp = New PDFPlus.App
+If Not GetFromFileDialogWindow(msoFileDialogFilePicker, strFileName, "C:\Users\e-aatkinson\Documents\9) Temp\premier med year", "Select FDF to Convert", "Select", True) Then GoTo SAFEEXIT
+mPDFtext = GetTextFromPDF(strFileName)
+dbP mPDFtext(0)
+SAFEEXIT:
+    Exit Sub
+NOTIFYANDEXIT:
+    MsgBox "Conflicting string"
+
+End Sub
+
+
+Public Sub SortAndMovePDF()
+    Set nuanceApp = New PDFPlus.App
+    
+    Dim sourceFolder As String
+    sourceFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\all\"
+
+    Dim destinationFolder As String
+
+    Dim myfile As String
+    myfile = Dir(sourceFolder & "*.*")
+
+    Do While Len(myfile) > 0
+        Dim pdfText() As String
+        pdfText = GetTextFromPDF(sourceFolder & myfile)
+        destinationFolder = GetDestinationFolder(pdfText(0))
+        Name (sourceFolder & myfile) As (destinationFolder & myfile)
+        myfile = Dir
+    Loop
+
+End Sub
+
+
+Function GetTextFromPDF(longFilename As String) As String()
+    Dim dvPDF As PDFPlus.DVDoc
+    Dim ddPDF As PDFPlus.DDDoc
+    Dim jsoPDF As Object
+    Dim nWord As Integer
+    Dim iWord As Integer
+    Dim nPage As Integer
+    Dim iPage As Integer
+    Dim strWord As String
+    Dim pageText() As String
+    Set nuanceApp = New PDFPlus.App
+    Set dvPDF = New PDFPlus.DVDoc
+    'nuanceApp.Show
+    If dvPDF.Open(longFilename) = True Then
+        'dvPDF.BringToFront
+        Set ddPDF = dvPDF.GetDDDoc
+        Set jsoPDF = ddPDF.GetJSObject
+        nPage = ddPDF.GetNumPages
+        ReDim pageText(nPage)
+        For iPage = 0 To nPage - 1
+            nWord = jsoPDF.getPageNumWords(iPage)
+            For iWord = 0 To nWord - 1
+                strWord = jsoPDF.getPageNthWord(iPage, iWord, False) ' if the last parameter is set to True, it avoids certain characters like dash os blank spaces etc
+                pageText(iPage) = pageText(iPage) & strWord
+                If CBool(InStr(pageText(iPage), "LIQUID OXYGEN")) Then Exit For
+            Next
+            If CBool(InStr(pageText(iPage), "LIQUID OXYGEN")) Then Exit For
+        Next
+    End If
+    dvPDF.Close 1
+    Set dvPDF = Nothing
+'    nuanceApp.Exit
+'    Set nuanceApp = Nothing
+    GetTextFromPDF = pageText
+End Function
+
+
+Function GetDestinationFolder(searchString As String) As String
+Dim strMonth As String
+    Select Case True
+        Case CBool(InStr(searchString, "DATE 01."))
+            strMonth = "01 Jan"
+        Case CBool(InStr(searchString, "DATE 02."))
+            strMonth = "02 Feb"
+        Case CBool(InStr(searchString, "DATE 03."))
+            strMonth = "03 Mar"
+        Case CBool(InStr(searchString, "DATE 04."))
+            strMonth = "04 Apr"
+        Case CBool(InStr(searchString, "DATE 05."))
+            strMonth = "05 May"
+        Case CBool(InStr(searchString, "DATE 06."))
+            strMonth = "06 Jun"
+        Case CBool(InStr(searchString, "DATE 07."))
+            strMonth = "07 Jul"
+        Case CBool(InStr(searchString, "DATE 08."))
+            strMonth = "08 Aug"
+        Case CBool(InStr(searchString, "DATE 09."))
+            strMonth = "09 Sep"
+        Case CBool(InStr(searchString, "DATE 10."))
+            strMonth = "10 Oct"
+        Case CBool(InStr(searchString, "DATE 11."))
+            strMonth = "11 Nov"
+        Case CBool(InStr(searchString, "DATE 12."))
+            strMonth = "12 Dec"
+    End Select
+    If CBool(InStr(searchString, "LIQUID OXYGEN")) Then
+        GetDestinationFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\Buckley\" & strMonth & "\"
+    Else
+        GetDestinationFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\Buckley\NO MATCH\" & strMonth & "\"
+    End If
+End Function
+
+
+Public Sub MoveingFiles(Optional ByVal incrementFolder As Boolean = True)
+  Dim pdfPageCount As Long
+    Dim wb As Workbook
+    Dim strFileName As String
+    Dim ary() As String
+    
+    If Not GetFromFileDialogWindow(msoFileDialogFilePicker, strFileName, "C:\Users\e-aatkinson\Documents\9) Temp\premier med year", "Select FDF to Convert", "Select", True) Then GoTo SAFEEXIT
+    ary = Split(strFileName, "|")
+    Dim i As Long
+    For i = LBound(ary) To UBound(ary)
+    If PDFApp Is Nothing Then Set PDFApp = New PDFPlus.App
+    Set PDFdvDoc = New PDFPlus.DVDoc
+
+    PDFdvDoc.Open (ary(i))
+    Set PDFddDoc = PDFdvDoc.GetDDDoc
+'    Debug.Print PDFddDoc.GetFileName
+'    Debug.Print "info", PDFddDoc.GetNumPages
+'    Debug.Print "saved", PDFddDoc.Save(DDSaveFull + DDSaveCopy, "C:\Users\e-aatkinson\iServe\Mail Processing\190826-0907_ExtractPage2.pdf")
+    PDFApp.MenuItemExecute "SaveAs"
+    PDFdvDoc.Close 0
+    PDFApp.Exit
+'    PDFapp.MenuItemExecute "ExtractPage"
+    Next i
+SAFEEXIT:
+    Exit Sub
+NOTIFYANDEXIT:
+    MsgBox "Conflicting string"
+
+
+
+
+    Dim destinationFolder As String
+    Dim sourceFolder As String: sourceFolder = "\\ALICA002\Clinical\ACCOUNTING 1\Accounts Payable\Spreadsheets - ALL\2019\NONCA Invoices"
+    Dim supplyFolder As String: supplyFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\560301"
+    Dim rentFolder As String: rentFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\560711"
+    Dim otherFolder As String: otherFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\other"
+    Dim lo As ListObject: Set lo = Sheet1.ListObjects(1)
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim supplyGL As String: supplyGL = "560301"
+    Dim rentGL As String: rentGL = "560711"
+    Dim glCol As Long: glCol = 10
+    Dim fnCol As Long: fnCol = 15
+    Dim statusCol As Long: statusCol = 4
+    Dim i As Long
+    Dim saveToFolder As String
+    Dim myfile As String
+    Dim errorFlag As Boolean
+    
+    For i = 1 To lo.DataBodyRange.Rows.Count
+    
+        If lo.ListColumns(statusCol).DataBodyRange(i) = "Completed" Then
+        
+            Select Case lo.ListColumns(glCol).DataBodyRange(i)
+                Case supplyGL
+                    destinationFolder = supplyFolder
+                Case rentGL
+                    destinationFolder = rentFolder
+                Case other
+                    destinationFolder = otherFolder
+            End Select
+    
+    
+End Sub
+
+
+
+
+
+
+'OXYLIQUIDBULK
+Sub callit()
+Dim strVal() As String
+strVal = GetAllTextInPDF("\\ALICA002\Clinical\ACCOUNTING 1\Accounts Payable\Spreadsheets - ALL\2019\Premier Invoices - Bob Buckley\PREMIERI427572-191204-1853_191204-1855.PDF")
+dbP UBound(strVal)
+End Sub
+
+
+
+Public Sub oldSortAndMovePDF()
+    Dim sourceFolder As String: sourceFoler = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\all"
+    Dim targetFolder As String: targetFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\all\"
+    Dim singleFolder As String: singleFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\all\singlepage\"
+    Dim multiFolder As String: multiFolder = "C:\Users\e-aatkinson\Documents\9) Temp\premier med year\all\multipage\"
+    Dim destinationFolder As String
+    Dim i As Long
+    Dim saveToFolder As String
+
+    Dim errorFlag As Boolean
+    Dim invNumber As String
+
+    Dim myfile As String
+    myfile = Dir(sourceFolder & "*.*")
+
+    Dim PDFApp As PDFPlus.App
+    If PDFApp Is Nothing Then Set PDFApp = New PDFPlus.App
+
+        Do While Len(myfile) > 0
+            
+            Dim pdfPageCount As Long
+            Dim wb As Workbook
+            Dim strFileName As String
+        Dim PDFdvDoc As PDFPlus.DVDoc
+        Dim PDFddDoc As PDFPlus.DDDoc
+
+            Set PDFdvDoc = New PDFPlus.DVDoc
+
+            PDFdvDoc.Open (sourceFoler & myfile)
+            Set PDFddDoc = PDFdvDoc.GetDDDoc
+            Debug.Print PDFddDoc.GetFileName
+            Debug.Print "info", PDFddDoc.GetNumPages
+            Debug.Print "saved", PDFddDoc.Save(DDSaveFull + DDSaveCopy, "C:\Users\e-aatkinson\iServe\Mail Processing\190826-0907_ExtractPage2.pdf")
+            pdfPageCount = PDFddDoc.GetNumPages
+
+            Select Case pdfPageCount
+                Case 1
+                saveToFolder = singleFolder
+                dbP "1 page"
+                Case Is > 1
+                saveToFolder = multiFolder
+                dbP "2 page"
+                Case Else
+                dbP "else"
+            End Select
+
+            PDFdvDoc.Close 0
+    
+        Name (sourceFolder & myfile) As (saveToFolder & myfile)
+        myfile = Dir
+    Loop
+    
+    PDFApp.Exit
+
+End Sub
+
+
+Sub newtest()
+Dim filepath As String
+'filepath = "C:\Users\e-aatkinson\Documents\9) Temp\ARJOIN6890733151-191025-1949_191025-2112.PDF"
+filepath = "C:\Users\e-aatkinson\iServe\Active Queue\_NUANCE MERGE DESTINATION\global.pdf"
+Dim cls As New APclsPDFDDDoc
+    Dim PDFApp As PDFPlus.App
+    Dim PDFdvDoc As PDFPlus.DVDoc
+    Dim PDFddDoc As PDFPlus.DDDoc
+    Dim jso As Object
+
+    Set PDFApp = New PDFPlus.App
+    Set PDFdvDoc = New PDFPlus.DVDoc
+
+
+    cls.OpenDD = filepath
+    Set PDFdvDoc = cls.ddd.OpenDVDoc(cls.ddd.GetFileName)
+    Set PDFdvDoc = New PDFPlus.DVDoc
+    PDFApp.Show
+    Set PDFddDoc = PDFdvDoc.GetDDDoc
+
+    PDFddDoc.GetFileName
+End Sub
+
+Sub test()
+    Dim path2 As String
+    Dim TextInArray() As String
+    Set mPDF = New APclsPDF
+    'path2 = "C:\Users\e-aatkinson\Documents\9) Temp\Stanley Healthcare Inv 60643606  2020 Contract Renewal.pdf"
+    path2 = "C:\Users\e-aatkinson\iServe\Active Queue\_NUANCE MERGE DESTINATION\global.pdf"
+
+    Dim PDFApp As PDFPlus.App
+    Dim PDFdvDoc As PDFPlus.DVDoc
+    Dim PDFddDoc As PDFPlus.DDDoc
+    Dim jso As Object
+
+
+    Dim nWord As Integer
+    Dim iWord As Integer
+    Dim nPage As Integer
+    Dim iPage As Integer
+    Dim strWord As String
+    Dim pageText() As String
+
+    Set PDFApp = New PDFPlus.App
+    Set PDFdvDoc = New PDFPlus.DVDoc
+    PDFApp.Show
+
+    If PDFdvDoc.Open(fullPath) = True Then
+        PDFdvDoc.BringToFront
+        Set PDFddDoc = PDFdvDoc.GetDDDoc
+        Set jso = PDFddDoc.GetJSObject
+        nPage = PDFddDoc.GetNumPages
+        ReDim pageText(nPage)
+        For iPage = 0 To nPage - 1
+            nWord = jso.getPageNumWords(iPage)
+            For iWord = 0 To nWord - 1
+                strWord = jso.getPageNthWord(iPage, iWord, False) ' if the last parameter is set to True, it avoids certain characters like dash os blank spaces etc
+                pageText(iPage) = pageText(iPage) & strWord
+'                dbp UBound(pageText)
+            Next
+            Debug.Print pageText(iPage)
+        Next
+    End If
+    Set PDFdvDoc = Nothing
+    PDFApp.Exit
+    Set PDFApp = Nothing
+
+    
+
+    TextInArray = ExtractTextFromPDF_WithNuancePowerPDF(path2)
+End Function
+
+

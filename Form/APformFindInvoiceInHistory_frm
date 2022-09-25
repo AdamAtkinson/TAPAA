@@ -1,0 +1,741 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APformFindInvoiceInHistory 
+   Caption         =   "iServe History Invoice Lookup"
+   ClientHeight    =   4335
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   8820
+   OleObjectBlob   =   "APformFindInvoiceInHistory_frm.frx":0000
+   ShowModal       =   0   'False
+End
+Attribute VB_Name = "APformFindInvoiceInHistory"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+
+Option Explicit
+
+Private Const mLISTBOXCOLUMN_INVOICENUMBER = 0
+Private Const mLISTBOXCOLUMN_INVOICEAMOUNT = 1
+Private Const mLISTBOXCOLUMN_SUPPLIERNAME = 2
+Private Const mLISTBOXCOLUMN_SUBSTATUS = 3
+Private Const mLISTBOXCOLUMN_CLOSEDDATE = 4
+Private Const mLISTBOXCOLUMN_ROWNUMBERS = 5
+
+Private Const mARRAYBASE = 1
+
+Private Const mMISSINGVALUETEXT As String = "MISSING"
+Private Const mROWNUMBERTEXT As String = "Row Number"
+
+Private mMyRow As Long
+Private mTable As ListObject
+Private mWS As Worksheet
+Private mWB As Workbook
+Private maryListBoxShadow() As String
+Private maryMatchedInvoiceFilter() As String
+Private marySelectedSupplierFilter() As String
+
+Private mFormEventsEnabled As Boolean
+
+
+Private Sub Frame1_Click()
+SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub Frame3_Click()
+SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub Label1_Click()
+SetFocusOnInvoiceNumberComboBox
+End Sub
+
+'Private Sub ListBox_SearchResults_Click()
+'    If ThisWorkbook.ActiveSheet.Name <> mWS.Name Then
+'        mWS.Activate
+'        ActiveWindow.ScrollRow = Application.Selection.Row 'mWS.Range(selectionAddress).Row
+'    End If
+'End Sub
+
+
+
+
+Private Sub UserForm_Initialize()
+    Dim i As Long
+    Set mWB = ActiveWorkbook
+    Set mWS = APsheetiServeHistory
+    Me.height = 237
+    
+    
+    Me.Left = Application.Left '(0.2 * Application.Width) - (0.2 * Me.Width)
+    Me.Top = Application.Top + (0.1 * Application.height) - (0.1 * Me.height)
+    'mWS.Activate
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    ReDim maryListBoxShadow(1 To 6, 1 To 1)
+    maryListBoxShadow(1, 1) = sTABLE_COL_ISERVEHISTORY_INVOICENUMBER
+    maryListBoxShadow(2, 1) = sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT
+    maryListBoxShadow(3, 1) = sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME
+    maryListBoxShadow(4, 1) = sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS
+    maryListBoxShadow(5, 1) = sTABLE_COL_ISERVEHISTORY_CASECLOSEDDATE
+    maryListBoxShadow(6, 1) = mROWNUMBERTEXT
+    Set mTable = mWS.ListObjects(1)
+    For i = 1 To loPostingHistory.HeaderRowRange.Cells.Count
+        Me.ComboBox_FilterType.AddItem loPostingHistory.HeaderRowRange(i)
+    Next i
+    Me.ComboBox_FilterType.ListIndex = loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).Index - 1
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub CommandButton_DeleteLine_Click()
+    DeleteLine
+End Sub
+Private Sub DeleteLine()
+    Dim tempIndex As Long
+    Dim i As Long
+    mFormEventsEnabled = False
+    tempIndex = Me.ListBox_SearchResults.ListCount - 1
+    If Me.ListBox_SearchResults.ListCount > 0 Then
+      Do
+        If Me.ListBox_SearchResults.Selected(tempIndex) Then
+            Me.ListBox_SearchResults.RemoveItem tempIndex
+            For i = tempIndex + 2 To UBound(maryListBoxShadow, 2) - 1
+                maryListBoxShadow(1, i) = maryListBoxShadow(1, i + 1)
+                maryListBoxShadow(2, i) = maryListBoxShadow(2, i + 1)
+                maryListBoxShadow(3, i) = maryListBoxShadow(3, i + 1)
+                maryListBoxShadow(4, i) = maryListBoxShadow(4, i + 1)
+                maryListBoxShadow(5, i) = maryListBoxShadow(5, i + 1)
+                maryListBoxShadow(6, i) = maryListBoxShadow(6, i + 1)
+            Next
+            ReDim Preserve maryListBoxShadow(1 To 6, LBound(maryListBoxShadow, 2) To UBound(maryListBoxShadow, 2) - 1)
+        End If
+        tempIndex = tempIndex - 1
+        Loop While tempIndex >= 0
+        mFormEventsEnabled = True
+        SetEnabledFilters
+    End If
+End Sub
+
+
+Public Property Get EnableFormEvents() As Boolean
+    EnableFormEvents = mFormEventsEnabled
+End Property
+Public Property Let EnableFormEvents(p_Events As Boolean)
+    mFormEventsEnabled = p_Events
+End Property
+
+Private Sub SetFocusOnInvoiceNumberComboBox()
+    If Me.Visible Then
+        With Me.ComboBox_InvoiceNumber
+                .Visible = False
+                .Visible = True
+                .SetFocus
+                .SelStart = Len(.Text)
+        End With
+    End If
+End Sub
+
+Private Sub CheckBox_WildCardPrefix_Change()
+    If mFormEventsEnabled Then SetEnabledFilters
+End Sub
+
+Private Sub CheckBox_WildCardSuffix_Change()
+    If mFormEventsEnabled Then SetEnabledFilters
+End Sub
+
+Private Sub CommandButton_GoToBatch_Click()
+    APsheetBatch.Activate
+End Sub
+
+Private Sub UserForm_Click()
+    SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub CommandButton_Hide_Click()
+    ModifyFormButton gcAP.mainAPform.CommandButton_FindInvoiceInHistory, styleLoad
+    Me.Hide
+End Sub
+Private Sub CommandButton_ExternalQuery_Click()
+    APmodMethods.LookupRangeInHistory
+End Sub
+
+Private Sub Frame_Panel_InvoiceSearch_Click()
+    SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub Label_InvoiceQuery_InvoiceNumberTitle_Click()
+    SetFocusOnInvoiceNumberComboBox
+End Sub
+Private Sub ComboBox_FilterType_Change()
+    Select Case Me.ComboBox_FilterType.Text
+        Case sTABLE_COL_ISERVEHISTORY_ACCOUNTNUMBER, _
+                        sTABLE_COL_ISERVEHISTORY_CASEOPENEDDATE, _
+                        sTABLE_COL_ISERVEHISTORY_CASECLOSEDDATE, _
+                        sTABLE_COL_ISERVEHISTORY_CASESTATUS, _
+                        sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS, _
+                        sTABLE_COL_ISERVEHISTORY_INVOICEDATE, _
+                        sTABLE_COL_ISERVEHISTORY_ALIAS, _
+                        sTABLE_COL_ISERVEHISTORY_CASENUMBER, _
+                        sTABLE_COL_ISERVEHISTORY_CHECKDATE, _
+                        sTABLE_COL_ISERVEHISTORY_CHECKNUMBER, _
+                        sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT
+            mFormEventsEnabled = False
+            Me.CheckBox_WildCardPrefix = False
+            Me.CheckBox_WildCardSuffix = False
+            mFormEventsEnabled = True
+        Case Else
+            mFormEventsEnabled = False
+            Me.CheckBox_WildCardPrefix = True
+            Me.CheckBox_WildCardSuffix = True
+            mFormEventsEnabled = True
+    End Select
+    SetEnabledFilters
+End Sub
+
+
+Private Sub UserForm_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Select Case KeyCode
+        Case vbKeyEscape
+            If Me.ComboBox_InvoiceNumber.Value = vbNullString Then
+                Me.Hide
+            Else
+                Me.ComboBox_InvoiceNumber.Value = vbNullString
+            End If
+        Case vbKeyLeft, vbKeyRight, vbKeyLeft, vbKeyRight, vbKeyMenu, vbKeyTab, 192
+            '   DEAD KEYS   (KEEPS FOCUS ON USER FORM INSTEAD OF SENDING TO SHEET)
+        Case vbKeyUp, vbKeyDown
+            CycleThroughSelection KeyCode, Shift
+        Case vbKeyDelete
+            DeleteLine
+        Case Else
+            APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+        End Select
+'        SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub ComboBox_InvoiceNumber_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Dim i As Long
+    Dim indx As Double
+    Dim strAmount As String
+    Dim strVendorName As String
+    Dim closedDate As Date
+    Dim strSubStatus As String
+    Dim r As Range
+    Dim r_ As Range 'used with 'findnext' because it requires a range object
+    Dim ri As Long
+    ri = 1
+    
+    Select Case KeyCode
+        Case Is = vbKeyReturn
+'            If ActiveWorkbook.Name <> mWB.Name Or ActiveSheet.Name <> mWS.Name Then mWS.Activate
+            StopScreen
+            StopEvents
+            If Not Me.CheckBox_FilterMatchedRows And Not Me.CheckBox_ForceQuickFilter And Not Me.CheckBox_FilterSelectedSuppliers Then ResetTableFilters loPostingHistory
+            Set r = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.Find(Me.ComboBox_InvoiceNumber.Value, lookat:=xlWhole, MatchCase:=False)
+            If r Is Nothing Then
+                Set r = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.Find(Val(Me.ComboBox_InvoiceNumber.Value), lookat:=xlWhole, MatchCase:=False)
+                Set r_ = r
+            End If
+            If Not r Is Nothing Then
+                Me.ListBox_SearchResults.BackColor = -2147483627
+                mFormEventsEnabled = False
+                ri = r.Row
+                If mWS.Rows(ri).EntireRow.Hidden Then ResetTableFilters loPostingHistory
+                Do
+                    mMyRow = r.Row - 1
+                    If Me.CheckBox_HighlightMatchedRows Then mTable.DataBodyRange.Rows(mMyRow).Interior.Color = vbYellow
+                    ReDim Preserve maryListBoxShadow(1 To 6, 1 To UBound(maryListBoxShadow, 2) + 1)
+                    strAmount = Format(mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT).DataBodyRange.Rows(mMyRow), "#,##0.00")
+                    strVendorName = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).DataBodyRange.Rows(mMyRow)
+                    closedDate = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_CASECLOSEDDATE).DataBodyRange.Rows(mMyRow)
+                    strSubStatus = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS).DataBodyRange.Rows(mMyRow)
+                    maryListBoxShadow(1, UBound(maryListBoxShadow, 2)) = r.Value
+                    maryListBoxShadow(2, UBound(maryListBoxShadow, 2)) = strAmount
+                    maryListBoxShadow(3, UBound(maryListBoxShadow, 2)) = strVendorName
+                    maryListBoxShadow(4, UBound(maryListBoxShadow, 2)) = strSubStatus
+                    maryListBoxShadow(5, UBound(maryListBoxShadow, 2)) = closedDate
+                    maryListBoxShadow(6, UBound(maryListBoxShadow, 2)) = r.Row
+                    With Me.ListBox_SearchResults
+                        For i = 0 To .ListCount - 1
+                            If .Selected(i) Then .Selected(i) = False
+                        Next i
+                        .AddItem
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_INVOICENUMBER) = r.Value
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_INVOICEAMOUNT) = strAmount
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_SUPPLIERNAME) = strVendorName
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_SUBSTATUS) = strSubStatus
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_CLOSEDDATE) = closedDate
+                        .List(.ListCount - 1, mLISTBOXCOLUMN_ROWNUMBERS) = r.Row
+                        .ListIndex = .ListCount - 1
+                        .Selected(.ListIndex) = True
+                    End With
+                    Set r = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange _
+                            .FindNext(r)
+                    If r Is Nothing Then
+                        Set r = mTable.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.FindNext(r_)
+                        Set r_ = r
+                    End If
+                Loop Until ri >= r.Row
+                SetEnabledFilters
+                With Me.ListBox_SearchResults
+                    If .ListCount > 1 Then
+                        .TopIndex = .ListCount - 1
+                    End If
+                End With
+                mFormEventsEnabled = True
+            Else 'match not found
+                ReDim Preserve maryListBoxShadow(1 To 6, 1 To UBound(maryListBoxShadow, 2) + 1)
+                maryListBoxShadow(1, UBound(maryListBoxShadow, 2)) = Me.ComboBox_InvoiceNumber.Value
+                maryListBoxShadow(3, UBound(maryListBoxShadow, 2)) = mMISSINGVALUETEXT
+                Me.ListBox_SearchResults.AddItem
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 0) = Me.ComboBox_InvoiceNumber.Value
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 1) = vbNullString
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 2) = mMISSINGVALUETEXT
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 3) = vbNullString
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 4) = vbNullString
+                Me.ListBox_SearchResults.List(ListBox_SearchResults.ListCount - 1, 5) = vbNullString
+                Me.ListBox_SearchResults.Selected(ListBox_SearchResults.ListCount - 1) = True
+                Me.ListBox_SearchResults.BackColor = 128
+            End If
+            Me.ComboBox_InvoiceNumber.Value = vbNullString
+            With Me.ListBox_SearchResults
+                If .ListCount > 1 Then
+                    .TopIndex = .ListCount - 1
+                End If
+            End With
+            ResumeEvents
+            ResumeScreen
+    End Select
+'    SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub CommandButton_ClearList_Click()
+    mFormEventsEnabled = False
+    Me.ListBox_SearchResults.Clear
+    mFormEventsEnabled = True
+    ReDim maryListBoxShadow(1 To 6, 1 To 1)
+    maryListBoxShadow(1, 1) = sTABLE_COL_ISERVEHISTORY_INVOICENUMBER
+    maryListBoxShadow(2, 1) = sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT
+    maryListBoxShadow(3, 1) = sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME
+    maryListBoxShadow(4, 1) = sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS
+    maryListBoxShadow(5, 1) = sTABLE_COL_ISERVEHISTORY_CASECLOSEDDATE
+    maryListBoxShadow(6, 1) = mROWNUMBERTEXT
+    SetEnabledFilters
+    SetFocusOnInvoiceNumberComboBox
+End Sub
+
+Private Sub CommandButton_ExportList_Click()
+    Dim i As Long
+    Dim j As Long
+    Dim newWB As Workbook
+    Dim newWS As Worksheet
+    Set newWB = Workbooks.Add
+    Set newWS = newWB.Sheets(1)
+    For i = 1 To UBound(maryListBoxShadow, 1)
+        For j = 1 To UBound(maryListBoxShadow, 2)
+            newWS.Cells(j, i) = maryListBoxShadow(i, j)
+        Next
+    Next
+    With newWS
+        .UsedRange.HorizontalAlignment = xlRight
+        With .Range("A1:D1")
+            .HorizontalAlignment = xlCenter
+            .Style = "40% - Accent1"
+        End With
+        .Cells.EntireColumn.AutoFit
+        .UsedRange.AutoFilter
+    End With
+End Sub
+
+Private Sub ListBox_SearchResults_Change()
+    Dim i As Long
+    If mFormEventsEnabled Then
+        Dim selectionAddress As String
+        ReDim marySelectedSupplierFilter(mARRAYBASE To mARRAYBASE)
+        ReDim maryMatchedInvoiceFilter(mARRAYBASE To mARRAYBASE)
+        With Me.ListBox_SearchResults
+            For i = .ListCount - 1 To 0 Step -1
+                If IsNumeric(.List(i, mLISTBOXCOLUMN_ROWNUMBERS)) Then
+                    If .Selected(i) Then
+                        AddToStringArrayIfUnique marySelectedSupplierFilter, "=" & .List(i, mLISTBOXCOLUMN_SUPPLIERNAME)
+                        If CBool(Len(selectionAddress)) Then
+                            selectionAddress = selectionAddress & "," & mWS.Rows(.List(i, mLISTBOXCOLUMN_ROWNUMBERS)).Address
+                        Else
+                            selectionAddress = mWS.Rows(.List(i, mLISTBOXCOLUMN_ROWNUMBERS)).Address
+                        End If
+                    End If
+                    AddToStringArrayIfUnique maryMatchedInvoiceFilter, "=" & .List(i, mLISTBOXCOLUMN_INVOICENUMBER)
+                End If
+            Next i
+            If .ListIndex > -1 Then
+                If Not IsNumeric(.List(.ListIndex, mLISTBOXCOLUMN_ROWNUMBERS)) Then .ListIndex = -1
+            End If
+            If Not CBool(Len(selectionAddress)) And .ListIndex > -1 Then selectionAddress = mWS.Rows(.List(.ListIndex, mLISTBOXCOLUMN_ROWNUMBERS)).Address
+        End With
+        If CBool(Len(selectionAddress)) Then ShowSelectedLines selectionAddress
+    End If
+End Sub
+
+Private Sub ListBox_SearchResults_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    If ThisWorkbook.ActiveSheet.Name <> mWS.Name Then mWS.Activate
+    ShowSelectedLines
+End Sub
+
+Private Sub ShowSelectedLines(Optional ByVal selectionAddress As String)
+    Static selectedLines As String
+    If CBool(Len(selectionAddress)) Then selectedLines = selectionAddress
+    If mFormEventsEnabled Then
+        If ThisWorkbook.ActiveSheet.Name = mWS.Name Then
+            If Not CellIsInVisibleRange(mWS.Range(selectedLines)) Then ActiveWindow.ScrollRow = mWS.Range(selectedLines).Row
+            mWS.Range(selectedLines).Select
+        End If
+        SetEnabledFilters
+    End If
+End Sub
+
+
+Private Sub CycleThroughSelection(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    On Error GoTo HANDLER
+    Dim i As Long
+    Dim foundSelection As Boolean
+    mFormEventsEnabled = False
+    With Me.ListBox_SearchResults
+        For i = .ListCount - 1 To 0 Step -1
+            If .Selected(i) Then
+                foundSelection = True
+                Select Case KeyCode
+                    Case vbKeyUp
+                        .Selected(i) = False
+                        If Shift Then
+                            .ListIndex = 0
+                        Else
+                            If i > 0 Then
+                                .ListIndex = i - 1
+                                .Selected(.ListIndex) = True
+                            Else
+                                .ListIndex = .ListCount - 1
+                                .Selected(.ListIndex) = True
+                            End If
+                        End If
+                        Exit For
+                    Case vbKeyDown
+                        .Selected(i) = False
+                        If Shift Then
+                            .ListIndex = .ListCount - 1
+                        Else
+                            If i < .ListCount - 1 Then
+                                .ListIndex = i + 1
+                                .Selected(.ListIndex) = True
+                            Else
+                                .ListIndex = 0
+                                .Selected(.ListIndex) = True
+                            End If
+                        End If
+                        Exit For
+                End Select
+            End If
+        Next i
+        If foundSelection Then
+            .Selected(.ListIndex) = True
+        Else
+            If .TopIndex > -1 Then .Selected(.TopIndex) = True
+        End If
+    End With
+    mFormEventsEnabled = True
+    Exit Sub
+HANDLER:
+    If Err.Number = 380 Then
+        Resume Next
+    Else
+        MsgBox "unhandled error, debug recommended"
+    End If
+End Sub
+Private Sub CommandButton_ClearQuickFilter_Click()
+    mFormEventsEnabled = False
+    Me.ComboBox_QuickFilterCriteria.Value = vbNullString
+    Me.CheckBox_ForceQuickFilter = False
+    SetEnabledFilters
+    mFormEventsEnabled = True
+End Sub
+
+Private Sub ComboBox_QuickFilterCriteria_Change()
+    If mFormEventsEnabled Then
+        SetEnabledFilters
+    End If
+End Sub
+
+Private Sub ComboBox_QuickFilterCriteria_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Select Case KeyCode
+        Case Is = vbKeyReturn
+            SetEnabledFilters
+        Case Is = vbKeyEscape
+            If Me.ComboBox_QuickFilterCriteria.Value = vbNullString Then
+                Me.Hide
+            Else
+                Me.ComboBox_QuickFilterCriteria.Value = vbNullString
+            End If
+    End Select
+End Sub
+
+Private Sub CheckBox_ForceQuickFilter_Change()
+   If mFormEventsEnabled Then
+        Select Case Me.CheckBox_ForceQuickFilter And (Me.CheckBox_FilterMatchedRows Or Me.CheckBox_FilterSelectedSuppliers Or Me.CheckBox_FilterSelectedRows)
+            Case True
+                mFormEventsEnabled = False
+                Select Case MsgBox("Continue?", vbCritical + vbYesNo, "Search Result Filters Will Be Removed")
+                    Case vbYes
+                        Me.CheckBox_FilterMatchedRows = False
+                        Me.CheckBox_FilterSelectedSuppliers = False
+                        Me.CheckBox_FilterSelectedRows = False
+                        SetEnabledFilters
+                    Case vbNo
+                        Me.CheckBox_ForceQuickFilter = False
+                End Select
+                mFormEventsEnabled = True
+            Case False
+                SetEnabledFilters
+        End Select
+    End If
+End Sub
+
+Private Sub CheckBox_FilterMatchedRows_Change()
+    If mFormEventsEnabled Then
+        Select Case Me.CheckBox_FilterMatchedRows And Me.CheckBox_ForceQuickFilter
+            Case True
+                MsgBox "Unable to set filter because 'Force Filter' is checked in the Quick Filter", vbCritical, "Cannot Set Filter"
+                mFormEventsEnabled = False
+                Me.CheckBox_FilterMatchedRows = False
+                mFormEventsEnabled = True
+            Case False
+                SetEnabledFilters
+        End Select
+    End If
+End Sub
+
+Private Sub CheckBox_FilterSelectedSuppliers_Change()
+    If mFormEventsEnabled Then
+        Select Case Me.CheckBox_FilterSelectedSuppliers And Me.CheckBox_ForceQuickFilter
+            Case True
+                MsgBox "Unable to set filter because 'Force Filter' is checked in the Quick Filter", vbCritical, "Cannot Set Filter"
+                mFormEventsEnabled = False
+                Me.CheckBox_FilterSelectedSuppliers = False
+                mFormEventsEnabled = True
+            Case False
+                SetEnabledFilters
+        End Select
+    End If
+End Sub
+
+
+Private Sub CheckBox_FilterSelectedRows_Change()
+    If mFormEventsEnabled Then
+        Select Case Me.CheckBox_FilterSelectedRows And Me.CheckBox_ForceQuickFilter
+            Case True
+                MsgBox "Unable to set filter because 'Force Filter' is checked in the Quick Filter", vbCritical, "Cannot Set Filter"
+                mFormEventsEnabled = False
+                Me.CheckBox_FilterSelectedRows = False
+                mFormEventsEnabled = True
+            Case False
+                SetEnabledFilters
+        End Select
+    End If
+End Sub
+
+
+Private Sub SetEnabledFilters()
+    Dim WildCardPrefix As String
+    Dim WildCardSuffix As String
+    Dim iFilterField As Single
+    Dim addCriteria As String
+    Dim filterByRow() As String
+    Dim filterByName() As String
+    Dim filterArray() As String
+    
+    StopScreen
+
+    ResetTableFilters loPostingHistory
+    
+    With Me
+    
+        iFilterField = loPostingHistory.ListColumns(.ComboBox_FilterType.Text).Index
+        
+        If .CheckBox_WildCardPrefix Then WildCardPrefix = "*"
+        If .CheckBox_WildCardSuffix Then WildCardSuffix = "*"
+        
+        addCriteria = "=" & WildCardPrefix & .ComboBox_QuickFilterCriteria.Text & WildCardSuffix
+        
+        filterByRow = maryMatchedInvoiceFilter
+        filterByName = marySelectedSupplierFilter
+        
+        
+        If Len(.ComboBox_QuickFilterCriteria.Text) > 0 Then
+
+            Select Case .ComboBox_FilterType.Text
+            
+                Case sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME
+                
+                    If .CheckBox_FilterSelectedSuppliers Then
+                        ReDim Preserve filterByName(LBound(filterByName) To UBound(filterByName) + 1)
+                        filterByName(UBound(filterByName)) = addCriteria
+                    End If
+                    
+                Case sTABLE_COL_ISERVEHISTORY_INVOICENUMBER
+                
+                    If .CheckBox_FilterMatchedRows Then
+                        ReDim Preserve filterByRow(LBound(filterByRow) To UBound(filterByRow) + 1)
+                        filterByRow(UBound(filterByRow)) = addCriteria
+                    End If
+                    
+            End Select
+            
+        End If
+        
+    End With
+    
+    With loPostingHistory
+    
+        Select Case Me.CheckBox_ForceQuickFilter
+        
+            Case True
+                .ListColumns(iFilterField).DataBodyRange.AutoFilter _
+                                field:=.ListColumns(iFilterField).Index, _
+                                Criteria1:=addCriteria, _
+                                Operator:=xlFilterValues
+                            
+            Case False
+            
+                Select Case True
+                
+                    Case Me.CheckBox_FilterMatchedRows
+                            .ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.AutoFilter _
+                                            field:=.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).Index, _
+                                            Criteria1:=filterByRow, _
+                                            Operator:=xlFilterValues
+                    Case Me.CheckBox_FilterSelectedSuppliers
+                            .ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).DataBodyRange.AutoFilter _
+                                            field:=.ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).Index, _
+                                            Criteria1:=filterByName, _
+                                            Operator:=xlFilterValues
+                    
+'                    Case Me.CheckBox_FilterSelectedRows
+'                            .ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).DataBodyRange.AutoFilter _
+'                                            field:=.ListColumns(sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME).Index, _
+'                                            Criteria1:=filterByName, _
+'                                            Operator:=xlFilterValues
+                    
+                End Select
+                
+                If Len(Me.ComboBox_QuickFilterCriteria.Text) > 0 And _
+                                    Me.ComboBox_FilterType.Text <> sTABLE_COL_ISERVEHISTORY_INVOICENUMBER And _
+                                    Me.ComboBox_FilterType.Text <> sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME Then
+                    .ListColumns(iFilterField).DataBodyRange.AutoFilter _
+                                        field:=.ListColumns(iFilterField).Index, _
+                                        Criteria1:=addCriteria, _
+                                        Operator:=xlFilterValues
+                End If
+                
+        End Select
+        
+    End With
+    
+    ResumeScreen
+    
+End Sub
+Private Sub CheckBox_HighlightSelectedRows_Change()
+    APsheetiServeHistory.Cells.Interior.Color = xlNone
+End Sub
+
+Private Sub CheckBox_HighlightMatchedRows_Change()
+    Dim InvNum As String
+    Dim i As Long
+    Dim ri As Long
+    Dim r As Range
+    StopScreen
+'    If ActiveWorkbook.Name <> mWB.Name Or ActiveSheet.Name <> mWS.Name Then mWS.Activate
+    If Me.CheckBox_HighlightMatchedRows Then
+        For i = 0 To Me.ListBox_SearchResults.ListCount - 1
+            If IsNumeric(Me.ListBox_SearchResults.List(i, mLISTBOXCOLUMN_ROWNUMBERS)) Then
+                mWS.Rows(Me.ListBox_SearchResults.List(i, mLISTBOXCOLUMN_ROWNUMBERS)).Interior.Color = vbYellow
+            End If
+        Next
+    Else
+        APsheetiServeHistory.Cells.Interior.Color = xlNone
+    End If
+    ResumeScreen
+End Sub
+
+
+
+
+Private Sub UserForm_Terminate()
+    ModifyFormButton gcAP.mainAPform.CommandButton_FindInvoiceInHistory, styleHighContrast
+    Set gfrmInvoiceQuery = Nothing
+End Sub
+
+
+'Private Sub ComboBox_InvoiceNumber_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+Private Sub CheckBox_FilterMatchedRows_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_FilterSelectedSuppliers_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_ForceQuickFilter_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_HighlightMatchedRows_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_WildCardPrefix_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_WildCardSuffix_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub ComboBox_FilterType_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub ComboBox_InvoiceNumber_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+'Private Sub ComboBox_QuickFilterCriteria_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'    Call UserForm_KeyUp(KeyCode, Shift)
+'End Sub
+Private Sub CommandButton_ClearList_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ClearQuickFilter_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_DeleteLine_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ExportList_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GoToBatch_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_Hide_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_Panel_InvoiceSearch_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_Panel_QuickFilter_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Label_InvoiceQuery_InvoiceNumberTitle_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Label_Quickfilter_CriteriaTitle_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Label_QuickFilter_DropdownTitle_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub ListBox_SearchResults_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+

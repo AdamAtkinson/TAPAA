@@ -1,0 +1,150 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APformiServeAddressQuery 
+   Caption         =   "Adam's Insanely Awesome iServe Vendor Search Tool"
+   ClientHeight    =   4110
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   5865
+   OleObjectBlob   =   "APformiServeAddressQuery_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APformiServeAddressQuery"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Public Event BeforeInitialized()
+Public Event BeforeTerminate()
+Public Event SupplierSearchClicked(ByVal SupplierAddress As String)
+Public Event PopulateBatch()
+Public Event SendToCell(ByVal SupplierAddress As String)
+Public Event SpinSelectChange(ByVal SupplierAddress As String)
+Public Event BeforeUserQuit(ByVal showPrompt As Boolean, ByRef cancelClose As Boolean)
+Private WithEvents mWB As Workbook
+Attribute mWB.VB_VarHelpID = -1
+Private mUserQuit As Boolean
+Private cnt As Long
+
+Private Sub ComboBox_SupplierName_Enter()
+    Me.ComboBox_SupplierName.SelStart = 0
+    Me.ComboBox_SupplierName.SelLength = Me.ComboBox_SupplierName.TextLength
+End Sub
+
+Private Sub CommandButton_Hide_Click()
+    Me.Hide
+End Sub
+
+Private Sub CommandButton_AddVendorDetails_Click()
+    Dim ans As Long
+        If ActiveSheet.CodeName = APsheetBatch.CodeName Then
+        ans = MsgBox("This will use the currently selected line to create a new vendor entry in the lookup table." _
+                & vbCr & vbCr & "Do you want to continue?", vbYesNo, "Add vendor")
+        Select Case ans
+            Case vbYes
+                AddToDetails
+                CreateListOfSupplierNames
+            Case vbNo
+        End Select
+    Else
+        MsgBox "Vendors can only be added from the batch sheet"
+    End If
+End Sub
+
+Private Sub CommandButton_RestoreWindow_Click()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.iServeAddressQuery Is Nothing Then
+            If Not gcAP.iServeAddressQuery.job Is Nothing Then
+                With gcAP.iServeAddressQuery.job.ExposedIserveObject.Window
+                    .SetPosition .Position.x, .Position.Y
+                    AppActivate .Title
+                End With
+            End If
+        End If
+    End If
+End Sub
+
+Private Sub CommandButton_Search_Click()
+    Dim SupplierAddress As String
+    SupplierAddress = Me.SpinButton_SelectAddress.Value
+    RaiseEvent SupplierSearchClicked(SupplierAddress)
+    'iServeAddressOnly.PopulateAddresses
+End Sub
+
+Private Sub CommandButton_VendorDetail_Click()
+    Call VendorDetailOverview(Me.ComboBox_SupplierName.Text)
+End Sub
+
+Private Sub UserForm_Initialize()
+    RaiseEvent BeforeInitialized
+    Set mWB = ActiveWorkbook
+    Me.Label_SearchForVendorName.Caption = ActiveCell.Value
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    Dim showPrompt As Boolean
+    If Not mUserQuit Then showPrompt = True
+    Dim cancelClose As Boolean
+    RaiseEvent BeforeUserQuit(showPrompt, cancelClose)
+    If cancelClose Then Cancel = 1
+End Sub
+
+Private Sub UserForm_Terminate()
+    RaiseEvent BeforeTerminate
+End Sub
+
+Private Sub mWB_SheetSelectionChange(ByVal sh As Object, ByVal target As Range)
+    If IsError(ActiveCell.Value) Then Exit Sub
+    Me.Label_SearchForVendorName.Caption = ActiveCell.Value
+End Sub
+
+Private Sub SpinButton_SelectAddress_Change()
+    If cnt > 0 Then
+        If Me.SpinButton_SelectAddress.Value > -1 Then Me.SpinButton_SelectAddress.Value = -1
+        If Me.SpinButton_SelectAddress.Value < -cnt Then Me.SpinButton_SelectAddress.Value = -cnt
+        Dim SupplierAddress As String
+        SupplierAddress = Me.SpinButton_SelectAddress.Value
+        RaiseEvent SpinSelectChange(SupplierAddress)
+        'iServeAddressOnly.GetValueAfterChange (Me.SpinButton_SelectAddress.Value)
+    End If
+End Sub
+
+Private Sub CommandButton_SendAddressToCell_Click()
+    Dim SupplierAddress As String
+    SupplierAddress = Me.SpinButton_SelectAddress.Value
+    RaiseEvent SendToCell(SupplierAddress)
+    'iServeAddressOnly.SendAddressToCell (Me.SpinButton_SelectAddress.Value)
+End Sub
+
+Public Property Let AddressCount(c As Long)
+    cnt = c
+    Me.SpinButton_SelectAddress.Value = -1
+End Property
+Public Property Get AddressCount() As Long
+    AddressCount = cnt
+End Property
+
+Private Sub CommandButton_PopulateBatch_Click()
+    RaiseEvent PopulateBatch
+
+    'iServeAddressOnly.PopulateBatch (Me.SpinButton_SelectAddress.Value)
+End Sub
+
+Private Sub CommandButton_WriteList_Click()
+    Dim r As Range
+    Dim s As String
+    Dim answr As Long
+    Dim ary() As String
+    answr = MsgBox("Do you want to list all vendors in a new workbook?", vbYesNo, _
+            "View List in Excel")
+    Select Case answr
+        Case vbYes
+             gcAP.iServeAddressQuery.job.WriteList
+            'iServeAddressOnly.WriteList
+        Case vbNo
+            'do nothing
+    End Select
+End Sub
+
+

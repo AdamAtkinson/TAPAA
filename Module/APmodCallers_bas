@@ -1,0 +1,43 @@
+Attribute VB_Name = "APmodCallers"
+Option Explicit
+
+
+Public Sub APApplication_Start()
+    Call LoadFrontEnd
+End Sub
+Public Sub APApplication_Stop()
+    Call ResetApp
+End Sub
+Public Sub AP_Repair_Application()
+    Call RebuildBatchSheet
+End Sub
+Public Sub AP_Launch_Outlook()
+    Call LoadFrontEnd(True)
+    Call LoadOutlook
+End Sub
+Public Sub AP_Show_GlobalTimer()
+    Call Adam_AddIn_Base.Adam_VBE_Utilities.ShowPopupTimer
+End Sub
+Public Sub AP_InvoiceQuery()
+    Call APaInvoiceBatchEntry.ManualInvoiceHistorySearch
+End Sub
+
+
+Public Sub AP_GLQuery()
+    Call APaInvoiceBatchEntry.GLQuery
+End Sub
+Public Sub AP_EnableShortCutKeys()
+    Call APmodMethods.EnableKeyboardShortcuts
+End Sub
+Public Sub AP_DisableShortCutKeys()
+    Call APmodMethods.DisableKeyboardShortcuts
+End Sub
+
+Public Sub AP_ToggleMainFormHeight()
+    gcAP.mainAPform.ToggleMainFormHeight
+    
+End Sub
+
+'Sub ClickThrough()
+'APSheetTaskList.Cells(APSheetTaskList.Shapes(Application.caller).TopLeftCell.Row, 3).Select
+'End Sub

@@ -1,0 +1,177 @@
+Attribute VB_Name = "APmodOnTimeCallers"
+Option Explicit
+    'both these work to send literal strings to external workbooks
+    'Application.Run "'Book1.xlsm'!VBAProject.Module1.testFinalDestination", """a literal string"""
+    'Selection.OnAction = "'AP.xlsm'!'APApplication.TestModule.SimpleTestMacro1 ""a literal string""'"
+    Private Const mONTIME_MAXLOOPS As Long = 10
+    
+Sub OptionsAutoSaveProc()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.mainAPform.optionsAPform Is Nothing Then
+            If gcAP.mainAPform.optionsAPform.IsAutoSaveEnabled Then
+                gcAP.mainAPform.optionsAPform.AutoSaveProc
+            End If
+        End If
+    End If
+End Sub
+
+
+Sub testit()
+    Dim i As Long
+    i = 0
+    OnTimeLoopUntilFunction_simple "00:00:02", "testargs", "iwin"
+End Sub
+Sub iwin()
+    Debug.Print " i win "
+End Sub
+Function testargs() As Boolean
+    Dim i As Long
+    i = i + 1
+    Debug.Print i
+    If i > 4 Then testargs = True
+End Function
+
+
+Function TestIfFileIsReady(Optional ByVal FileToTest As String, Optional ByVal LoopCounter As Long) As eTRUTHINESS
+    Static theFile As String
+    Static theCounter As Long
+    Debug.Print "in file", theCounter
+    If CBool(Len(FileToTest)) Then theFile = FileToTest
+    If CBool(LoopCounter) Then theCounter = LoopCounter
+    theCounter = theCounter + 1
+    Select Case theCounter
+        Case Is < mONTIME_MAXLOOPS
+            If FileIsLocked(theFile) = isfalse Then
+                TestIfFileIsReady = istrue
+            Else
+                TestIfFileIsReady = isfalse
+            End If
+        Case Else
+            TestIfFileIsReady = isother
+    End Select
+End Function
+
+Function TestIfWorkbookIsReady(Optional ByVal WorkbookToTest As String, Optional ByVal LoopCounter As Long) As eTRUTHINESS
+    Static theWBname As String
+    Static theCounter As Long
+    Debug.Print "in wb", theCounter
+    Dim theWb As Workbook
+    If CBool(Len(WorkbookToTest)) Then theWBname = WorkbookToTest
+    If CBool(LoopCounter) Then theCounter = LoopCounter
+    theCounter = theCounter + 1
+    Select Case theCounter
+        Case Is < mONTIME_MAXLOOPS
+            On Error Resume Next
+            Set theWb = Workbooks.Open(theWBname)
+            On Error GoTo 0
+            If theWb Is Nothing Then
+                TestIfWorkbookIsReady = isfalse
+            Else
+                TestIfWorkbookIsReady = istrue
+            End If
+        Case Else
+            TestIfWorkbookIsReady = isother
+    End Select
+End Function
+
+Function OnTimeLoopUntilFunction_simple(ByVal TimeBetweenTests As String, _
+                                        ByVal testingfunction As String, _
+                                        ByVal ProcedureToCall As String _
+                                        ) As eTRUTHINESS
+    Dim s As String: s = Chr(32)
+    Dim c As String: c = Chr(44)
+    Dim q As String: q = Chr(39)
+    Dim qq As String: qq = Chr(34)
+    Dim u As String: u = qq & c & qq
+    Dim thisProc As String
+    Dim parmString As String
+    thisProc = "OnTimeLoopUntilFunction_simple"
+    parmString = q & thisProc & s & qq & TimeBetweenTests & u & testingfunction & u & ProcedureToCall & qq & q
+    Select Case Application.Run(testingfunction)
+        Case eTRUTHINESS.istrue
+            OnTimeLoopUntilFunction_simple = istrue
+            Application.Run ProcedureToCall
+        Case eTRUTHINESS.isfalse
+            OnTimeLoopUntilFunction_simple = isfalse
+            Application.OnTime TimeValue(TimeBetweenTests) + Now, parmString
+        Case eTRUTHINESS.isother
+            OnTimeLoopUntilFunction_simple = isother
+    End Select
+End Function
+
+
+
+Sub OnTimeLoopUntilFunctionIsTrue(ByVal TimeBetweenTests As String, _
+                                  ByVal testingfunction As String, _
+                                  ByVal TestHasArguments As String, _
+                                  ByVal ProcedureToCall As String, _
+                                  ByVal ProcHasArguments As String, _
+                                  Optional ByVal testArguments As String, _
+                                  Optional ByVal testArgumentDelim As String, _
+                                  Optional ByVal inclProcArguments As String, _
+                                  Optional ByVal procArguments As String, _
+                                  Optional ByVal procArgumentDelim As String)
+    Dim testResult As Boolean
+    Dim s As String: s = Chr(32)
+    Dim c As String: c = Chr(44)
+    Dim q As String: q = Chr(39)
+    Dim qq As String: qq = Chr(34)
+    Dim u As String: u = qq & c & qq
+    Dim thisProc As String
+    Dim Args As String
+    Dim parmString As String
+    Dim testargs() As String
+    Dim procArgs() As String
+
+    If LCase(TestHasArguments) = "true" Then
+        Args = u & TestHasArguments & u & testArguments
+        If CBool(Len(testArgumentDelim)) Then Args = Args & u & testArgumentDelim
+    End If
+    
+    If LCase(ProcHasArguments) = "true" Then
+        Args = Args & u & ProcHasArguments & u & procArguments
+        If Len(procArgumentDelim) > 0 Then Args = Args & u & procArgumentDelim
+    End If
+    
+    thisProc = "OnTimeLoopUntilFunctionIsTrue"
+    parmString = q & thisProc & s & qq & TimeBetweenTests & u & testingfunction & u & ProcedureToCall & Args & qq & q
+    
+    Select Case LCase(TestHasArguments)
+        Case "true"
+            testResult = Application.Run(testingfunction, testargs)
+        Case Else
+            testResult = Application.Run(testingfunction)
+    End Select
+    
+    Select Case testResult
+        Case True
+            Select Case Len(procArguments)
+                Case 0
+                    Application.Run ProcedureToCall
+                Case Is > 0
+                    If Len(procArgumentDelim) > 0 Then
+                        procArgs = Split(procArguments, procArgumentDelim)
+                        Application.Run ProcedureToCall, procArgs
+                    Else
+                        Application.Run ProcedureToCall, procArguments
+                    End If
+            End Select
+        Case False
+            Application.OnTime TimeValue(TimeBetweenTests) + Now, parmString
+    End Select
+End Sub
+
+Function CreateParameterArrayFromArguments(Optional ByVal includesArguments As String, _
+                                           Optional ByVal argumentsToParse As String, _
+                                           Optional ByVal argumentDelim As String) As String()
+    Dim a() As String
+    If Len(includesArguments) > 0 Then
+        a = Split(argumentsToParse, argumentDelim)
+    Else
+        ReDim a(0 To 0)
+        a(0) = vbNullString
+    End If
+    CreateParameterArrayFromArguments = a
+End Function
+
+

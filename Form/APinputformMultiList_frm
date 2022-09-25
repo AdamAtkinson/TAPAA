@@ -1,0 +1,368 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APinputformMultiList 
+   Caption         =   "Invoice Field Entry"
+   ClientHeight    =   4305
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   9210
+   OleObjectBlob   =   "APinputformMultiList_frm.frx":0000
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APinputformMultiList"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+
+Public Event FieldComplete()
+Public Event Terminated()
+
+Private usrchoice As String
+Private mKnownString As String
+'Private strDelim As String
+Private mLookInColumnName As String
+Private strOnlyOption As String
+Private AvoidRecursion As Boolean
+Private i As Integer
+Private j As Integer
+Private intOptionCount As Integer
+
+Private mFormEventsDisabled As Boolean
+
+Private Const mLARGE_PADDING As Single = 25
+Private Const mSHORT_PADDING As Single = 5
+Private Const mSTANDARD_ALIAS_LENGTH As Single = 6
+
+
+
+Private Sub UserForm_Initialize()
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left + (0.5 * Application.Width) - (0.5 * Me.Width)
+    Me.Top = Application.Top + (0.7 * Application.height) - Me.height
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(ActiveCell.Row) <> vbNullString Then CheckBox_SplitLine = True
+End Sub
+
+Private Sub UserForm_Activate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+'    Set hook = New Hook_Class
+'    hook.SetHook
+    Me.listboxAvailableOptions.SetFocus
+    If Me.listboxAvailableOptions.ListCount = 1 Then Call CheckUserSelection
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode <> 1 Then Cancel = 1
+    usrchoice = vbNullString
+'    gflgCancel = True
+    Me.txtScratchPad.Visible = False
+    Call CheckUserSelection
+End Sub
+
+Public Sub ClearOptionList()
+    Me.listboxAvailableOptions.Clear
+End Sub
+
+Public Property Get OnlyOption() As String
+    OnlyOption = strOnlyOption
+End Property
+
+Public Property Get UserSelection() As String
+    UserSelection = usrchoice
+End Property
+
+Public Property Get OptionCount() As Integer
+    OptionCount = intOptionCount
+End Property
+
+Public Property Let SetScratchPadText(p_strVal As String)
+    usrchoice = p_strVal
+    Me.listboxAvailableOptions.AddItem p_strVal
+    Me.Caption = sEDIT_INVOICE_DESCRIPTION
+    mLookInColumnName = sTABLE_COL_BATCH_INVOICEDESCRIPTION
+End Property
+
+
+Public Property Let LookupColumn(p_LookupColumn As String)
+    Dim ary() As String
+    Dim cnt As Long
+    Dim i As Long
+    Dim s As String
+    Dim r As Range
+    Dim noDuplicate As Boolean
+    mLookInColumnName = p_LookupColumn
+    cnt = 1
+    ReDim ary(1 To cnt)
+    For Each r In loSupplierDetails.ListColumns(p_LookupColumn).DataBodyRange.SpecialCells(xlCellTypeVisible)
+        If r.Value <> vbNullString Then
+            noDuplicate = True
+            For i = LBound(ary) To UBound(ary)
+                If r.Value = ary(i) Then noDuplicate = False
+            Next i
+            If noDuplicate = True Then
+                ReDim Preserve ary(1 To cnt)
+                ary(cnt) = r.Value
+                cnt = cnt + 1
+            End If
+        End If
+        If CBool(InStr(1, APsheetSupplierConfig.Cells(r.Row, loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_PROCESSINGCODE).Index).Value, sPROCESS_CODE_SPLIT_ACCOUNT)) Then
+            mFormEventsDisabled = True
+            Me.CheckBox_SplitLine = True
+            mFormEventsDisabled = False
+        End If
+        If APsheetSupplierConfig.Cells(r.Row, loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_REMITTANCEREQUIRED).Index).Value = True Then
+            mFormEventsDisabled = True
+            Me.CheckBox_RemittanceRequired = True
+            mFormEventsDisabled = False
+        End If
+    Next r
+    
+    If UBound(ary) = 1 Then
+        intOptionCount = 1
+        strOnlyOption = ary(1)
+    Else
+        For i = 1 To UBound(ary)
+            noDuplicate = True
+
+            If noDuplicate Then
+                If strOnlyOption = vbNullString Then strOnlyOption = ary(i)
+                Select Case p_LookupColumn
+                    Case Is = sTABLE_COL_BATCH_ALIAS
+'error may occur with find
+                        Set r = loApproverList.ListColumns(sTABLE_COL_BATCH_ALIAS).DataBodyRange.Find(ary(i), lookat:=xlWhole, MatchCase:=False)
+                        If Not r Is Nothing Then
+                            s = r.Offset(0, 1)
+                            s = s & Space(mLARGE_PADDING - Len(s))
+                            s = s & r.Value
+                            s = s & Space(mSHORT_PADDING + mSTANDARD_ALIAS_LENGTH - Len(r.Value))
+                            s = s & r.Offset(0, 2)
+                            Me.listboxAvailableOptions.AddItem s
+                        End If
+                    Case Is = sTABLE_COL_BATCH_ACCOUNTNUMBER
+                        Set r = loChartOfAccounts.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).DataBodyRange.Find(ary(i), lookat:=xlWhole, MatchCase:=False)
+                        If Not r Is Nothing Then
+                            s = ary(i) & " - " & r.Offset(0, 1)
+                            Me.listboxAvailableOptions.AddItem s
+                        End If
+                    Case Else
+                        Me.listboxAvailableOptions.AddItem (ary(i))
+                End Select
+            End If
+        Next
+        intOptionCount = Me.listboxAvailableOptions.ListCount
+        Me.listboxAvailableOptions.SetFocus
+    End If
+HANDLER:
+End Property
+
+Private Sub listboxAvailableOptions_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    For i = 0 To Me.listboxAvailableOptions.ListCount
+        If Me.listboxAvailableOptions.Selected(i) Then usrchoice = Me.listboxAvailableOptions.List(i)
+    Next
+    Call CheckUserSelection
+End Sub
+
+Private Sub CheckBox_SplitLine_Change()
+If Not mFormEventsDisabled Then Call ToggleTrueFalseEmptyOnSheet(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(ActiveCell.Row))
+End Sub
+
+Private Sub CheckBox_RemittanceRequired_Change()
+If Not mFormEventsDisabled Then Call ToggleTrueFalseEmptyOnSheet(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(ActiveCell.Row))
+End Sub
+
+Private Sub ToggleTrueFalseEmptyOnSheet(rng As Range, Optional ValueIfFalse As String = vbNullString)
+Dim strVal As String
+    If rng.Value = True Then
+        strVal = rng.Value
+        If LCase(strVal) = "true" Then rng.Value = ValueIfFalse
+    Else
+        rng.Value = True
+    End If
+End Sub
+
+
+Private Sub btnSelect_Click()
+    For i = 0 To Me.listboxAvailableOptions.ListCount
+        If Me.listboxAvailableOptions.Selected(i) Then usrchoice = Me.listboxAvailableOptions.List(i)
+    Next
+    Me.txtScratchPad.Visible = False
+    Call CheckUserSelection
+End Sub
+
+
+
+Private Sub CheckUserSelection()
+    Dim i As Integer
+    Dim r As Range
+    
+    If Me.txtScratchPad.Visible = True Then Me.txtScratchPad.Visible = False
+    
+    If AvoidRecursion Then Exit Sub
+    
+    If usrchoice = vbNullString Then
+'        gflgCancel = True
+        Me.Hide
+    Else
+        Select Case mLookInColumnName
+            Case Is = sTABLE_COL_BATCH_ACCOUNTNUMBER
+                If IsNumeric(Left(usrchoice, 6)) Then usrchoice = Left(usrchoice, 6)
+                Me.Hide
+            Case Is = sTABLE_COL_BATCH_ALIAS
+                'ALL ALIASES START WITH 1 AND THE STRING IS PUT TOGETHER LIKE "Reno   [mLARGEPADDING]  143175JL  [mSMALLPADDING]  Justin Lee"
+                If usrchoice Like "*1#####*" Then usrchoice = Trim(Mid(usrchoice, 26, InStr(26, usrchoice, Chr(32)) - mLARGE_PADDING + 1))
+                Me.Hide
+            Case Is = sTABLE_COL_BATCH_INVOICEDESCRIPTION
+                Set r = loInvoiceDescriptionList.ListColumns(1).DataBodyRange.Find(usrchoice, lookat:=xlWhole, MatchCase:=False)
+                If Not r Is Nothing Then
+                    AvoidRecursion = True
+                    Me.listboxAvailableOptions.BackColor = -2147483633
+                    Me.txtScratchPad.Visible = True
+                    Me.txtScratchPad.SetFocus
+                    Do
+                        If CheckForKnownString Then Me.txtScratchPad.Visible = False
+                        DoEvents
+                    Loop Until Me.txtScratchPad.Visible = False Or Me.Visible = False
+                    usrchoice = Me.txtScratchPad.Text & Mid(usrchoice, InStr(1, usrchoice, "]") + 1, Len(usrchoice))
+                    Me.txtScratchPad.Text = vbNullString
+                    AvoidRecursion = False
+                    Me.listboxAvailableOptions.BackColor = -2147483643
+                End If
+                Me.Hide
+            Case Else
+                Me.Hide
+        End Select
+    End If
+End Sub
+
+Sub teststring()
+Dim ary(1 To 5) As String
+ary(1) = "[MMM/DD] INTERPRETATION"
+ary(2) = "[MM/DD-MM/DD/YY] SECURITY"
+ary(3) = "[MM/DD-MM/DD] INTERIM ADMIN"
+ary(4) = "[MM/DD] DOS"
+ary(5) = "[MMM/YY] SERVICE"
+Dim i As Long
+For i = 1 To 5
+If Not CheckForKnownString Then Debug.Print mKnownString
+Next
+End Sub
+
+Private Function CheckForKnownString() As Boolean
+    Dim leftPart As String
+    Dim rightPart As String
+    Dim startPoint As String
+    Dim midPoint As Single
+    Dim endPoint As Single
+    Dim dateSegment As String
+    If InStr(1, usrchoice, "[") = 0 Then Exit Function
+    startPoint = InStr(1, usrchoice, "[")
+    endPoint = InStr(1, usrchoice, "]")
+    If endPoint < 10 Then
+        midPoint = InStr(1, usrchoice, "/")
+    Else
+        midPoint = InStr(1, usrchoice, "-")
+    End If
+    dateSegment = Mid(usrchoice, startPoint + 1, endPoint - 2)
+    leftPart = Mid(usrchoice, startPoint + 1, midPoint - 2)
+    rightPart = Mid(usrchoice, midPoint + 1, endPoint - midPoint - 1)
+    mKnownString = dateSegment
+    With Me.txtScratchPad
+        Select Case leftPart
+            Case "MM"
+                If .Text Like "##" Then .Text = .Text & "/"
+                If .Text Like "##/##" Then
+                    mKnownString = .Text
+                    .Visible = False
+                End If
+            
+            Case "MMM"
+                If Len(.Text) = 2 And IsNumeric(.Text) And IsDate(.Text & "/01/2019") Then _
+                            .Text = UCase(Format(DateValue(.Text & "/01/2019"), "MMM") & "/")
+                If Len(.Text) = 3 And InStr(1, "JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC", .Text) > 0 Then .Text = .Text & "/"
+                If Len(.Text) = 6 And InStr(1, "JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC", Left(.Text, 3)) > 0 _
+                And .Text Like "???/##" Then
+                    mKnownString = .Text
+                    .Visible = False
+                End If
+            Case "MM/DD"
+                If .Text Like "##" Then .Text = .Text & "/"
+                If .Text Like "##/##" Then .Text = .Text & "-"
+                If .Text Like "##/##-##" Then .Text = .Text & "/"
+                Select Case rightPart
+                    Case "MM/DD"
+                        If .Text Like "##/##-##/##" Then
+                            mKnownString = .Text
+                            .Visible = False
+                        End If
+                    Case "MM/DD/YY"
+                        If .Text Like "##/##-##/##" Then .Text = .Text & "/"
+                        If .Text Like "##/##-##/##/##" Then
+                            mKnownString = .Text
+                            .Visible = False
+                        End If
+                    End Select
+        End Select
+    End With
+
+End Function
+
+Private Sub listboxAvailableOptions_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+End Sub
+Private Sub listboxAvailableOptions_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'    APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+End Sub
+Private Sub listboxAvailableOptions_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+    Select Case KeyCode
+        Case vbKeyUp
+            If Shift Then
+                'DO SOMETHING
+            End If
+        Case vbKeyR
+            Me.CheckBox_RemittanceRequired = Not Me.CheckBox_RemittanceRequired
+        Case vbKeyS
+            Me.CheckBox_SplitLine = Not Me.CheckBox_SplitLine
+        Case Is = vbKeyEscape
+            usrchoice = vbNullString
+            Me.txtScratchPad.Visible = False
+            Call CheckUserSelection
+        Case Is = vbKeyReturn, vbKeyRight
+            For i = 0 To Me.listboxAvailableOptions.ListCount
+                If Me.listboxAvailableOptions.Selected(i) Then usrchoice = Me.listboxAvailableOptions.List(i)
+            Next
+            Me.txtScratchPad.Visible = False
+            Call CheckUserSelection
+    End Select
+End Sub
+Private Sub txtScratchPad_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+End Sub
+Private Sub txtScratchPad_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'    APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+End Sub
+Private Sub txtScratchPad_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+    Select Case KeyCode
+        Case Is = vbKeyEscape
+            Me.txtScratchPad.Text = vbNullString
+            CheckUserSelection
+            Me.txtScratchPad.Visible = False
+        Case Is = vbKeyReturn
+            CheckUserSelection
+            Me.txtScratchPad.Visible = False
+    End Select
+End Sub
+
+Private Sub CommandButton_Exit_Click()
+    usrchoice = vbNullString
+    gflgCancel = True
+    Me.Hide
+    'Me.txtScratchPad.Visible = False
+    'If Not gflgCancel Then Call CheckUserSelection
+End Sub
+
+Private Sub UserForm_Terminate()
+'gflgCancel = False
+'    If Not hook Is Nothing Then Set hook = Nothing
+End Sub

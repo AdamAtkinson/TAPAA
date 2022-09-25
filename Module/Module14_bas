@@ -1,0 +1,108 @@
+Attribute VB_Name = "Module14"
+Option Explicit
+
+Const newfolder As String = "C:\Users\e-aatkinson\iServe\Active Queue\Ready for Upload\New folder\"
+Const oldfolder As String = "C:\Users\e-aatkinson\iServe\Active Queue\Ready for Upload\"
+
+Sub MOVESHITTOSAFETY()
+Dim ws As Worksheet
+Set ws = APsheetBatch
+Dim lo As ListObject
+Set lo = ws.ListObjects(1)
+Dim lc As ListColumn
+Set lc = lo.ListColumns("Invoice File Name")
+
+Dim r As Range
+
+For Each r In lc.DataBodyRange
+    If r.Hyperlinks.Count = 1 Then
+        If Len(Dir(r.Hyperlinks(1).Address)) > 0 Then
+            If Not r.Font.Strikethrough Then
+                Name r.Hyperlinks(1).Address As newfolder & r.Address & ".pdf"
+            End If
+        End If
+    End If
+Next
+
+End Sub
+
+Sub NEWBOOKMARKS()
+Dim ws As Worksheet
+Set ws = APsheetBatch
+Dim lo As ListObject
+Set lo = ws.ListObjects(1)
+Dim lc As ListColumn
+Set lc = lo.ListColumns("Invoice File Name")
+
+Dim r As Range
+
+For Each r In lc.DataBodyRange
+    If r.Hyperlinks.Count = 1 Then
+        If Not r.Font.Strikethrough Then
+    
+    r.Hyperlinks(1).Address = newfolder & Trim(Left(ActiveSheet.Cells(r.Row, 2), 7)) & ActiveSheet.Cells(r.Row, 1) & "-2002008-2005.pdf"
+    
+    End If
+    End If
+    Next
+    
+End Sub
+
+
+
+Sub NOWRENAMESHIT()
+
+Dim ws As Worksheet
+Set ws = APsheetBatch
+Dim lo As ListObject
+Set lo = ws.ListObjects(1)
+Dim lc As ListColumn
+Set lc = lo.ListColumns("Invoice File Name")
+
+Dim r As Range
+
+For Each r In lc.DataBodyRange
+    If r.Hyperlinks.Count = 1 Then
+                If Not r.Font.Strikethrough Then
+        If Len(Dir(newfolder & r.Address & ".pdf")) > 0 Then
+
+                Name newfolder & r.Address & ".pdf" As r.Hyperlinks(1).Address & ".pdf"
+            End If
+        End If
+    End If
+Next
+
+End Sub
+
+Sub FIXSTUPID()
+Dim N As String
+N = newfolder & (Dir(newfolder & "*.pdf.pdf"))
+    Do
+        N = newfolder & N
+        Name N As Left(N, InStrRev(N, ".") - 1)
+         N = (Dir)
+    Loop Until Len(N) = 0
+End Sub
+
+
+Sub FIXSTUPIDER()
+Dim ws As Worksheet
+Set ws = APsheetBatch
+Dim lo As ListObject
+Set lo = ws.ListObjects(1)
+Dim lc As ListColumn
+Set lc = lo.ListColumns("Invoice File Name")
+
+Dim r As Range
+
+
+For Each r In lc.DataBodyRange
+    If Not r.Font.Strikethrough Then
+        If r.Hyperlinks.Count = 1 Then
+            r.Hyperlinks(1).TextToDisplay = ActiveSheet.Cells(r.Row, 1)
+            End If
+            End If
+            Next
+            
+End Sub
+

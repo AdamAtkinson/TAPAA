@@ -1,0 +1,17 @@
+Attribute VB_Name = "APmodWrappers"
+Option Explicit
+
+Public Sub ModifyFormButton(btn As MSForms.CommandButton, btnState As enumButtonStyles, Optional btnText As String)
+    Dim btnClass As New APclsButtonStyles
+    Set btnClass.AssignButton = btn
+    btnClass.SetStyle = btnState
+    If CBool(Len(btnText)) Then btnClass.SetText = btnText
+End Sub
+
+'Sub SetButtonStyle(btn As MSForms.CommandButton, btnStyle As typeButtonStyle, Optional newButtonText As String)
+'    With btnStyle
+'        btn.BackColor = btnStyle.utButtonColor
+'        btn.ForeColor = btnStyle.utTextColor
+'        If CBool(Len(newButtonText)) Then btn.Caption = newButtonText
+'    End With
+'End Sub

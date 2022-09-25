@@ -1,0 +1,49 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} SkippedDetails_Form 
+   ClientHeight    =   3840
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   15105
+   OleObjectBlob   =   "SkippedDetails_Form_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "SkippedDetails_Form"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+
+
+
+
+Private Sub UserForm_Initialize()
+   Dim i As Long
+    With Me.ListBox_Details
+        For i = LBound(gSkippedDetails) To UBound(gSkippedDetails)
+            .AddItem
+            .List(.ListCount - 1, 0) = gSkippedDetails(i).emailDate
+            .List(.ListCount - 1, 1) = gSkippedDetails(i).emailSender
+            .List(.ListCount - 1, 2) = gSkippedDetails(i).emailSubject
+            .List(.ListCount - 1, 3) = gSkippedDetails(i).attachmentCount
+            .List(.ListCount - 1, 4) = gSkippedDetails(i).savedCount
+            .List(.ListCount - 1, 5) = gSkippedDetails(i).skippedCount
+            .List(.ListCount - 1, 6) = gSkippedDetails(i).attachmentFileName
+        Next i
+    End With
+
+End Sub
+
+Private Sub ListBox_Details_Change()
+    Dim i As Long
+    For i = 1 To Me.ListBox_Details.ListCount - 1
+        If Me.ListBox_Details.Selected(i) Then gSkippedDetails(i).otMessage.Display
+    Next i
+End Sub
+
+
+Private Sub CommandButton_SaveAll_Click()
+    APappOutlook.SaveAllSkippedAttachments
+End Sub

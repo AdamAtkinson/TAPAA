@@ -1,0 +1,955 @@
+Attribute VB_Name = "APappOutlook"
+
+Option Explicit
+Option Private Module
+
+'                                                                                                       '
+'   Cycles through selected emails and saves attachments to a unique folder                             '
+'                                                                                                       '
+
+'                                                                                                       '
+'########################################################################################################
+'   VBA MODULE DEPENDENCIES                                                                             '
+'--------------------------------------------------------------------------------------------------------
+'   AttachmentDownloader_Form                                                                           '
+'########################################################################################################
+'                                                                                                       '
+
+'                                                                                                       '
+'Written by Adam Atkinson - July 2018                                                                   '
+'                modified - 01/09/19 : added save path for Dom                                          '
+'                modified - 06/19/19 : modified to make it easier to handle save paths                  '
+'                modified - 08/06/19 : added progress bar                                               '
+'                modified - 08/07/19 : added ability to move email to a different folder in outlook     '
+'                modified - 08/14/19 : added ability to download PDF and ignore all other               '
+'                modified - 08/21/19 : massive edit with new userform and detail tracking               '
+'                modified - 09/13/19 : enabled AP inbox functionality and added excel control           '
+'                                                                                                       '
+
+'                                                                                                       '
+'########################################################################################################
+'   Modify these constants to maintain and select between two download paths                            '
+'--------------------------------------------------------------------------------------------------------
+Private Const mACTIVE_USER As String = "Adam"                                                    '      '
+'--------------------------------------------------------------------------------------------------------
+Private Const mUSER_1 As String = "Adam"                                                         '      '
+Private Const mUSER_1_Path As String = "C:\Users\e-aatkinson\iServe\Mail Processing\"            '      '
+'--------------------------------------------------------------------------------------------------------
+Private Const mUSER_2 As String = "Dom"                                                          '      '
+Private Const mUSER_2_Path As String = "S:\ACCOUNTING 1\Accounts Payable\VBA\"                   '      '
+'--------------------------------------------------------------------------------------------------------
+
+
+Private Const PDF_EXT As String = ".PDF"
+Private Const PNG_EXT As String = ".PNG"
+Private Const XLS_EXT As String = ".XLS*"
+Private Const JPG_EXT As String = ".JPG"
+Private Const JPEG_EXT As String = ".JPEG"
+Private Const GIF_EXT As String = ".GIF"
+Private Const DOC_EXT As String = ".DOC*"
+
+Private Const mDELIM As String = "\"
+Private Const mDBLLN As String = vbCr & vbCr
+
+Private savePath As String
+
+Public Type typeSkippedAttachmentDetails
+    emailSubject As String
+    emailSender As String
+    emailDate As String
+    attachmentCount As String
+    skippedCount As String
+    savedCount As String
+    attachmentFileName As String
+    otMessage As MailItem
+    otAttachment As Attachment
+End Type
+
+Public gSkippedDetails() As typeSkippedAttachmentDetails
+
+#Const LateBind = False
+Const olMinimized As Long = 1
+Const olMaximized As Long = 2
+Const olFolderInbox As Long = 6
+
+Private Declare Function ShowWindow Lib "User32" (ByVal hwnd As Long, ByVal nCmdShow As Long) As Long
+Private Declare Function IsIconic Lib "user32.dll" (ByVal hwnd As Long) As Long
+Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+
+
+Sub SearchForRejectedEmailNotification()
+Dim olApp As APclsOutlookApplication
+Set olApp = New APclsOutlookApplication
+Dim SearchTerm As String
+
+SearchTerm = APsheetBatch.Cells(ActiveCell.Row, 1).Value
+olApp.DisplayRejectedNotice SearchTerm
+End Sub
+
+Sub LoadOutlook()
+    Dim OutApp  As Object
+    Set OutApp = OutlookApp()
+    'Automate OutApp as desired
+    Application.OnTime Now + TimeValue("00:00:10"), "APappOutlook.ShowDownLoadForm"
+End Sub
+Sub ShowDownloadForm()
+    LoadFrontEnd True
+    If frmDownloader Is Nothing Then Set frmDownloader = New AttachmentDownloader_Form
+    frmDownloader.Show
+End Sub
+Sub ClearDownloader()
+    Set frmDownloader = Nothing
+End Sub
+Sub ShowSkippedForm()
+    Set frmSkipped = New SkippedDetails_Form
+    frmSkipped.Show
+End Sub
+
+Sub SaveAttachmentsFromSelection()
+    Dim oOutlookApplication As Outlook.Application
+    Dim oInbox As Outlook.MAPIFolder
+    Dim oMoveToFolder As Outlook.MAPIFolder
+    Dim oNameSpace As Outlook.Namespace
+    Dim oRecipient As Outlook.Recipient
+    Dim oActiveExplorer As Outlook.Explorer
+    Dim oSelection As Outlook.Selection
+    Dim oSelectedItem As Object
+    Dim oMailItem As Outlook.MailItem
+    Dim oAttachments As Outlook.Attachments
+    Dim oAttachment As Outlook.Attachment
+    Dim strSkippedAttachments() As String
+    Dim i As Long
+    Dim t As Long: t = Timer
+    Dim docExt As String
+    Dim strIndex As String
+    Dim prefixNewName As String
+    Dim nameDivider As String
+    Dim newname As String
+    Dim selectedItemsCount As Long
+    Dim totalAttachmentCount As Long
+    Dim selectedItemCounter As Long
+    Dim savedAttachmentsCount As Long
+    Dim totalSavedAttachmentsCount As Long
+    Dim proceedWithCurrent As Boolean
+    Dim raiseSkippedFlag As Boolean
+    Dim skippedAttachmentsCount As Long
+    Dim totalSkippedAttachmentsCount As Long
+    Dim skippedItemCount As Long
+    Dim flgUncheckDestinations As Boolean
+    
+    ReDim gSkippedDetails(0 To 0)
+    gSkippedDetails(0).attachmentCount = "Total"
+    gSkippedDetails(0).skippedCount = "Skip"
+    gSkippedDetails(0).savedCount = "Save"
+    gSkippedDetails(0).attachmentFileName = "File Name"
+    gSkippedDetails(0).emailDate = "Recieved"
+    gSkippedDetails(0).emailSender = "From"
+    gSkippedDetails(0).emailSubject = "Subject"
+    
+    
+    '-------------------------------------------'
+    'TODO USE THE INI CLASS TO HANDLE THIS      '
+    '-------------------------------------------'
+        Select Case mACTIVE_USER '              '
+        Case mUSER_1 '                          '
+            savePath = mUSER_1_Path '           '
+        Case mUSER_2 '                          '
+            savePath = mUSER_2_Path '           '
+    End Select '                                '
+    '--------------------------------------------
+
+
+    Set oOutlookApplication = CreateObject("Outlook.Application")
+    Set oNameSpace = oOutlookApplication.GetNamespace("MAPI")
+    If frmDownloader Is Nothing Then Set frmDownloader = New AttachmentDownloader_Form
+    With frmDownloader
+        Select Case True
+            Case .CheckBox_AP And .CheckBox_iServeQueue
+                flgUncheckDestinations = True
+                MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Invalid Configuration"
+    
+            Case .CheckBox_iServeQueue
+                Set oRecipient = oNameSpace.CreateRecipient("Adam Atkinson")
+                oRecipient.Resolve
+                Select Case oRecipient.Resolved
+                    Case Is = True
+                        Set oInbox = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+                        Set oMoveToFolder = pGetMyMAPIFolder("Adam.Atkinson@neurorestorative.com\Inbox\iServe\iServe Queue")
+                        If oMoveToFolder Is Nothing Then
+                            flgUncheckDestinations = True
+                            MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Could Not Find Email Folder"
+                        End If
+                    Case Is = False
+                        MsgBox "Error: Unable To Resolve Atkinson Inbox"
+                        GoTo CLEANUPANDEXIT
+                    Case Else
+                        MsgBox "Error: Undefined Error Resolving AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                End Select
+                
+            Case .CheckBox_AP
+                Set oRecipient = oNameSpace.CreateRecipient("CareMeridian_AP")
+                oRecipient.Resolve
+                Select Case oRecipient.Resolved
+                    Case Is = True
+                        Set oInbox = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+                        Set oMoveToFolder = oNameSpace.Folders("CareMeridian_AP") _
+                                .Folders("Managed Folders").Folders("2Year").Folders("Printed Invoices")
+                        If oMoveToFolder Is Nothing Then
+                            flgUncheckDestinations = True
+                            MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Could Not Find Email Folder"
+                        End If
+                    Case Is = False
+                        MsgBox "Error: Unable To Resolve AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                    Case Else
+                        MsgBox "Error: Undefined Error Resolving AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                End Select
+            Case Not .CheckBox_AP And Not .CheckBox_iServeQueue
+                flgUncheckDestinations = True
+                 MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "No Email Folder Selected"
+            Case Else
+                MsgBox "unhandled error"
+                Exit Sub
+        End Select
+
+        If flgUncheckDestinations Then
+            .CancelEvents = True
+            .CheckBox_AP = False
+            .CheckBox_iServeQueue = False
+            .CancelEvents = False
+        End If
+    End With
+
+    'look for savePath and prompt user to create if not found; exit if not found and created
+    If Not CBool(Len(Dir(savePath, vbDirectory))) Then
+        Select Case MsgBox("'" & savePath & "' does not exist!" & mDBLLN & "Do you want to create it now?", vbYesNo)
+            Case Is = vbYes
+                MkDir savePath
+            Case Is = vbNo
+                MsgBox "Cannot continue until folder exists.  Program terminated"
+                GoTo CLEANUPANDEXIT
+        End Select
+    End If
+      
+    'loop through every email in the active selection, looping through and saving the attachments for each one
+    Set oActiveExplorer = Outlook.ActiveExplorer
+    Set oSelection = oActiveExplorer.Selection
+    selectedItemsCount = oSelection.Count
+    frmDownloader.StartAttachmentIndicator selectedItemCounter, selectedItemsCount
+    For Each oSelectedItem In oSelection
+        selectedItemCounter = selectedItemCounter + 1
+        If TypeOf oSelectedItem Is Outlook.MailItem Then
+            Set oMailItem = oSelectedItem
+            Set oAttachments = oMailItem.Attachments
+            If oAttachments.Count > 0 Then
+                skippedAttachmentsCount = 0
+                savedAttachmentsCount = 0
+                totalAttachmentCount = totalAttachmentCount + oAttachments.Count
+                For Each oAttachment In oAttachments
+                    proceedWithCurrent = False
+                    docExt = UCase(Right(oAttachment.fileName, Len(oAttachment.fileName) - InStrRev(oAttachment.fileName, ".") + 1))
+                    Select Case True
+                        Case frmDownloader.CheckBox_DOC And docExt Like DOC_EXT
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_GIF And docExt Like GIF_EXT
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_JPG And (docExt Like JPG_EXT Or docExt Like JPEG_EXT)
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_PDF And docExt Like PDF_EXT
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_PNG And docExt Like PNG_EXT
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_XLS And docExt Like XLS_EXT
+                            proceedWithCurrent = True
+                        Case frmDownloader.CheckBox_Other _
+                                And Not (docExt Like XLS_EXT Or docExt Like PNG_EXT Or docExt Like PDF_EXT Or docExt Like JPG_EXT _
+                                Or docExt Like JPEG_EXT Or docExt Like GIF_EXT Or docExt Like DOC_EXT)
+                            proceedWithCurrent = True
+                    End Select
+                    If proceedWithCurrent Then
+                        prefixNewName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+                        newname = pReplaceSpecialCharacters(oMailItem.Subject, "_", True, 100) & "(" & Replace(oAttachment.fileName, docExt, vbNullString, Compare:=vbTextCompare) & ")" & docExt
+                        Do
+                            DoEvents
+                            If CBool(Len(Dir(savePath & prefixNewName & strIndex & nameDivider & newname))) Then
+                                strIndex = CStr(Val(strIndex) + 1)
+                                nameDivider = "()"
+                            End If
+                        Loop Until Not CBool(Len(Dir(savePath & Left(prefixNewName, 1) & strIndex & Right(prefixNewName, 1) & nameDivider & newname)))
+                        oAttachment.SaveAsFile savePath & prefixNewName & strIndex & nameDivider & newname
+                        totalSavedAttachmentsCount = totalSavedAttachmentsCount + 1
+                        savedAttachmentsCount = savedAttachmentsCount + 1
+                    Else
+                        raiseSkippedFlag = True
+                        totalSkippedAttachmentsCount = totalSkippedAttachmentsCount + 1
+                        skippedAttachmentsCount = skippedAttachmentsCount + 1
+
+                        ReDim Preserve gSkippedDetails(0 To UBound(gSkippedDetails) + 1)
+                        With oMailItem
+                            gSkippedDetails(UBound(gSkippedDetails)).attachmentCount = .Attachments.Count
+                            gSkippedDetails(UBound(gSkippedDetails)).skippedCount = skippedAttachmentsCount
+                            gSkippedDetails(UBound(gSkippedDetails)).savedCount = savedAttachmentsCount
+                            gSkippedDetails(UBound(gSkippedDetails)).attachmentFileName = oAttachment.fileName
+                            gSkippedDetails(UBound(gSkippedDetails)).emailDate = .ReceivedTime
+                            gSkippedDetails(UBound(gSkippedDetails)).emailSender = .SenderName
+                            gSkippedDetails(UBound(gSkippedDetails)).emailSubject = .Subject
+                            Set gSkippedDetails(UBound(gSkippedDetails)).otMessage = oMailItem
+                            Set gSkippedDetails(UBound(gSkippedDetails)).otAttachment = oAttachment
+                        End With
+                    End If
+                DoEvents
+                Next oAttachment
+                If raiseSkippedFlag Then
+                    oMailItem.UnRead = True
+                    oMailItem.FlagStatus = olFlagMarked
+                Else
+                    oMailItem.UnRead = False
+                    oMailItem.FlagStatus = olFlagComplete
+                End If
+                If Not flgUncheckDestinations Then
+                    oMailItem.Move oMoveToFolder
+                Else
+                    skippedItemCount = skippedItemCount + 1
+                End If
+                raiseSkippedFlag = False
+            Else
+                skippedItemCount = skippedItemCount + 1
+            End If
+        End If
+        
+        frmDownloader.UpdateAttachmentIndicator selectedItemCounter, selectedItemsCount, skippedItemCount, _
+                                                totalSavedAttachmentsCount, totalSkippedAttachmentsCount, totalAttachmentCount
+    Next
+
+
+    'process is complete, time to show statistics and open the folder
+    If totalSavedAttachmentsCount > 0 Then Call OpenFolder1(savePath)
+    frmDownloader.CommandButton_HideBar.Visible = True
+
+
+CLEANUPANDEXIT:
+
+    Set oActiveExplorer = Nothing
+    Set oSelection = Nothing
+    Set oSelectedItem = Nothing
+    Set oAttachments = Nothing
+    
+AutoBatch_GetListOfInvoices savePath
+
+End Sub
+
+
+
+
+Sub SaveAllSkippedAttachments()
+    Dim newSavePath As String
+    Dim newFolderName As String
+    Dim folderCreated As String
+    Dim strIndex As String
+    Dim prefixNewName As String
+    Dim nameDivider As String
+    Dim i As Long
+
+    Do
+        newFolderName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & " Skipped Attachments"
+        newSavePath = savePath & newFolderName & mDELIM
+        If Not CBool(Len(Dir(newSavePath, vbDirectory))) Then
+            MkDir newSavePath
+            folderCreated = True
+        End If
+    Loop Until folderCreated
+    For i = 1 To UBound(gSkippedDetails)
+
+        prefixNewName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+        Do
+            DoEvents
+            If CBool(Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.fileName))) Then
+                strIndex = CStr(Val(strIndex) + 1)
+                nameDivider = "_"
+            End If
+        Loop Until Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.fileName)) = 0
+        gSkippedDetails(i).otAttachment.SaveAsFile newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.fileName
+    Next i
+    OpenFolder1 newSavePath
+End Sub
+
+
+
+Private Sub OpenFolder1(ByVal strDirectory As String)
+    Dim w As Variant
+    Dim pID As Variant
+    Dim sh As Variant
+    Dim retainDelim As Boolean
+
+    Dim SW_RESTORE As Single: SW_RESTORE = 9
+    
+    If Right(strDirectory, 1) = mDELIM Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+    
+    On Error GoTo 102:
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+            If w.Document.Folder.self.Path = strDirectory Then
+                If CBool(IsIconic(w.hwnd)) Then
+                    w.Visible = False
+                    w.Visible = True
+                    ShowWindow w.hwnd, SW_RESTORE
+                Else
+                    w.Visible = False
+                    w.Visible = True
+                End If
+                Exit Sub
+            End If
+        End If
+    Next
+
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+102:
+    If Err.Number <> 0 Then MsgBox "error opening window", vbCritical, Err.Number
+End Sub
+
+
+'this is very generic and works well, defintely worth keeping
+Public Function pGetMyMAPIFolder(strFolderPath As String) As Outlook.MAPIFolder
+    ' strFolderPath needs to be something like
+    '   "Public Folders\All Public Folders\Company\Sales" or
+    '   "Personal Folders\Inbox\My Folder"
+    
+    Dim objApp As Outlook.Application
+    Dim objNS As Outlook.Namespace
+    Dim colFolders As Outlook.Folders
+    Dim objFolder As Outlook.MAPIFolder
+    Dim arrFolders() As String
+    Dim i As Long
+    On Error Resume Next
+    
+    strFolderPath = Replace(strFolderPath, "/", "\")
+    arrFolders() = Split(strFolderPath, "\")
+    Set objApp = Outlook.Application
+    Set objNS = objApp.GetNamespace("MAPI")
+    Set objFolder = objNS.Folders.item(arrFolders(0))
+    If Not objFolder Is Nothing Then
+        For i = 1 To UBound(arrFolders)
+            Set colFolders = objFolder.Folders
+            Set objFolder = Nothing
+            Set objFolder = colFolders.item(arrFolders(i))
+            If objFolder Is Nothing Then
+                Exit For
+            End If
+        Next
+    End If
+    
+    Set pGetMyMAPIFolder = objFolder
+    Set colFolders = Nothing
+    Set objNS = Nothing
+    Set objApp = Nothing
+End Function
+
+
+'this is simple version of the below, very generic and works well, might be worth keeping both
+Public Sub pSimpleOpenFolder(ByVal strDirectory As String)
+'how to call
+'strPath = "C:\Windows"
+'Call pOpenFolder(strPath)
+    Dim w As Variant
+    Dim pID As Variant
+    Dim sh As Variant
+    If Right(strDirectory, 1) = Chr(92) Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+    On Error GoTo EXITSUB
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+            If w.Document.Folder.self.Path = strDirectory Then
+                'if already open, bring it front
+                w.Visible = False
+                w.Visible = True
+                Exit Sub
+            End If
+        End If
+    Next
+    'if you get here, the folder isn't open so open it
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+EXITSUB:
+End Sub
+
+
+'this is an enhanved version of the above, it is very generic and works well, defintely worth keeping
+Public Sub pOpenFolder(Optional strDirectory As String)
+'requires AP_WINDOWS_API.ShowWindow
+'requires AP_WINDOWS_API.IsIconic
+    'Private Const SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+    Dim SW_RESTORE As Single: SW_RESTORE = 9
+    Dim pID As Variant
+    Dim sh As Variant
+    Dim w As Object
+    If Right(strDirectory, 1) = Chr(92) Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+    If strDirectory = vbNullString Then strDirectory = Environ("USERPROFILE") & Chr(92)
+    On Error GoTo ERRORSEEN:
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+'            Debug.Print w.Name
+            If w.Document.Folder.self.Path = strDirectory Then
+                'if already open, bring it front
+                If CBool(IsIconic(w.hwnd)) Then ' If it's minimized, show it
+                    w.Visible = False
+                    w.Visible = True
+                    ShowWindow w.hwnd, SW_RESTORE
+                Else
+                    w.Visible = False
+                    w.Visible = True
+                End If
+                Exit Sub
+            End If
+        End If
+    Next
+    'if you get here, the folder isn't open so open it
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+    Exit Sub
+ERRORSEEN:
+'    Debug.Print Err.Number
+End Sub
+
+
+'this is mostly generic and works well, defintely worth keeping
+Public Function pReplaceSpecialCharacters(ByVal txt As String, _
+                                        Optional ByVal replaceWith As String, _
+                                        Optional ByVal allowSpace As Boolean, _
+                                        Optional ByVal maxLength As Long) As String
+    Dim regexPattern As String
+    If allowSpace Then
+        regexPattern = "[^A-Z\s0-9()]+"
+    Else
+        regexPattern = "[^A-Z0-9]+"
+    End If
+    With CreateObject("VBScript.RegExp")
+        .Pattern = regexPattern
+        .Global = True
+        .ignoreCase = True
+        If Not CBool(maxLength) Then maxLength = Len(txt)
+        pReplaceSpecialCharacters = Left(Trim(.Replace(txt, replaceWith)), maxLength)
+    End With
+End Function
+
+
+''this is very generic and works well, defintely worth keeping
+'Public Sub pDeleteFile(ByVal FileToDelete As String)
+'' Requires function     AP_GLOBAL_METHODS.pFileExists
+'   If pFileExists(FileToDelete) Then 'See above
+'      ' First remove readonly attribute, if set
+'      SetAttr FileToDelete, vbNormal
+'      ' Then delete the file
+'      Kill FileToDelete
+'    End If
+'End Sub
+
+
+#If LateBind Then
+Public Function OutlookApp( _
+                            Optional WindowState As Long = olMinimized, _
+                            Optional ReleaseIt As Boolean = False _
+                            ) As Object
+    Static o As Object
+#Else
+Public Function OutlookApp( _
+                            Optional WindowState As Outlook.OlWindowState = olMaximized, _
+                            Optional ReleaseIt As Boolean _
+                            ) As Outlook.Application
+    Static o As Outlook.Application
+#End If
+
+    On Error GoTo ErrHandler
+ 
+    Select Case True
+        Case o Is Nothing, Len(o.Name) = 0
+            Set o = GetObject(, "Outlook.Application")
+            If o.Explorers.Count = 0 Then
+InitOutlook:
+                'Open inbox to prevent errors with security prompts
+                o.Session.GetDefaultFolder(olFolderInbox).Display
+                o.ActiveExplorer.WindowState = WindowState
+            End If
+        Case ReleaseIt
+            Set o = Nothing
+    End Select
+    Set OutlookApp = o
+ 
+ExitProc:
+    Exit Function
+ErrHandler:
+    Select Case Err.Number
+        Case -2147352567
+            'User cancelled setup, silently exit
+            Set o = Nothing
+        Case 429, 462
+            Set o = GetOutlookApp()
+            If o Is Nothing Then
+                Err.Raise 429, "OutlookApp", "Outlook Application does not appear to be installed."
+            Else
+                Resume InitOutlook
+            End If
+        Case Else
+            MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical, "Unexpected error"
+    End Select
+    Resume ExitProc
+    Resume
+End Function
+
+#If LateBind Then
+Private Function GetOutlookApp() As Object
+#Else
+Private Function GetOutlookApp() As Outlook.Application
+#End If
+    On Error GoTo ErrHandler
+    Set GetOutlookApp = CreateObject("Outlook.Application")
+ExitProc:
+    Exit Function
+ErrHandler:
+    Select Case Err.Number
+        Case Else
+            'Do not raise any errors
+            Set GetOutlookApp = Nothing
+    End Select
+    Resume ExitProc
+    Resume
+End Function
+'============================================================================================================================
+
+
+
+
+
+
+
+'============================================================================================================================
+
+Sub err_parent()
+On Error GoTo m
+    Debug.Print Err.Number, "start on err M", "jump gosub foo"
+    err_foo
+Debug.Print Err.Number, "returned from foo"
+m:
+Debug.Print Err.Number, "M:"
+End Sub
+
+Sub err_foo()
+On Error Resume Next
+    Debug.Print Err.Number; "top of foo, on err H", "raising err"
+Err.Raise 5
+    Debug.Print Err.Number, "in foo, going to exit"
+    err_sub
+On Error GoTo h
+    Debug.Print Err.Number
+    Exit Sub
+h:
+    Debug.Print Err.Number, "H:"
+On Error GoTo -1
+    Debug.Print Err.Number, "on err -1"
+On Error Resume Next
+    Debug.Print Err.Number, "on err next"
+    Err.Raise 4
+    Debug.Print Err.Number, "bottom of foo, going to exit"
+End Sub
+
+Sub err_sub()
+    Debug.Print Err.Number, "in sub"
+    Err.Raise 6
+    Resume Next
+    Debug.Print Err.Number, "bottom of sub, going to exit"
+End Sub
+
+'============================================================================================================================
+
+
+
+
+
+'============================================================================================================================
+
+
+
+
+'============================================================================================================================
+
+
+
+'============================================================================================================================
+
+
+
+'============================================================================================================================
+
+
+'============================================================================================================================
+
+'============================================================================================================================
+
+'============================================================================================================================
+'============================================================================================================================
+
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+Sub Mail_Outlook_With_Signature_Html_2()
+' Don't forget to copy the function GetBoiler in the module.
+' Working in Office 2000-2016
+    Dim OutApp As Object
+    Dim OutMail As Object
+    Dim strbody As String
+    Dim SigString As String
+    Dim Signature As String
+
+    Set OutApp = CreateObject("Outlook.Application")
+    Set OutMail = OutApp.CreateItem(0)
+
+    strbody = "<H3><B>Dear Customer Ron de Bruin</B></H3>" & _
+              "Please visit this website to download the new version.<br>" & _
+              "Let me know if you have problems.<br>" & _
+              "<A HREF=""http://www.rondebruin.nl/tips.htm"">Ron's Excel Page</A>" & _
+              "<br><br><B>Thank you</B>"
+
+    'Change only Mysig.htm to the name of your signature
+    SigString = Environ("appdata") & _
+                "\Microsoft\Signatures\Mysig.htm"
+
+    If Dir(SigString) <> "" Then
+        Signature = GetBoiler(SigString)
+    Else
+        Signature = ""
+    End If
+
+    On Error Resume Next
+
+    With OutMail
+        .To = "ron@debruin.nl"
+        .CC = ""
+        .BCC = ""
+        .Subject = "This is the Subject line"
+        .HTMLBody = strbody & "<br>" & Signature
+        .Send    'or use .Display
+    End With
+
+    On Error GoTo 0
+    Set OutMail = Nothing
+    Set OutApp = Nothing
+End Sub
+
+
+Function GetBoiler(ByVal sFile As String) As String
+'Dick Kusleika
+    Dim fso As Object
+    Dim ts As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set ts = fso.GetFile(sFile).OpenAsTextStream(1, -2)
+    GetBoiler = ts.ReadAll
+    ts.Close
+End Function
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+
+'============================================================================================================================
+'============================================================================================================================
+'============================================================================================================================
+
+'============================================================================================================================
+'============================================================================================================================
+
+'============================================================================================================================
+
+'============================================================================================================================
+
+
+'============================================================================================================================
+
+
+
+'============================================================================================================================
+
+
+
+'============================================================================================================================
+
+
+
+
+'============================================================================================================================
+
+
+
+
+
+'============================================================================================================================
+
+
+
+
+
+
+'============================================================================================================================
+
+
+
+
+
+
+
+'============================================================================================================================
+
+'Read this good
+'If you receive a lot of mail with attachments and you want to save the files in a folder on your computer then you can use the code on this page to save the files in the folder you want.
+'
+'First right click on the Inbox and choose New Folder, in the code example I use the name "MyFolder". Note: look good the folder MyFolder must be inside your Inbox folder
+'
+'
+'
+'Tip: Create a mail rule in Outlook (Tools>Rules and Alerts) and move the mail from ? or with the
+'subject ? to the folder in your Inbox named "MyFolder" when the mail arrived.
+'Note: You can also move the files from your Inbox to the folder "MyFolder" manual.
+'
+'To test the code copy a few mails into the new folder named MyFolder inside your Inbox folder.
+'
+'
+'
+'Macro example
+'We use two macros in this example but we only run the macro named Test with one code line.
+'There are the three arguments in the macro call in the Test macro :
+'
+'Arg 1 = Folder name of folder inside your Inbox
+'Arg 2 = File extension, "" is every file
+'Arg 3 = Save folder, "C:\Users\Ron\test" or ""
+'              If you use "" it will create a date/time stamped folder for you in your "Documents" folder
+'              Note: If you use this "C:\Users\Ron\test" the folder must exist.
+'
+'
+'This will copy all files from “MyFolder” to a new folder in the Documents folder
+'    SaveEmailAttachmentsToFolder "MyFolder", "", ""
+'
+'This will copy all xls files from “MyFolder” to "C:\Users\Ron\test"
+'    SaveEmailAttachmentsToFolder "MyFolder", "xls", "C:\Users\Ron\test"
+'
+'This will copy all xlsx files from “MyFolder” to "C:\Users\Ron\test"
+'    SaveEmailAttachmentsToFolder "MyFolder", "xlsx", "C:\Users\Ron\test"
+'
+'
+'Set a reference to Outlook and copy/paste the code in a standard module
+'
+'1) Go to the VBA editor, Alt -F11
+'2) Tools>References in the Menu bar
+'3) Place a Checkmark before Microsoft Outlook ? Object Library
+'    ? is the Outlook version number
+'4) Insert>Module
+'5) Paste the code (two macros) in this module
+'6) Alt q to close the editor
+'7) Save the file
+'
+'Sub Test()
+''Arg 1 = Folder name of folder inside your Inbox
+''Arg 2 = File extension, "" is every file
+''Arg 3 = Save folder, "C:\Users\Ron\test" or ""
+''        If you use "" it will create a date/time stamped folder for you in your "Documents" folder
+''        Note: If you use this "C:\Users\Ron\test" the folder must exist.
+'
+'    SaveEmailAttachmentsToFolder "MyFolder", "xls", ""
+'
+'End Sub
+'Note: You not have to change the code in the macro below. But you can change Item.SenderName to ReceivedTime in the save line like Format(Item.ReceivedTime, "yyyy-mmm-dd")
+'
+'When you do that it will put the ReceivedTime before each file name instead of the SenderName
+Sub SaveEmailAttachmentsToFolder(OutlookFolderInInbox As String, _
+                                 ExtString As String, DestFolder As String)
+    Dim ns As Namespace
+    Dim Inbox As MAPIFolder
+    Dim SubFolder As MAPIFolder
+    Dim item As Object
+    Dim Atmt As Attachment
+    Dim fileName As String
+    Dim MyDocPath As String
+    Dim i As Integer
+    Dim wsh As Object
+    Dim fs As Object
+
+    On Error GoTo ThisMacro_err
+
+    Set ns = GetNamespace("MAPI")
+    Set Inbox = ns.GetDefaultFolder(olFolderInbox)
+    Set SubFolder = Inbox.Folders(OutlookFolderInInbox)
+
+    i = 0
+    ' Check subfolder for messages and exit of none found
+    If SubFolder.Items.Count = 0 Then
+        MsgBox "There are no messages in this folder : " & OutlookFolderInInbox, _
+               vbInformation, "Nothing Found"
+        Set SubFolder = Nothing
+        Set Inbox = Nothing
+        Set ns = Nothing
+        Exit Sub
+    End If
+
+    'Create DestFolder if DestFolder = ""
+    If DestFolder = "" Then
+        Set wsh = CreateObject("WScript.Shell")
+        Set fs = CreateObject("Scripting.FileSystemObject")
+        MyDocPath = wsh.SpecialFolders.item("mydocuments")
+        DestFolder = MyDocPath & "\" & Format(Now, "dd-mmm-yyyy hh-mm-ss")
+        If Not fs.FolderExists(DestFolder) Then
+            fs.createFolder DestFolder
+        End If
+    End If
+
+    If Right(DestFolder, 1) <> "\" Then
+        DestFolder = DestFolder & "\"
+    End If
+
+    ' Check each message for attachments and extensions
+    For Each item In SubFolder.Items
+        For Each Atmt In item.Attachments
+            If LCase(Right(Atmt.fileName, Len(ExtString))) = LCase(ExtString) Then
+                fileName = DestFolder & item.SenderName & " " & Atmt.fileName
+                Atmt.SaveAsFile fileName
+                i = i + 1
+            End If
+        Next Atmt
+    Next item
+
+    ' Show this message when Finished
+    If i > 0 Then
+        MsgBox "You can find the files here : " _
+             & DestFolder, vbInformation, "Finished!"
+    Else
+        MsgBox "No attached files in your mail.", vbInformation, "Finished!"
+    End If
+
+    ' Clear memory
+ThisMacro_exit:
+    Set SubFolder = Nothing
+    Set Inbox = Nothing
+    Set ns = Nothing
+    Set fs = Nothing
+    Set wsh = Nothing
+    Exit Sub
+
+    ' Error information
+ThisMacro_err:
+    MsgBox "An unexpected error has occurred." _
+         & vbCrLf & "Please note and report the following information." _
+         & vbCrLf & "Macro Name: SaveEmailAttachmentsToFolder" _
+         & vbCrLf & "Error Number: " & Err.Number _
+         & vbCrLf & "Error Description: " & Err.Description _
+         , vbCritical, "Error!"
+    Resume ThisMacro_exit
+
+End Sub
+
+
+

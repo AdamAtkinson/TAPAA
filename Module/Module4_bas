@@ -1,0 +1,59 @@
+Attribute VB_Name = "Module4"
+Option Explicit
+Option Private Module
+
+
+Private mKnownString As String
+Private usrchoice As String
+
+Sub teststring()
+Dim ary(1 To 5) As String
+ary(1) = "[MMM/DD] INTERPRETATION"
+ary(2) = "[MM/DD-MM/DD/YY] SECURITY"
+ary(3) = "[MM/DD-MM/DD] INTERIM ADMIN"
+ary(4) = "[MM/DD] DOS"
+ary(5) = "[MMM/YY] SERVICE"
+Dim i As Long
+For i = 1 To 5
+usrchoice = ary(i)
+If Not UserEnteredKnownString Then Debug.Print mKnownString
+Next
+End Sub
+
+Private Function UserEnteredKnownString() As Boolean
+    Dim leftPart As String
+    Dim rightPart As String
+    Dim startPoint As String
+    Dim midPoint As Single
+    Dim endPoint As Single
+    Dim dateSegment As String
+    If InStr(1, usrchoice, "[") = 0 Then Exit Function
+    startPoint = InStr(1, usrchoice, "[")
+    midPoint = InStr(1, usrchoice, "/")
+    endPoint = InStr(1, usrchoice, "]")
+    dateSegment = Mid(usrchoice, startPoint + 1, endPoint - 2)
+    mKnownString = dateSegment
+
+End Function
+
+
+'Sub Macro2()
+''
+'' Macro2 Macro
+''
+'
+''
+'    Range("C6726").Select
+'    Application.CommandBars("Workbook Queries").Visible = False
+'    Sheets("Lookup iServe History (no edit)").Select
+'End Sub
+'
+'Sub adfad()
+'Dim i As Long
+'Dim btn As Button
+'For i = 1 To ActiveSheet.Buttons.Count
+'Set btn = ActiveSheet.Buttons(i)
+'Debug.Print btn.Name
+''If Left(btn.Name, 3) = "But" Then btn.Delete
+'Next
+'End Sub

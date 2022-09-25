@@ -1,0 +1,109 @@
+Attribute VB_Name = "Module3"
+Option Explicit
+Option Private Module
+Sub test1()
+    Dim aryFilter()
+    Dim ii As Long
+    With loPostingHistory.AutoFilter.Filters(7)
+    If .On = True Then
+        Select Case .Count
+            Case Is > 2
+                aryFilter = .Criteria1
+                Debug.Print UBound(aryFilter)
+                For ii = LBound(aryFilter) To UBound(aryFilter)
+                    Debug.Print aryFilter(ii)
+                Next
+            Case 2
+                Debug.Print .Criteria1
+                Debug.Print .Criteria2
+            Case 1
+                Debug.Print .Criteria1
+        End Select
+    End If
+    End With
+End Sub
+
+Sub test()
+Dim ary(0 To 0) As String
+ary(0) = "=*"
+    loPostingHistory.ListColumns(7).DataBodyRange.AutoFilter _
+                field:=loPostingHistory.ListColumns(7).Index, _
+                Criteria1:=ary(0), _
+                Operator:=xlFilterValues
+End Sub
+'
+'
+'Sub Focus_ControlOfUserForm(ByRef obj As Object) 'from the Userform, call Focus_ControlOfUserForm(Me)
+'    Dim ctl As Control
+'    With obj
+'        Set ctl = .ActiveControl
+'        If TypeName(ctl) = "MultiPage" Or TypeName(ctl) = "Frame" Then
+'            Set ctl = ctl.SelectedItem.ActiveControl.Name
+'        End If
+'
+'        With ctl
+'            Dim Af As Boolean
+'            With Application
+'                Af = .ScreenUpdating
+'                .ScreenUpdating = False
+'            End With
+'            '.SetFocus
+'            .Visible = False
+'            .Visible = True
+'            .SetFocus
+'            If Af Then Application.ScreenUpdating = True
+'        End With
+'    End With
+'End Sub
+'
+'
+'Sub adfadf()
+'Dim ary() As String
+'ary = Split(ActiveCell.Value, Chr(10))
+'Debug.Print ary(0)
+'End Sub
+'
+'
+'
+''
+''Sub GetPDFPageCount()
+''    Dim I As Long
+''
+''    Dim xRg As Range
+''    Dim xStr As String
+''    Dim xFd As FileDialog
+''    Dim xFdItem As Variant
+''    Dim xFileName As String
+''    Dim xFileNum As Long
+''    Dim RegExp As Object
+''
+''
+''    Set xFd = Application.FileDialog(msoFileDialogFolderPicker)
+''    If xFd.Show = -1 Then
+''        xFdItem = xFd.SelectedItems(1) & Application.PathSeparator
+''        xFileName = Dir(xFdItem & "*.pdf", vbDirectory)
+''        Set xRg = Range("A1")
+''        Range("A:B").ClearContents
+''        Range("A1:B1").Font.Bold = True
+''        xRg = "File Name"
+''        xRg.Offset(0, 1) = "Pages"
+''        I = 2
+''        xStr = ""
+''        Do While xFileName <> ""
+''            Cells(I, 1) = xFileName
+''            Set RegExp = CreateObject("VBscript.RegExp")
+''            RegExp.Global = True
+''            RegExp.Pattern = "/Type\s*/Page[^s]"
+''            xFileNum = FreeFile
+''            Open (xFdItem & xFileName) For Binary As #xFileNum
+''                xStr = Space(LOF(xFileNum))
+''                Get #xFileNum, , xStr
+''            Close #xFileNum
+''            Cells(I, 2) = RegExp.Execute(xStr).Count
+''            I = I + 1
+''            xFileName = Dir
+''        Loop
+''        Columns("A:B").AutoFit
+''    End If
+''End Sub
+'

@@ -1,0 +1,117 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APinputformAmount 
+   Caption         =   "Amount"
+   ClientHeight    =   375
+   ClientLeft      =   45
+   ClientTop       =   375
+   ClientWidth     =   1890
+   OleObjectBlob   =   "APinputformAmount_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APinputformAmount"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Public Event FieldComplete()
+Public Event Terminated()
+
+ Const SHIFT_MASK = 1
+Private tgtCell As Range
+Public Property Set TargetCell(tgt As Range)
+    Set tgtCell = tgt
+End Property
+
+Private Sub UserForm_Activate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+'    Set hook = New Hook_Class
+'    hook.SetHook
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left + (0.5 * Application.Width) - (0.5 * Me.Width)
+    Me.Top = Application.Top + (0.5 * Application.height) - (0.5 * Me.height)
+End Sub
+
+Private Sub txtAmount_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+    End If
+End Sub
+
+Private Sub txtAmount_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+        Select Case KeyCode
+            Case vbKeyS
+                gDisableFormEvents = True
+                Me.Hide
+                Me.txtAmount.Value = vbNullString
+                Set APsheetSplit.ReturnTarget = tgtCell
+                Me.Tag = tgtCell.Address
+                Call APaInvoiceBatchEntry.ActivateSplitSheet
+                gDisableFormEvents = False
+            Case vbKeyLeft
+                gDisableFormEvents = True
+                Me.Hide
+                tgtCell.Offset(0, -1).Select
+                gDisableFormEvents = False
+            Case vbKeyUp, vbKeyDown
+                If Shift Then
+                    If IsNumeric(tgtCell.Offset(-1, 0)) Then
+                        Me.Hide
+                        tgtCell = tgtCell.Offset(-1, 0)
+                        Me.txtAmount.Value = vbNullString
+                        Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Index)
+                    End If
+                End If
+            Case vbKeyDelete
+                If Shift = SHIFT_MASK Then
+                Else
+                    tgtCell.ClearContents
+                    Me.txtAmount.Value = vbNullString
+                End If
+            Case vbKeyEscape
+                Me.Hide
+                Me.txtAmount.Value = vbNullString
+            Case vbKeyTab, vbKeyReturn, vbKeyRight
+                If IsNumeric(Me.txtAmount.Value) Then
+                    Me.Hide
+                    tgtCell.Value = Me.txtAmount.Value
+                    Me.txtAmount.Value = vbNullString
+                    Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Index)
+                End If
+            Case Else
+                If Me.txtAmount.Value Like "*.##" And IsNumeric(Me.txtAmount.Value) Then
+                    Me.Hide
+                    tgtCell.Value = Me.txtAmount.Value
+                    Me.txtAmount.Value = vbNullString
+                    Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Index)
+                End If
+        End Select
+    End If
+End Sub
+Private Sub txtAmount_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        If Me.txtAmount.Value Like "*.##" And IsNumeric(Me.txtAmount.Value) Then
+            Me.Hide
+            tgtCell.Value = Me.txtAmount.Value
+            Me.txtAmount.Value = vbNullString
+            Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Index)
+        End If
+        APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+    End If
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode <> 1 Then Cancel = 1
+    Me.txtAmount.Value = vbNullString
+    Me.Hide
+End Sub
+
+Private Sub UserForm_Terminate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+End Sub

@@ -1,0 +1,1418 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} AP_1_Form_MainWindow 
+   Caption         =   "AP Automation Assistant"
+   ClientHeight    =   6360
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   14310
+   OleObjectBlob   =   "AP_1_Form_MainWindow_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "AP_1_Form_MainWindow"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+
+#Const mUSE_ALT_MAX_SIZE = True
+Public Event Activated()
+Public Event Deactivated()
+Public Event Hidden()
+Public Event UploadButtonClicked()
+Public Event AddressQueryButtonClicked(ByRef Cancel As Boolean)
+Public Event LaunchIserve()
+Public Event BeforeTerminate()
+
+'Private WithEvents mOptionsForm As AP_2_OptionsWindow
+
+Private Const mPANEL_ANCHOR_OPTIONS_XY As Long = 6
+Private Const mPANEL_ANCHOR_OPTIONSBUTTONS_X As Long = 90
+Private Const mPANEL_ANCHOR_OPTIONSBUTTONS_Y As Long = 6
+
+Private Const mPANEL_TOP As Long = 164
+Private Const mFORM_W_MAX As Long = 600
+
+Private Const mFORM_W As Long = 322 '280 ' 200 '206 '196
+Private Const mFORM_H As Long = 298 '234 '222
+Private Const mFORM_H_MIN As Long = 280 '158
+Private Const mFORM_H_MAX As Long = 280 '318
+Private Const mPANEL_TOP_MIN As Long = 102
+Private Const mFORM_H_DELTA As Long = 62
+
+
+Private mAltMax_H As Long
+Private mAltMax_W As Long
+
+Private mcolArmableButtons As New VBA.Collection
+
+Private mKeyPressCaller As String
+Private mKeyUpCaller As String
+Private mKeyDownCaller As String
+
+
+Private Const mAUTOSAVEPROCTIME As String = "00:10:00"
+Private Const mAUTOSAVEPROCWINDOW As String = "00:00:05"
+
+Private mAutoSaveEnabled As Boolean
+Private mNextSaveTime As Date
+
+
+                                                                       
+
+
+
+
+
+
+
+Private Sub CommandButton_ShowRejectEmail_Click()
+    SearchForRejectedEmailNotification
+End Sub
+
+Private Sub UserForm_Deactivate()
+RaiseEvent Deactivated
+End Sub
+
+'
+'  FORM INITIALIZATION, ACTIVATION, QUERY CLOSE, AND TERMINATION
+'
+                                                                            
+Private Sub UserForm_Initialize()
+
+'    #If mUSE_ALT_MAX_SIZE Then
+'        mAltMax_H = Me.height
+'        mAltMax_W = Me.Width
+'    #End If
+    
+    Dim temparray() As String
+    Dim i As Long
+    
+    With Me
+        
+        .StartUpPosition = 0
+        If Application.Left > .Width Then
+            .Left = Application.Left - .Width
+        Else
+            .Left = Application.Left + 0.25 * Application.Width
+        End If
+        '.Left = -300 'Application.Left - 240 '(0.2 * Application.Width) - (0.2 * Me.Width)
+        .Top = 0 'Application.top + (0.1 * Application.height) - (0.1 * Me.height)
+        .CheckBox_AliasLock = flgAliasLock
+        .CheckBox_GLLock = flgGLLock
+        .CommandButton_ViewSupplierInvoiceHistory.Visible = False
+        .CommandButton_ViewMatchingInvoiceHistory.Visible = False
+        '.Frame_CurrentPDFDetails.Visible = False
+        '.Frame_MainPanel.top = mPANEL_TOP_MIN
+        .height = mFORM_H 'mFORM_H_MIN
+        .Width = mFORM_W
+        .BackColor = 4210752
+        If InvoiceEntryMode Then
+            ModifyFormButton .CommandButton_InvoiceEntryMode, styleOn, "4"
+        Else
+            ModifyFormButton .CommandButton_InvoiceEntryMode, styleOff, ";"
+        End If
+        
+        If ActiveSheet.Name = APsheetBatch.Name Then .CommandButton_GoToBatchSheet.Visible = False
+        
+        ModifyFormButton .CommandButton_FindInvoiceInHistory, styleHighContrast
+        ModifyFormButton .CommandButton_GLQuery, styleHighContrast
+        ModifyFormButton Me.DEV_CommandButton_PopulateAll, styleArmable
+        ModifyFormButton .CommandButton_iServeInvoiceUpload, styleOff
+        ModifyFormButton .CommandButton_iServeAddress, styleOff
+        ModifyFormButton .CommandButton_GrabPDF, styleOff, BUTTONLABEL_PDFQUEUE_DEFAULT
+        ModifyFormButton .CommandButton_GLQuery, styleOff
+        ModifyFormButton .CommandButton_FindInvoiceInHistory, styleOff
+    End With
+    
+    ResetPDFPanelText
+'    Set mOptionsForm = New AP_2_OptionsWindow
+    
+    'mcolArmableButtons.Add Me.CommandButton_ResetBatch
+    mcolArmableButtons.Add Me.CommandButton_ResetApplication
+
+    DisarmEveryArmableButton
+End Sub
+
+Private Sub UserForm_Activate()
+    RaiseEvent Activated
+    On Error Resume Next
+    AppFocus
+    On Error GoTo 0
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    'user clicked red X, just hide the window - do not close it
+    Cancel = 1
+    Me.Hide
+    RaiseEvent Hidden
+End Sub
+
+Private Sub UserForm_Terminate()
+    'do I want to do anything?
+    RaiseEvent BeforeTerminate
+End Sub
+
+
+
+
+Private Sub BREAKBOX_Change()
+    AppFocus
+End Sub
+
+Private Sub BREAKBOX_Click()
+    AppFocus
+End Sub
+
+
+                                                                            '
+'                                                                           |
+'  USERFORM EVENTS                                                          |
+'                                                                           |
+                                                                            '
+                                                                            
+Private Sub CommandButton_AutoSave_Click()
+'    DBP "AUTOSAVE BUTTON CLICKED"
+    mAutoSaveEnabled = Not mAutoSaveEnabled
+    UpdateAutoSaveProc
+    UpdateAutoSaveButtons
+End Sub
+
+Private Sub CommandButton_AddVendorDetails_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_AddVendorDetails.ControlTipText
+End Sub
+
+Private Sub CommandButton_AutoSave_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_AutoSave.ControlTipText
+End Sub
+
+Private Sub CommandButton_CancelAction_MouseDown(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_CancelAction.ControlTipText
+End Sub
+
+Private Sub CommandButton_CheckLinks_Click()
+    If Len(GetInvalidLinksInBatch) > 0 Then
+        MsgBox GetInvalidLinksInBatch
+    Else
+        MsgBox "All Valid"
+    End If
+End Sub
+
+Private Sub CommandButton_CheckLinks_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_CancelAction.ControlTipText
+End Sub
+
+Private Sub CommandButton_ConfirmAction_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ConfirmAction.ControlTipText
+End Sub
+
+Private Sub CommandButton_CopyBatchToAccrual_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_CopyBatchToAccrual.ControlTipText
+End Sub
+
+Private Sub CommandButton_CreateBackup_Click()
+    #If Devmode Then
+        Dim savePath As String
+        savePath = gBackupPath & "\" & Format(Now, "yymmdd_hhnn") & "-manual ( " & Replace(ThisWorkbook.Name, ".xlsm", vbNullString) & " ).xlsm"
+        StopEvents
+        ThisWorkbook.SaveCopyAs savePath
+        If CBool(Len(Dir(savePath))) Then
+            MsgBox savePath, , "Backup Success"
+        Else
+            MsgBox "The backup save job did not complete", , "ERROR CREATING BACKUP"
+        End If
+        ResumeEvents
+    #End If
+End Sub
+                                                                            '
+'                                                                           |
+'  PUBLIC AUTOSAVE PROPERTIES AND METHODS                                   |
+'                                                                           |
+                                                                            '
+
+Public Property Get IsAutoSaveEnabled() As Boolean
+'    DBP "FETCHED ISAUTOSAVEENABLED PROPERTY"
+    IsAutoSaveEnabled = mAutoSaveEnabled
+End Property
+
+Public Property Get NextSaveTime() As Date
+'    DBP "FETCHED NEXT SAVE PROPERTY"
+    NextSaveTime = mNextSaveTime
+End Property
+
+Public Sub EndAutoSaveProc()
+'    DBP "ENDING AUTOSAVE", mNextSaveTime
+    mAutoSaveEnabled = False
+'    If mNextSaveTime > Now Then
+''        DBP "NEXT PROC IS FUTURE, UPDATING"
+'        UpdateAutoSaveProc
+'    Else
+''        DBP "NEXT PROC IS NOT FUTURE, NOT UPDATING"
+'    End If
+    UpdateAutoSaveButtons
+End Sub
+
+Public Sub AutoSaveProc()
+'    DBP "AUTOSAVE FORM PROC"
+'    DBP "SAVING"
+    ThisWorkbook.Save
+'    DBP "UPDATING NEXT PROC"
+    UpdateAutoSaveProc
+End Sub
+                                                                            '
+'                                                                           |
+'  PRIVATE AUTOSAVE PROPERTIES AND METHODS                                  |
+'                                                                           |
+                                                                            '
+Private Sub UpdateAutoSaveProc()
+'    DBP "UPDATING PROC TIME"
+    Select Case mAutoSaveEnabled
+        Case True
+            If mNextSaveTime <= Now Then
+                mNextSaveTime = Now + TimeValue(mAUTOSAVEPROCTIME)
+                    
+                Dim latestTime As Date
+                latestTime = mNextSaveTime + TimeValue(mAUTOSAVEPROCWINDOW)
+                Application.OnTime mNextSaveTime, "APmodOnTimeCallers.OptionsAutoSaveProc", latestTime
+'                DBP "NEW PROC TIME SET", mNextSaveTime
+'                DBP "LATEST PROC TIME SET", latestTime
+            Else
+'                DBP "AUTOSAVE IS ENABLED BUT PROC TIME WAS IN THE PAST"
+            End If
+        Case False
+            If mNextSaveTime > Now Then
+                'THIS WAS BEING CALLED SO I STOPPED IT
+'                Application.OnTime mNextSaveTime, "APmodOnTimeCallers.OptionsAutoSaveProc", False
+'                DBP "CANCELLED FUTURE PROC TIME"
+            Else
+'                DBP "PROC TIME WAS IN PAST, NOTHING TO CANCEL"
+            End If
+    End Select
+End Sub
+
+
+
+
+Private Sub UpdateAutoSaveButtons()
+'    DBP "CHANGING BUTTONS"
+    If mAutoSaveEnabled Then
+'        DBP "BUTTON ON"
+        ModifyFormButton Me.CommandButton_AutoSave, styleOn
+    Else
+'        DBP "BUTTON OFF"
+        ModifyFormButton Me.CommandButton_AutoSave, styleOff
+    End If
+End Sub
+
+
+
+
+
+
+
+Private Sub CommandButton_CreateBackup_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_CreateBackup.ControlTipText
+End Sub
+
+Private Sub CommandButton_ExpandHeight_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ExpandHeight.ControlTipText
+End Sub
+
+Private Sub CommandButton_ExtractPDF_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ExtractPDF.ControlTipText
+End Sub
+
+Private Sub CommandButton_FindInvoiceInHistory_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_FindInvoiceInHistory.ControlTipText
+End Sub
+
+Private Sub CommandButton_GLQuery_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_GLQuery.ControlTipText
+End Sub
+
+Private Sub CommandButton_GoToBatchSheet_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_GoToBatchSheet.ControlTipText
+End Sub
+
+Private Sub CommandButton_GrabPDF_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_GrabPDF.ControlTipText
+End Sub
+
+Private Sub CommandButton_InvoiceEntryMode_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_InvoiceEntryMode.ControlTipText
+End Sub
+
+Private Sub CommandButton_iServeAddress_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_iServeAddress.ControlTipText
+End Sub
+
+Private Sub CommandButton_iServeInvoiceUpload_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_iServeInvoiceUpload.ControlTipText
+End Sub
+
+Private Sub CommandButton_RemoveRowsBIAS_MouseDown(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_RemoveRowsBIAS.ControlTipText
+End Sub
+
+Private Sub CommandButton_RemoveRowsBIAS_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_RemoveRowsBIAS.ControlTipText
+End Sub
+
+Private Sub CommandButton_ResetApplication_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ResetApplication.ControlTipText
+End Sub
+
+Private Sub CommandButton_ResetBatch_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ResetBatch.ControlTipText
+End Sub
+
+Private Sub CommandButton_ResetConditionalFormat_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ResetConditionalFormat.ControlTipText
+End Sub
+
+Private Sub CommandButton_ShowReset_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ShowReset.ControlTipText
+End Sub
+
+Private Sub CommandButton_SplitPDF_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_SplitPDF.ControlTipText
+End Sub
+
+Private Sub CommandButton_ToggleKeys_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ToggleKeys.ControlTipText
+End Sub
+
+Private Sub CommandButton_ViewMatchingInvoiceHistory_MouseDown(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ViewMatchingInvoiceHistory.ControlTipText
+End Sub
+
+Private Sub CommandButton_ViewSupplierInvoiceHistory_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.CommandButton_ViewSupplierInvoiceHistory.ControlTipText
+End Sub
+
+Private Sub DEV_CommandButton_PopulateAll_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+Me.Caption = Me.DEV_CommandButton_PopulateAll.ControlTipText
+End Sub
+
+Private Sub Frame_InvoiceDetails_Click()
+    If ActiveSheet.Name = APsheetiServeHistory.Name Then
+        ActivateBatchSheet
+    Else
+        Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+    End If
+End Sub
+
+Private Sub Frame_iServeHistory_Click()
+    If ActiveSheet.Name = APsheetiServeHistory.Name Then
+        ActivateBatchSheet
+    Else
+        Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+    End If
+End Sub
+
+Private Sub Frame_SupplierInvoiceInformation_Click()
+    If ActiveSheet.Name = APsheetiServeHistory.Name Then
+        ActivateBatchSheet
+    Else
+        Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+    End If
+End Sub
+
+
+Private Sub Label_InvoiceLookup_Click()
+    If ActiveSheet.Name = APsheetiServeHistory.Name Then
+        ActivateBatchSheet
+    Else
+        Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+    End If
+End Sub
+
+
+Private Sub Label_FakeButton_LockedRow_MouseDown(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+  Me.Label_FakeButton_UnlockedRow.ZOrder 1
+ToggleRowStrikeThrough
+End Sub
+
+
+Private Sub Label_FakeButton_UnlockedRow_MouseDown(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+    Me.Label_FakeButton_LockedRow.ZOrder 1
+ ToggleRowStrikeThrough
+End Sub
+
+
+
+Private Sub Label_FakeButton_LockedRow_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+    Me.Caption = Me.Label_FakeButton_LockedRow.ControlTipText
+End Sub
+
+Private Sub Label_FakeButton_UnlockedRow_MouseMove(ByVal button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal Y As Single)
+    Me.Caption = Me.Label_FakeButton_UnlockedRow.ControlTipText
+End Sub
+
+
+
+  
+                                                                            '
+'                                                                           |
+'  FORM COMMAND BUTTON CLICK EVENTS                                         |
+'                                                                           |
+                                                                            '
+
+Private Sub CommandButton_ToggleKeys_Click()
+    If gcAP.kbHotKeys.EnableHotkeys Then
+        gcAP.kbHotKeys.DisableKeyboardShortcuts
+        ModifyFormButton Me.CommandButton_ToggleKeys, styleOff
+    Else
+        gcAP.kbHotKeys.EnableKeyboardShortcuts
+        ModifyFormButton Me.CommandButton_ToggleKeys, styleOn
+    End If
+End Sub
+
+Private Sub CommandButton_ShowReset_Click()
+    ToggleOptionsPanel
+    
+    With Me.Frame_ButtonPanel_Reset
+        .Visible = True
+        .Top = mPANEL_ANCHOR_OPTIONSBUTTONS_Y
+        .Left = mPANEL_ANCHOR_OPTIONSBUTTONS_X
+        Me.Frame_Panel_Options.height = .height + (2 * mPANEL_ANCHOR_OPTIONSBUTTONS_Y)
+        Me.height = Me.Frame_Panel_Options.height + (6 * mPANEL_ANCHOR_OPTIONSBUTTONS_Y)
+    End With
+
+    AppFocus
+    
+'    ToggleTheShowResetButton
+'    With Me
+'        .CommandButton_ShowReset.Visible = Not .CommandButton_ShowReset.Visible
+'        .CommandButton_ShowReset.Tag = .CommandButton_ShowReset.Visible
+'        .CommandButton_CancelAction.Visible = Not .CommandButton_ShowReset.Visible
+'    End With
+End Sub
+
+Private Sub CommandButton_CloseOptionsPanel_Click()
+    ToggleOptionsPanel
+    With Me
+        .Frame_ButtonPanel_Options.Visible = False
+        .Frame_ButtonPanel_Reset.Visible = False
+'        .Frame_Panel_Options.Visible = False
+'        .Frame_Panel_Primary.Visible = True
+    End With
+End Sub
+
+Private Sub CommandButton_ShowOptions_Click()
+
+ToggleOptionsPanel
+
+With Me.Frame_ButtonPanel_Options
+    .Visible = True
+    .Top = mPANEL_ANCHOR_OPTIONSBUTTONS_Y
+    .Left = mPANEL_ANCHOR_OPTIONSBUTTONS_X
+    Me.Frame_Panel_Options.height = .height + (2 * mPANEL_ANCHOR_OPTIONSBUTTONS_Y)
+    Me.height = Me.Frame_Panel_Options.height + (6 * mPANEL_ANCHOR_OPTIONSBUTTONS_Y)
+End With
+
+    AppFocus
+End Sub
+
+Private Sub ToggleOptionsPanel()
+
+With Me.Frame_Panel_Options
+    If .Visible Then
+        .Visible = False
+        .ZOrder 1
+        Me.Frame_Panel_Primary.Visible = True
+        Me.height = mFORM_H
+        Me.Width = mFORM_W
+    Else
+        .Visible = True
+        .ZOrder 0
+        Me.Frame_Panel_Primary.Visible = False
+        .Left = mPANEL_ANCHOR_OPTIONS_XY
+        .Top = mPANEL_ANCHOR_OPTIONS_XY
+        Me.Width = .Width + (3 * mPANEL_ANCHOR_OPTIONS_XY)
+    End If
+End With
+
+End Sub
+
+Private Sub CommandButton_iServeAddress_Click()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.iServeAddressQuery Is Nothing Then
+            If Not gcAP.iServeAddressQuery.addressForm Is Nothing Then
+                gcAP.iServeAddressQuery.addressForm.Show
+                Exit Sub
+            End If
+        End If
+    End If
+    ModifyFormButton Me.CommandButton_iServeAddress, styleLoad
+    Dim Cancel As Boolean
+    RaiseEvent AddressQueryButtonClicked(Cancel)
+    If Cancel Then
+        ModifyFormButton Me.CommandButton_iServeAddress, styleOff
+        MsgBox "event canceled"
+    End If
+End Sub
+Private Sub CommandButton_iServeInvoiceUpload_Click()
+    If gcAP.mainAPform.IsAutoSaveEnabled Then
+        MsgBox "Cancelled Auto Save"
+'        DBP "AUTOSAVE ENABLED - ENDING"
+        gcAP.mainAPform.EndAutoSaveProc
+    End If
+'    DBP "ISERVE UPLOAD OFFLINED"
+'    Dim Cancel As Boolean
+    RaiseEvent UploadButtonClicked
+    If gcAP.iServeInvoiceUpload.JobMode = InvoiceMode Then ModifyFormButton Me.CommandButton_iServeInvoiceUpload, styleOn
+'    If Not Cancel Then
+'        ContinueIserveInvoiceUpload
+'    Else
+'        MsgBox "event canceled"
+'    End If
+End Sub
+
+Private Sub CommandButton_AddVendorDetails_Click()
+    Dim ans As Long
+        If ActiveSheet.CodeName = APsheetBatch.CodeName Then
+        ans = MsgBox("This will use the currently selected line to create a new vendor entry in the lookup table." _
+                & vbCr & vbCr & "Do you want to continue?", vbYesNo, "Add vendor")
+        Select Case ans
+            Case vbYes
+                AddToDetails
+                CreateListOfSupplierNames
+            Case vbNo
+        End Select
+    Else
+        MsgBox "Vendors can only be added from the batch sheet"
+    End If
+End Sub
+
+Private Sub CommandButton_ViewMatchingInvoiceHistory_Click()
+    Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+End Sub
+
+Private Sub CommandButton_ViewSupplierInvoiceHistory_Click()
+    Call APaInvoiceBatchEntry.ViewSupplierInvoiceHistory
+End Sub
+
+Private Sub CommandButton_GrabPDF_Click()
+    CreatePDFQueue
+End Sub
+
+Private Sub CommandButton_GoToBatchSheet_Click()
+    APaInvoiceBatchEntry.ActivateBatchSheet
+End Sub
+
+Private Sub CommandButton_ExtractPDF_Click()
+    Call ExtractInvoicesFromConvertedPDF
+End Sub
+
+
+
+
+Private Sub CommandButton_ResetApplication_Click()
+    If flgPDFisOpen Then
+        Select Case MsgBox("You will have to remake the PDF queue.  Do you want to continue?", vbYesNo)
+            Case vbYes
+            Case vbNo
+                Exit Sub
+        End Select
+    End If
+    ResetApp
+    'ToggleArmedButtstyleOn Me.CommandButton_ResetApplication
+End Sub
+Private Sub CommandButton_ResetConditionalFormat_Click()
+    ResetConditionalFormatsOnBatchSheet
+End Sub
+
+Private Sub CommandButton_GLQuery_Click()
+    Call GLQuery
+End Sub
+
+Private Sub CommandButton_FindInvoiceInHistory_Click()
+    ManualInvoiceHistorySearch
+End Sub
+
+Private Sub CommandButton_InvoiceEntryMode_Click()
+    ToggleEntryMode
+End Sub
+
+Private Sub CommandButton_SplitPDF_Click()
+    ManualSplitInvoices
+End Sub
+
+Private Sub DEV_CommandButton_PopulateAll_Click()
+    
+    ToggleAutoPopuplate
+End Sub
+
+
+Private Sub CommandButton_CancelAction_Click()
+ToggleResetButtons
+    With Me
+'        DisarmTheButton .CommandButton_ResetApplication
+        'DisarmTheButton .CommandButton_ResetBatch
+        .CommandButton_ConfirmAction.Visible = False
+        .CommandButton_CancelAction.Visible = False
+        ResetTheShowResetButton
+    End With
+End Sub
+
+Private Sub CommandButton_CopyBatchToAccrual_Click()
+    CopyBatchToAccrual
+End Sub
+'
+'Sub ShowOptionsWindow()
+'    ModifyFormButton Me.CommandButton_Options, styleOn
+'    mOptionsForm.Show
+'End Sub
+
+
+Private Sub CommandButton_RemoveRowsBIAS_Click()
+ToggleResetButtons
+    With Me.Label_ResetWarningText
+        .Caption = "KEEP ROWS THAT LOOK LIKE THIS AND DELETE ALL THE OTHERS"
+        .Font.Strikethrough = True
+        .BackColor = &HC0C0C0
+        .ForeColor = vbBlue
+    End With
+Me.CommandButton_ConfirmAction.Tag = "BORDER SKIRMISH"
+'    Select Case MsgBox("Are you sure? This cannot be undone!", vbExclamation + vbYesNo, "Confirm Bias Reset")
+'        Case vbYes
+'            RemoveAllButStrikeThrough
+'            AppFocus
+'        Case vbNo
+'            'do nothing
+'    End Select
+End Sub
+Private Sub CommandButton_ResetBatch_Click()
+    ToggleResetButtons
+    With Me.Label_ResetWarningText
+        .Font.Strikethrough = False
+        .Caption = "ALL DATA WILL BE LOST AND THE BATCH WILL BE RESET" & DBLLN & "THIS CANNOT BE UNDONE !"
+        .BackColor = vbRed
+        .ForeColor = vbYellow
+    End With
+    Me.CommandButton_ConfirmAction.Tag = "NUKE EM!"
+'    Me.CommandButton_ConfirmAction.Visible = True
+'    Me.CommandButton_CancelAction.Visible = True
+'    ToggleArmedButtstyleOn Me.CommandButton_ResetBatch
+End Sub
+
+
+
+Private Sub CommandButton_ConfirmAction_Click()
+
+    ToggleResetButtons
+    Select Case Me.CommandButton_ConfirmAction.Tag
+        Case "NUKE EM!"
+            ResetBatch
+        Case "BORDER SKIRMISH"
+            RemoveAllButStrikeThrough
+    End Select
+'    Select Case True
+'        Case Me.CommandButton_ResetBatch.Tag
+'            ResetBatch
+''        Case Me.CommandButton_ResetApplication.Tag
+''            ResetApp
+'    End Select
+'
+'    DisarmEveryArmableButton
+End Sub
+
+Private Sub ResetTheShowResetButton()
+   Me.CommandButton_ShowReset.Tag = True
+    'Me.CommandButton_ShowReset.Tag = False
+    RepaintTheShowResetButton
+End Sub
+Private Sub ToggleTheShowResetButton()
+    With Me
+        .CommandButton_ShowReset.Tag = Not GetBooleanFromTrueFalseString(.CommandButton_ShowReset.Tag)
+    End With
+    RepaintTheShowResetButton
+End Sub
+Private Sub RepaintTheShowResetButton()
+    With Me
+        If GetBooleanFromTrueFalseString(.CommandButton_ShowReset.Tag) Then
+        .CommandButton_ShowReset.Visible = True
+'            .CommandButton_ShowReset.Caption = "HIDE" & vbNewLine & "RESET" & vbNewLine & "BUTTON"
+'            .CommandButton_ShowReset.ForeColor = vbGreen
+'            .CommandButton_ShowReset.BackColor = 8388608
+''            ShowTheButton .CommandButton_ResetApplication
+'            ShowTheButton .CommandButton_ResetBatch
+        Else
+                .CommandButton_ShowReset.Visible = False
+'            .CommandButton_ShowReset.Caption = "SHOW" & vbNewLine & "RESET" & vbNewLine & "BUTTON"
+'            .CommandButton_ShowReset.ForeColor = vbYellow
+'            .CommandButton_ShowReset.BackColor = 128
+''            HideTheButton .CommandButton_ResetApplication
+'            HideTheButton .CommandButton_ResetBatch
+'            'ModifyFormButton .CommandButton_ResetApplication, styleLoad
+        End If
+       ' ShowTheButton .CommandButton_ShowReset
+    End With
+End Sub
+                                                                    '
+
+
+Private Sub TextBox_CurrentFileName_Click()
+    'open invoice folder holding displayed invoice
+    If flgPDFisOpen And Me.TextBox_CurrentFileName.Caption Like "*\*.*" Then
+        OpenFolder GetPathFromLongFileName(Me.TextBox_CurrentFileName.Caption, False)
+    End If
+End Sub
+
+
+
+
+                                                                            '
+'                                                                           |
+'                                        |
+'                                                                           |
+                                                                            '
+
+Private Sub UserForm_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+    Select Case KeyAscii
+        Case vbKeyPageUp, vbKeyPageDown, vbKeyUp, vbKeyDown, vbKeyLeft, vbKeyRight, vbKeyMenu, 192
+            '   DEAD KEYS   (KEEPS FOCUS ON USER FORM INSTEAD OF SENDING TO SHEET)
+        Case vbKeyTab
+            ActiveCell.Offset(0, 1).Select
+            APaInvoiceBatchEntry.ActivateBatchSheet
+        Case vbKeyReturn
+            ActiveCell.Offset(1, 0).Select
+            APaInvoiceBatchEntry.ActivateBatchSheet
+        Case Else
+            APaInvoiceBatchEntry.ActivateBatchSheet
+    End Select
+    If Me.CheckBox_CapsLock And Not CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+    If Me.CheckBox_NumLock And Not NumLock Then Call SendKeysToApplication(KeysToSend:="number lock")
+End Sub
+Private Sub UserForm_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'    Select Case KeyCode
+'        Case vbKeyLeft, vbKeyRight, vbKeyUp, vbKeyDown, vbKeyLeft, vbKeyRight, vbKeyMenu, 192
+'            '   DEAD KEYS   (KEEPS FOCUS ON USER FORM INSTEAD OF SENDING TO SHEET)
+'        Case Else
+            Call APmodCommonKeys.UserFormKeyDownEvent(KeyCode, Shift)
+'    End Select
+    If Me.CheckBox_CapsLock And Not CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+    If Me.CheckBox_NumLock And Not NumLock Then Call SendKeysToApplication(KeysToSend:="number lock")
+End Sub
+Private Sub UserForm_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'    Select Case KeyCode
+'    Case vbKeyPageUp, vbKeyPageDown, vbKeyLeft, vbKeyRight, vbKeyUp, vbKeyDown, vbKeyShift, vbKeyCapital
+'        '   DEAD KEYS   (KEEPS FOCUS ON USER FORM INSTEAD OF SENDING TO SHEET)
+'    Case Else
+        Call APmodCommonKeys.UserFormKeyUpEvent(KeyCode, Shift)
+'    End Select
+End Sub
+
+
+
+
+                                                                            '
+'                                                                           |
+'                                         |
+'                                                                           |
+                                                                            '
+
+Private Sub CheckBox_AliasLock_Change()
+    flgAliasLock = Not flgAliasLock
+End Sub
+
+Private Sub CheckBox_GLLock_Change()
+    flgGLLock = Not flgGLLock
+End Sub
+
+Private Sub CheckBox_CapsLock_Change()
+    If CapsLock <> Me.CheckBox_CapsLock Then Application.SendKeys "{CAPSLOCK}"
+End Sub
+
+Private Sub CheckBox_NumLock_Change()
+    If NumLock <> Me.CheckBox_NumLock Then Application.SendKeys "{NUMLOCK}"
+End Sub
+
+Sub ToggleRowStrikeThrough()
+    Dim lRow As ListRow
+    Dim selRange As Range
+    Dim toggleValue As eTRUTHINESS
+    Dim refRange As Range
+    Set refRange = APsheetBatchTemplate.Range("A2")
+    toggleValue = isother
+    If ActiveSheet.Name = APsheetBatch.Name Then
+        If TypeName(Selection) = "Range" Then
+            For Each lRow In APsheetBatch.ListObjects(1).ListRows
+                Set selRange = Application.Intersect(lRow.Range, Selection)
+                If Not selRange Is Nothing Then
+                    If toggleValue = isother Then toggleValue = Not selRange.Font.Strikethrough
+                    If Len(lRow.Range(1).Value2) > 0 Then
+                        With lRow.Range
+                            .Font.Strikethrough = toggleValue
+                            .Font.Bold = Not .Font.Strikethrough
+                            Select Case .Font.Strikethrough
+                                Case True
+                                    .Font.Color = FONTCOLOR_EXCLUDEFROMUPLOAD
+                                    gcAP.mainAPform.Label_FakeButton_LockedRow.ZOrder 1
+                                Case False
+                                    .Font.Color = refRange.Font.Color
+                                    gcAP.mainAPform.Label_FakeButton_UnlockedRow.ZOrder 1
+                            End Select
+                        End With
+                    End If
+                End If
+            Next lRow
+        End If
+    End If
+End Sub
+
+Public Sub ResetConfirmation()
+    MsgBox "Reset complete"
+End Sub
+
+Sub ResetPDFPanelText()
+    Me.Frame_CurrentPDFDetails.Caption = "No invoices in queue"
+    Me.TextBox_CurrentFileName.Text = "Click 'QUEUE' to locate and queue invoice PDFs for batch entry..."
+End Sub
+
+Sub TogglePDFPanel(Optional OverRideToggle As Long)
+'    With Me
+'        Select Case OverRideToggle
+''            Case -1
+''                .Frame_CurrentPDFDetails.Visible = False
+''            Case 1
+''                .Frame_CurrentPDFDetails.Visible = True
+''            Case Else
+''                .Frame_CurrentPDFDetails.Visible = Not .Frame_CurrentPDFDetails.Visible
+'        End Select
+'        If .Frame_CurrentPDFDetails.Visible Then
+''            Select Case .height
+''                Case mFORM_H_MIN
+''                    .height = mFORM_H
+''                    '.Frame_MainPanel.top = mPANEL_TOP
+''                Case mFORM_H_MAX - mFORM_H_DELTA
+''                    .height = mFORM_H_MAX
+''                    '.Frame_MainPanel.top = mPANEL_TOP
+''            End Select
+'        Else 'PDF DETAILS ARE NOT VISIBLE
+'            Select Case .height
+''                Case mFORM_H
+''                    .height = mFORM_H_MIN
+''                    '.Frame_MainPanel.top = mPANEL_TOP_MIN
+''                Case mFORM_H_MAX
+''                    .height = mFORM_H_MAX - mFORM_H_DELTA
+''                    '.Frame_MainPanel.top = mPANEL_TOP_MIN
+'            End Select
+'        End If
+'    End With
+End Sub
+Private Sub ToggleResetButtons()
+    Me.Label_ResetWarningText.Visible = Not Me.Label_ResetWarningText.Visible
+    ToggleButtonVisibility Me.CommandButton_ResetBatch
+    ToggleButtonVisibility Me.CommandButton_ResetApplication
+    ToggleButtonVisibility Me.CommandButton_RemoveRowsBIAS
+    ToggleButtonVisibility Me.CommandButton_CancelAction
+    ToggleButtonVisibility Me.CommandButton_ConfirmAction
+End Sub
+Private Sub ToggleArmedButtstyleOn(buttonToToggle As MSForms.CommandButton)
+    If Me.CommandButton_ConfirmAction.Visible = True Then
+        Call DisarmEveryArmableButton
+    Else
+        buttonToToggle.Tag = True
+        ModifyFormButton buttonToToggle, styleArmed
+        'Me.CommandButton_ConfirmAction.Visible = True
+        HideTheButton Me.CommandButton_ShowReset
+        ShowTheButton Me.CommandButton_ConfirmAction
+        ShowTheButton Me.CommandButton_CancelAction
+        Application.OnTime Now + TimeValue("00:00:03"), "ArmedButtonTimedOut"
+    End If
+End Sub
+Public Sub DisarmEveryArmableButton()
+    Dim armableButton As MSForms.CommandButton
+    HideTheButton Me.CommandButton_ConfirmAction
+    HideTheButton Me.CommandButton_CancelAction
+    ShowTheButton Me.CommandButton_ShowReset
+    ResetTheShowResetButton
+    'Me.CommandButton_ConfirmAction.Visible = False
+    For Each armableButton In mcolArmableButtons
+        DisarmTheButton armableButton
+    Next
+End Sub
+Private Sub DisarmTheButton(ByRef buttonToDisarm As MSForms.CommandButton)
+        buttonToDisarm.Tag = False
+        ModifyFormButton buttonToDisarm, styleArmable
+End Sub
+Private Sub ToggleButtonVisibility(ByRef buttonToToggle As MSForms.CommandButton)
+    Select Case buttonToToggle.Visible
+        Case True
+            HideTheButton buttonToToggle
+        Case False
+            ShowTheButton buttonToToggle
+    End Select
+End Sub
+Private Sub ShowTheButton(ByRef buttonToShow As MSForms.CommandButton)
+        buttonToShow.Visible = True
+End Sub
+Private Sub HideTheButton(ByRef buttonToHide As MSForms.CommandButton)
+        buttonToHide.Visible = False
+End Sub
+
+Sub ToggleEntryMode()
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    InvoiceEntryMode = Not InvoiceEntryMode
+    With Me.CommandButton_InvoiceEntryMode
+        If InvoiceEntryMode Then
+            ModifyFormButton Me.CommandButton_InvoiceEntryMode, styleOn, "4"
+        Else
+            ModifyFormButton Me.CommandButton_InvoiceEntryMode, styleOff, ";"
+        End If
+    End With
+End Sub
+
+
+Sub ToggleAutoPopuplate()
+    If gflgPopulateAll Then
+'        DEV_CommandButton_PopulateAll.Caption = "Populate All"
+        ModifyFormButton Me.DEV_CommandButton_PopulateAll, styleArmable
+        gflgPopulateAll = False
+        'Me.BackColor = 4210752
+    Else
+'        DEV_CommandButton_PopulateAll.Caption = "Stop Populate"
+        ModifyFormButton Me.DEV_CommandButton_PopulateAll, styleOn
+        gflgPopulateAll = True
+        'Me.BackColor = vbRed
+    End If
+End Sub
+
+Sub ContinueIserveInvoiceUpload()
+'Dim userQuit As Boolean
+'Dim allowSubmit As Boolean
+'
+''        Select Case MsgBox("Click 'Yes' to enable auto submit" & DBLLN & _
+''                            "click 'No' to save as drafts" & DBLLN & _
+''                            "or click 'Cancel' to exit.", vbInformation + vbYesNoCancel + vbDefaultButton3, "LAUNCHING ISERVE UPLOAD")
+''            Case vbYes
+''                allowSubmit = True
+'''                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = False
+'''                gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit.Value = True
+'''                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = True
+''            Case vbNo
+''                allowSubmit = False
+'''                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = False
+'''                gcAP.iServeInvoiceUpload.uploadForm.chkAutoSubmit.Value = False
+'''                gcAP.iServeInvoiceUpload.uploadForm.EnableFormEvents = True
+''            Case vbCancel
+''                userQuit = True
+''        End Select
+'    If Not userQuit Then
+'        If Not gcAP.iServeInvoiceUpload.job Is Nothing Then
+'            ModifyFormButton gcAP.mainAPform.CommandButton_iServeInvoiceUpload, styleLoad
+''            With gcAP.iServeInvoiceUpload.uploadForm
+''                .EnableFormEvents = False
+''                .chkAutoSubmit = allowSubmit
+''                .EnableFormEvents = True
+''            End With
+'            If gcAP.iServeInvoiceUpload.job.CurrentMode <> eISERVECLASSMODE.InvoiceMode Then gcAP.iServeInvoiceUpload.job.ChangeMode = eISERVECLASSMODE.InvoiceMode
+'            If gcAP.iServeInvoiceUpload.job.LoginSuccess Then gcAP.iServeInvoiceUpload.job.UploadInvoiceBatchToIserve
+'        End If
+'    End If
+'
+End Sub
+
+
+
+Private Function iServeLaunchIsAllowed(iServeMode As eISERVECLASSMODE) As eISERVECLASSMODE
+    Dim returnValue As eISERVECLASSMODE
+    Select Case iServeMode
+
+    Case InvoiceMode
+        ModifyFormButton gcAP.mainAPform.CommandButton_InvoiceEntryMode, styleLoad
+        If gcAP.iServeInvoiceUpload Is Nothing Then
+            Select Case MsgBox("launch iserve?", vbYesNo)
+                Case vbYes
+                    RaiseEvent LaunchIserve
+                    If Not gcAP.iServeInvoiceUpload.job Is Nothing Then
+                        If gcAP.iServeInvoiceUpload.job.LoginSuccess Then returnValue = InvoiceMode
+                    End If
+                Case vbNo
+                    'do n othing
+            End Select
+        End If
+        If returnValue <> InvoiceMode Then ModifyFormButton gcAP.mainAPform.CommandButton_InvoiceEntryMode, styleOff
+        
+    Case AddressMode
+        ModifyFormButton gcAP.mainAPform.CommandButton_iServeAddress, styleLoad
+        If gcAP.iServeAddressQuery Is Nothing Then
+            Select Case MsgBox("launch iserve?", vbYesNo)
+                Case vbYes
+                    RaiseEvent LaunchIserve
+
+                Case vbNo
+                    'do nothing
+            End Select
+        Else
+            If gcAP.iServeAddressQuery.job.LoginSuccess Then returnValue = AddressMode
+        End If
+        If returnValue <> AddressMode Then ModifyFormButton gcAP.mainAPform.CommandButton_iServeAddress, styleOff
+    End Select
+    
+    iServeLaunchIsAllowed = returnValue
+End Function
+
+Sub CreatePDFQueue()
+    If flgPDFisOpen Then
+        Call StopOpeningPDF
+        If Not flgPDFisOpen Then ModifyFormButton Me.CommandButton_GrabPDF, styleOff, BUTTONLABEL_PDFQUEUE_DEFAULT
+    Else
+        ModifyFormButton Me.CommandButton_GrabPDF, styleLoad, BUTTONLABEL_PDFQUEUE_LOADING
+        Call CreateFilenameArrayFromPDFSelection
+        If flgPDFisOpen Then
+            ModifyFormButton Me.CommandButton_GrabPDF, styleOn, BUTTONLABEL_PDFQUEUE_ENABLED
+        Else
+            ModifyFormButton Me.CommandButton_GrabPDF, styleOff, BUTTONLABEL_PDFQUEUE_DEFAULT
+        End If
+    End If
+End Sub
+
+Sub ToggleMainFormSize()
+    ToggleMainFormHeight
+    ToggleMainFormWidth
+End Sub
+Sub ToggleMainFormHeight()
+    With Me
+        Select Case .Frame_CurrentPDFDetails.Visible
+            Case True
+                If .height = mFORM_H Then
+                    .height = GetDesiredMaxHeight
+                Else
+                    .height = mFORM_H
+                End If
+            Case False
+                If .height = mFORM_H_MIN Then
+                    If GetDesiredMaxHeight = mAltMax_H Then
+                        .height = mAltMax_H
+                    Else
+                        .height = mFORM_H_MAX - mFORM_H_DELTA
+                    End If
+                Else
+                    .height = mFORM_H_MIN
+                End If
+        End Select
+    End With
+End Sub
+Sub ToggleMainFormWidth()
+    If Me.Width > mFORM_W Then
+        Me.Width = mFORM_W
+    ElseIf Me.Width < GetDesiredMaxWidth Then
+        Me.Width = GetDesiredMaxWidth
+    End If
+End Sub
+Private Function GetDesiredMaxHeight()
+    If CBool(mAltMax_H) Then
+        GetDesiredMaxHeight = mAltMax_H
+    Else
+        GetDesiredMaxHeight = mFORM_H_MAX
+    End If
+End Function
+Private Function GetDesiredMaxWidth()
+    If CBool(mAltMax_W) Then
+        GetDesiredMaxWidth = mAltMax_W
+    Else
+        GetDesiredMaxWidth = mFORM_W_MAX
+    End If
+End Function
+                                                                            '
+'                                                                           |
+'                                         |
+'                                                                           |
+                                                                            '
+
+'#############################################################################################################################
+'#############################################################################################################################
+'#############################################################################################################################
+
+Private Sub CheckBox_CA_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_CA_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_CapsLock_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_CapsLock_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_NONCA_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_NONCA_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_NumLock_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_NumLock_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_Other_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_Other_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_AliasLock_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_AliasLock_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_GLLock_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CheckBox_GLLock_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_AddVendorDetails_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_AddVendorDetails_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ConfirmAction_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ConfirmAction_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ExtractPDF_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ExtractPDF_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_FindInvoiceInHistory_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_FindInvoiceInHistory_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GLQuery_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_GLQuery_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GoToBatchSheet_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_GoToBatchSheet_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GrabPDF_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_GrabPDF_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_InvoiceEntryMode_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_InvoiceEntryMode_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_iServeAddress_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_iServeAddress_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_iServeInvoiceUpload_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_iServeInvoiceUpload_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetApplication_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ResetApplication_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetBatch_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ResetBatch_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetConditionalFormat_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ResetConditionalFormat_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_SplitPDF_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_SplitPDF_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ViewMatchingInvoiceHistory_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ViewMatchingInvoiceHistory_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ViewSupplierInvoiceHistory_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "CommandButton_ViewSupplierInvoiceHistory_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub DEV_CommandButton_PopulateAll_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "DEV_CommandButton_PopulateAll_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_AliasFilterCheckBoxes_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_AliasFilterCheckBoxes_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_CurrentPDFDetails_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_CurrentPDFDetails_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_InvoiceDetails_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_InvoiceDetails_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_iServeHistory_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_iServeHistory_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+Private Sub Frame_LockCheckBoxes_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_LockCheckBoxes_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+
+Private Sub Frame_SupplierInvoiceInformation_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyUpCaller = "Frame_SupplierInvoiceInformation_KeyUp"
+    Call UserForm_KeyUp(KeyCode, Shift)
+End Sub
+
+'#############################################################################################################################
+'#############################################################################################################################
+'#############################################################################################################################
+
+Private Sub CheckBox_CA_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_CA_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_CapsLock_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_CapsLock_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_NONCA_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_NONCA_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_NumLock_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_NumLock_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_Other_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_Other_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CheckBox_AliasLock_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CheckBox_AliasLock_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_AddVendorDetails_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_AddVendorDetails_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ConfirmAction_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ConfirmAction_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ExtractPDF_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ExtractPDF_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_FindInvoiceInHistory_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_FindInvoiceInHistory_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GLQuery_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_GLQuery_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GoToBatchSheet_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_GoToBatchSheet_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_GrabPDF_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_GrabPDF_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_InvoiceEntryMode_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_InvoiceEntryMode_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_iServeAddress_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_iServeAddress_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_iServeInvoiceUpload_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_iServeInvoiceUpload_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetApplication_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ResetApplication_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetBatch_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ResetBatch_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ResetConditionalFormat_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ResetConditionalFormat_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_SplitPDF_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_SplitPDF_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ViewMatchingInvoiceHistory_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ViewMatchingInvoiceHistory_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub CommandButton_ViewSupplierInvoiceHistory_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "CommandButton_ViewSupplierInvoiceHistory_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+
+Private Sub DEV_CommandButton_PopulateAll_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "DEV_CommandButton_PopulateAll_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub Frame_AliasFilterCheckBoxes_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "Frame_AliasFilterCheckBoxes_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub Frame_InvoiceDetails_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "Frame_InvoiceDetails_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub Frame_iServeHistory_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "Frame_iServeHistory_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+Private Sub Frame_LockCheckBoxes_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "Frame_LockCheckBoxes_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+
+Private Sub Frame_SupplierInvoiceInformation_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    mKeyDownCaller = "Frame_SupplierInvoiceInformation_KeyDown"
+    Call UserForm_KeyDown(KeyCode, Shift)
+End Sub
+
+
+'======================================================================================================================================================================
+'======================================================================================================================================================================
+'                                                                                                                                                                     '
+'                                                                                                                                                                     '
+'    /######           /##########\     ##\           /##                                                                                                             '
+'    #### ####        ##############    ####         ####                                                                                                             '
+'    ####   ####      ####        \#     ####       ####                                                                                                              '
+'    ####    ####     ####   /#           ####     ####                                                                                                               '
+'    ####     ####    #########            ####   ####                                                                                                                '
+'    ####    ####     ####   \#             #### ####                                                                                                                 '
+'    ####   ####      ####        /#         #######                                                                                                                  '
+'    #### ####        ##############          #####                                                                                                                   '
+'    \######           \##########/            \#/                                                                                                                    '
+'                                                                                                                                                                     '
+'Private Sub DEV_CommandButton_iServe_Click() '                                                                                                                        '
+'    'the user can click the iserve button at any time, even when iserve is running                                                                                    '
+'    'so we use a flag to determine if we should do anything when the button is clicked                                                                                '
+'    If iServeIsOpen Then '                                                                                                                                            '
+'        MsgBox "iServe is already open and cannot be closed from this menu." '                                                                                        '
+'    Else '                                                                                                                                                            '
+'        Set DEV_iServe = New DEV_iServe_Test_Class '                                                                                                                  '
+'        iServeIsOpen = True '                                                                                                                                         '
+'        'execution will not return from this call unless allowed by the user (or an unknown bug/error)                                                                '
+'        MsgBox "COMMENTED OUT: Call DEV_iServe.UploadInvoiceBatchToIserve" '                                                                                                '
+'        'we assume the iserve process is complete when control returns to this sub                                                                                    '
+'        'so we reset the conditions to allow a new instance of iserve if the button is clicked                                                                        '
+'        iServeIsOpen = False '                                                                                                                                        '
+'        Set DEV_iServe = Nothing '                                                                                                                                    '
+'    End If '                                                                                                                                                          '
+'End Sub '                                                                                                                                                             '
+'                                                                                                                                                                     '
+'    /######           /##########\     ##\           /##                                                                                                             '
+'    #### ####        ##############    ####         ####                                                                                                             '
+'    ####   ####      ####        \#     ####       ####                                                                                                              '
+'    ####    ####     ####   /#           ####     ####                                                                                                               '
+'    ####     ####    #########            ####   ####                                                                                                                '
+'    ####    ####     ####   \#             #### ####                                                                                                                 '
+'    ####   ####      ####        /#         #######                                                                                                                  '
+'    #### ####        ##############          #####                                                                                                                   '
+'    \######           \##########/            \#/                                                                                                                    '
+'                                                                                                                                                                     '
+'                                                                                                                                                                     '
+'======================================================================================================================================================================
+'======================================================================================================================================================================
+

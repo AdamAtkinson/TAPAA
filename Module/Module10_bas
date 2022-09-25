@@ -1,0 +1,72 @@
+Attribute VB_Name = "Module10"
+Option Explicit
+
+Sub popr()
+Dim i As Long
+Dim ws As Worksheet
+Set ws = ActiveSheet
+For i = 2 To ws.UsedRange.Rows.Count
+If ws.Range("L" & i).Hyperlinks.Count > 0 Then ws.Range("L" & i).Value2 = GetShortNameFromLongFileName(ws.Range("L" & i).Hyperlinks(1).ScreenTip)
+Next
+End Sub
+
+
+Sub Macro3()
+Attribute Macro3.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Macro3 Macro
+'
+
+'
+    With Selection.Font
+        .Name = "Calibri"
+        .FontStyle = "Regular"
+        .size = 8
+        .Strikethrough = False
+        .Superscript = False
+        .Subscript = False
+        .OutlineFont = False
+        .Shadow = False
+        .Underline = xlUnderlineStyleNone
+        .ThemeColor = xlThemeColorLight1
+        .TintAndShade = 0
+        .ThemeFont = xlThemeFontMinor
+    End With
+    With Selection.Font
+        .Name = "Calibri"
+        .FontStyle = "Regular"
+        .size = 8
+        .Strikethrough = True
+        .Superscript = False
+        .Subscript = False
+        .OutlineFont = False
+        .Shadow = False
+        .Underline = xlUnderlineStyleNone
+        .ThemeColor = xlThemeColorLight1
+        .TintAndShade = 0
+        .ThemeFont = xlThemeFontMinor
+    End With
+End Sub
+Sub Macro4()
+Attribute Macro4.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Macro4 Macro
+'
+
+'
+    ActiveSheet.Hyperlinks.Add anchor:=Selection, Address:="image-a.png", _
+        TextToDisplay:="IMAGE OF A THING"
+End Sub
+
+Sub lcstuff()
+Dim lc As ListColumn
+Dim r As Range
+Dim lo As ListObject
+Dim ws As Worksheet
+Set ws = ActiveSheet
+Set lo = ws.ListObjects(1)
+Set lc = lo.ListColumns(lo.ListColumns.Count)
+For Each r In lc.DataBodyRange.Rows
+    dbP r.Address
+Next r
+End Sub

@@ -1,0 +1,124 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsErrorDialogBox"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+Private pNumber As Long
+Private pDescription As String
+Private pLocation As String
+Private pResolution As String
+Private pForceClose As Boolean
+
+Private mAllowClose As Long
+
+
+Public Property Get Number() As Long
+    Number = pNumber
+End Property
+Public Property Let Number(p As Long)
+    Select Case p
+        Case 0 To 513
+            pNumber = p
+        Case 514 To 1000
+            pNumber = p + 1000
+        Case 1001 To 2000
+            pNumber = p
+        Case Else
+            pNumber = 2001
+    End Select
+End Property
+
+Public Property Get Description() As String
+    Description = pDescription
+End Property
+Public Property Let Description(p As String)
+    Select Case pNumber
+        Case 0 To 513
+            pDescription = vbNullString
+        Case 1001 To 2000
+            pDescription = p
+        Case 2001
+            pDescription = "Error number out of range!" & DBLLN & p
+        Case Else
+            pDescription = "Invalid Error Handling"
+    End Select
+End Property
+
+Public Property Get Location() As String
+    Location = pLocation
+End Property
+Public Property Let Location(p As String)
+    pLocation = p
+End Property
+
+Public Property Get Resolution() As String
+    Resolution = pResolution
+End Property
+Public Property Let Resolution(p As String)
+    pResolution = p
+End Property
+
+Public Property Get ForceClose() As Boolean
+    ForceClose = pForceClose
+End Property
+Public Property Let ForceClose(p As Boolean)
+    pForceClose = p
+End Property
+
+Public Property Get AllowClose() As Boolean
+    AllowClose = CBool(pAllowClose)
+End Property
+Public Property Let AllowClose(p As Boolean)
+    Select Case p
+        Case True
+            mAllowClose = vbYesNo '4
+        Case False
+            mAllowClose = vbOKOnly '0
+    End Select
+End Property
+
+Public Sub Reset()
+    pNumber = 0
+    pDescription = vbNullString
+    pLocation = vbNullString
+End Sub
+
+Public Sub Raise()
+    If CBool(mAllowClose) Then mAllowClose = vbOKOnly
+    Err.Raise Me.Number, vbNullString, ConstructErrorString
+    If ForceClose Then End
+    MsgBox "should not get this after foce"
+End Sub
+
+Public Sub Warn()
+    Dim msgIcon As Long
+    If pForceClose Then
+        msgIcon = vbCritical
+    Else
+        msgIcon = vbInformation
+    End If
+    'user responses can be vbok = 0, vbyes = 6, vbno = 7
+    If MsgBox("Error : " & Me.Number & DBLLN & ConstructErrorString, mAllowClose + msgIcon, "Warning - Error") = vbNo Then End
+    If ForceClose Then End
+    MsgBox "should not get this after foce"
+End Sub
+
+Private Function ConstructErrorString() As String
+    Dim l As String
+    If CBool(Len(pLocation)) Then l = "Location :  " & Me.Location & DBLLN
+    Dim d As String
+    If CBool(Len(pDescription)) Then d = "Description :  " & Me.Description & DBLLN
+    Dim r As String
+    If CBool(Len(pResolution)) Then r = "Help :  " & Me.Resolution & DBLLN
+    Dim c As String
+    If CBool(mAllowClose) Then c = "Do you want to continue?" & DBLLN
+    Dim f As String
+    If pForceClose Then f = "This program cannot continue and will terminate." & DBLLN
+    ConstructErrorString = l & d & r & c & f
+End Function

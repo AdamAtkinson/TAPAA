@@ -1,0 +1,348 @@
+Attribute VB_Name = "APglobalVariables"
+Option Explicit
+
+'order of entry = (1,2,3,4,5,6,7,8,13,14,15)
+
+    '==================================================
+    '   FRAMEWORK FOR BUTTONS                         '
+    '==================================================
+    '. . . . . . . . . . . . . . . . . . . . . . . . ..
+    '  BUTTON STYLES                            '     '
+    '. . . . . . . . . . . . . . . . . . . . . .'. . ..
+    'Public isOn As typeButtonProperties        '     '
+    'Public isOff As typeButtonProperties       '     '
+    'Public isLoad As typeButtonProperties      '     '
+    'Public isIdle As typeButtonProperties      '     '
+    'Public isGeneric As typeButtonProperties   '     '
+    'Public isArmed As typeButtonProperties     '     '
+    '. . . . . . . . . . . . . . . . . . . . . .'. . ..
+    '  BUTTON DICTIONARY  (NOT USED)            '     '
+    '. . . . . . . . . . . . . . . . . . . . . .'. . ..
+    '==================================================
+                                                
+                                                
+    '==================================================
+    '   STAND ALONE ENUMERATORS                 '     '
+    '- - - - - - - - - - - - - - - - - - - - - - - - --
+    Public Enum eTRUTHINESS                      '     '
+        istrue = -1                             '     '
+        isfalse = 0                             '     '
+        isother = 1                             '     '
+    End Enum                                    '     '
+    '                                                 '
+    Public Enum eISERVEMODES                     '     '
+        UploadInvoice = 1                       '     '
+        QueryAddress = 2                        '     '
+    End Enum                                    '     '
+    '==================================================
+     Public Enum eISERVECLASSMODE
+        NotSet = 0
+        InvoiceMode = 1
+        AddressMode = 2
+    End Enum
+    
+    '===================================================.
+    '   FRAMEWORK FOR PDF                               '
+    '- - - - - - - - - - - - - - - - - - - - - -.       '
+    Public Enum ePDF_WINDOW_VISIBILITY           '       '
+        eHidden = -2                            '       '
+        eVisible = 1                            '       '
+    End Enum                                    '       '
+                                                '       '
+    Public Enum ePDF_VIEW_MODES                  '       '
+        enone = 1                               '       '
+        ethumbs = 2                             '       '
+        eFullScreen = 4                         '       '
+    End Enum                                    '       '
+                                                '       '
+    Public Enum ePDF_ZOOM_MODES                  '       '
+        eFitPage = 1                            '       '
+        eFitWidth = 2                           '       '
+        efitHeight = 3                          '       '
+    End Enum                                    '       '
+                                                '       '
+    Public Enum ePDF_PAGE_CHANGE                 '       '
+        eBack = 1                               '       '
+        eFoward = -1                            '       '
+    End Enum                                    '       '
+                                                '       '
+    '- - - - - - - - - - - - - - - - - - - - - -        '
+    Public Type tPDF_WINDOW_STATE                '       '
+        tVisible As ePDF_WINDOW_VISIBILITY       '       '
+        tMode As ePDF_VIEW_MODES                 '       '
+        tZoom As ePDF_ZOOM_MODES                 '       '
+        tChangePage As ePDF_PAGE_CHANGE          '       '
+    End Type                                    '       '
+                                                '       '
+    Public gPDFdefaultView As tPDF_WINDOW_STATE  '       '
+    '- - - - - - - - - - - - - - - - - - - - - -'       '
+    '==================================================='
+    Public Type tRECT
+        Left As Long
+        Right As Long
+        Top As Long
+        Bottom As Long
+    End Type
+    
+    '========================================================================================
+    '   STAND ALONE TYPES                                                                   -
+    '----------------------------------------------------------------------------------------
+    'Custom structure for passing in the parameters in/out of the hook enumeration function -
+    'Could use global variables instead, but this is nicer.                                 -
+    Public Type tFIND_WINDOW_PARAMETERS '                                                      -
+        strTitle As String           'INPUT                                                 -
+        hwnd As Long                 'OUTPUT                                                -
+    End Type                         '                                                      -
+    '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -'
+    'Custom structure for passing add-in menu parameters                                    '
+    '       should probably convert to a class instead but do not want to muddy the tree    '
+    Public Type tMENU_ITEMS       '                                                       '
+        tCaption As String          '                                                       '
+        tTag As String              '                                                       '
+        tCommand As String          '                                                       '
+        tIcon As Long               '                                                       '
+    End Type                        '                                                       '
+    Public Type tMENU            '                                                       '
+        tCaption As String          '                                                       '
+        tTag As String              '                                                       '
+        tItems() As tMENU_ITEMS   '                                                       '
+    End Type                        '                                                       '
+    '========================================================================================
+    
+
+    '======================================================
+    '   CLASSES                                           '
+'    Public iServeAddressOnly As AP_iServeAddressOnly_Class 'stand alone window for manual operation and testing
+   ' Public iServe As APclsIserveJob  'test_TotaliServe
+    Public gcIni As APclsIniFileHandler
+    'Public hook As Hook_Class 'too volatile without further refinement
+    '======================================================
+    Public gcAP As APclsMainApplication
+    Public gExcelState As APclsExcelStates
+    Public gPDF As APclsPDF
+    
+    '======================================================_____
+    '   USER FORMS                                      '''¯¯¯¯¯
+                                                         ''
+    Public gfrmSelectInvoiceDetails As APinputformMultiList          '
+    Public gfrmVendorName As APinputformVendorName
+    Public gfrmInvoiceDate As APinputformDate
+    Public gfrmInvoiceAmount As APinputformAmount
+'    Public gcAP.mainAPform As AP_1_Form_MainWindow
+    Public gfrmQuitCopyMode As APformCutCopyModeIsOn
+    'Public AddressWindowForm As APformiServeAddressQuery
+    Public gfrmInvoiceQuery As APformFindInvoiceInHistory
+    Public gfrmExpensePeriod As APinputformExpensePeriod
+    Public gfrmGLQuery As APformQueryCOA
+    'OUTLOOK FORMS                                        '
+    Public frmDownloader As AttachmentDownloader_Form
+    Public frmSkipped As SkippedDetails_Form              '
+                                                         ''
+    '                                                   '''
+    '======================================================
+    
+
+    
+    '======================================================
+    '   LISTOBJECTS                                       '
+    Public loInvoiceBatch As ListObject
+    Public loSupplierDetails As ListObject
+    Public loApproverList As ListObject
+    Public loChartOfAccounts As ListObject
+    Public loPostingHistory As ListObject
+    Public loInvoiceDescriptionList As ListObject
+    Public loBatchTemplate As ListObject
+    Public loTableRanges As ListObject
+    Public loPDFVendors As ListObject
+    Public loExpensePeriod As ListObject
+    Public loSupplierNames As ListObject
+    Public loSplitAllocations As ListObject
+    Public loSplitDetails As ListObject
+    '                                                     '
+    '======================================================
+    
+    
+    '======================================================
+    '   NUANCE POWER PDF OBJECTS                          '
+    Public gPDFapp As PDFPlus.App
+    Public gPDFddDoc As PDFPlus.DDDoc
+    Public gPDFdvDoc As PDFPlus.DVDoc
+    Public gPDFdvPageView As PDFPlus.DVPageView
+    '                                                     '
+    '======================================================
+    
+    
+    '======================================================
+    '   VARIANTS                                          '
+    Public vPID As Variant
+    'Public TaskTracker As Variant
+    '                                                     '
+    '======================================================
+    
+    
+    '======================================================
+    '   STRINGS / ARRAYS OF STRINGS                       '
+    Public PDF_Array() As String
+'    Public SupplierNames() As String
+    Public EmailContacts() As String
+    Public DEVKEY As String
+    Public DefaultEmailContact As String
+    Public AppTitle As String
+    Public gRootFolder As String
+    Public ActiveFolder As String
+    Public UploadFolder As String
+    Public TrashFolder As String
+    Public gBackupPath As String
+'    Public AppLongName As String
+    Public CurrentUser As String
+    Public NuancePowerPDF As String
+    Public DefaultImportSplitPDFFolder As String
+    '                                                     '
+    '======================================================
+    
+    
+    '======================================================
+    '   INTEGERS                                          '
+    Public Headache As Long
+    Public IndexPDF As Long
+    Public AppHWND As Long
+    Public gSalesforceChromeHWND As Long
+    Public recursionCounter As Long
+    '                                                     '
+    '======================================================
+    
+    
+    '======================================================
+    '   BOOLEAN                                           '
+    Public gMODE_MatchOnly As Boolean
+    Public gflgCancel As Boolean
+    Public flgAliasLock As Boolean
+    Public flgGLLock As Boolean
+    Public InvoiceBatchEnvironmentWasInitialized As Boolean
+    Public flgPDFisOpen As Boolean
+    Public flgHoldCellFocus As Boolean
+    Public InvoiceEntryMode As Boolean
+    Public gflgPopulateAll As Boolean
+    Public gKeyboardShortcutsEnabled As Boolean
+    Public gDisableFormEvents As Boolean
+    'Public WindowsIsHooked As Boolean 'too volatile without refinement
+    '                                                     '
+    '======================================================
+    
+
+    
+    
+    'Public Type jQueryTags
+    '    mainFrm As String
+    '    firstInv As String
+    '    eachInv As String
+    '    buttons As String
+    '    lHeader As String
+    '    iHeader As String
+    '    LineItemList As String
+    '    addButton As String
+    '    id As String
+    '    sel2result As String
+    '    sel2selection As String
+    '    sel2search As String
+    '    AddAttachment As String
+    '    submitInv As String
+    '    saveDraft As String
+    '    scrollBottom As String
+    '    fileDesc As String
+    '    doneButton As String
+    '    uploadFile As String
+    '    fileNameField As String
+    '    homeButton As String
+    '    payInvoice As String
+    '    payInvoiceText As String
+    'End Type
+    'Public jQ As jQueryTags
+    '
+    ' Public Const BaseFields1 As String = "j_id0:mainFrm:lstOfInv:j_id"
+    ' Public Const BaseFields2 As String = ":eachInv:LIHeader:lineItemlist:"
+    '
+    'Public Type iServeFields
+    '    Seg1() As jQueryTags
+    '    Seg2() As jQueryTags
+    '    Seg3() As jQueryTags
+    '    ID1 As Integer
+    '    ID2 As Integer
+    'End Type
+    '
+    'Public Type jQ_gcAP.mainAPform
+    '    j__id As String
+    '
+    '
+    'Public fld_Number As iServeFields
+    'Public fld_Date As iServeFields
+    'Public fld_Description As iServeFields
+    'Public fld_Amount As iServeFields
+    'Public fld_Period As iServeFields
+    'Public fld_Submit As String
+    'Public fld_Save As String
+    'Public fld_Attach As String
+    'Public fld_FileName As iServeFields
+    'Public fld_Upload As String
+    'Public fld_Done As String
+    'Public fld_FileDescription As iServeFields
+    'Public fld_Home As String
+    'Public fld_DropDown As String
+    'Public fld_Supplier As String
+    'Public fld_Approver As String
+    '
+    'Public Const select2_select As String = "select2-selection"
+    'Public Const select2_search As String = "select2-search__field"
+    'Public Const select2_results As String = "select2-result-item__title"
+    'Private Const jID = "j_id"
+    ' Sub test()
+    '
+    ' Dim BaseFields2 As String
+    ' jQ = Fill_jQ
+    'BaseFields2 = Join(Array( _
+    '                        vbNullString, jQ.eachInv, jQ.lHeader, jQ.LineItemList, vbNullString _
+    '                        ), ":")
+    '
+    ' Debug.Print BaseFields2
+    '
+    '
+    '
+    ' End Sub
+    '
+    'Public Function jStringAssembler(jForm As String, jFormIndex As String, _
+    '                                GroupIndex As String, _
+    '                                Optional LineIndex As String = vbNullString, _
+    '                                Optional jInv As String = vbNullString, _
+    '                                Optional jInvIndex As String = vbNullString) As String
+    '    jStringAssembler = jID & jBaseIndex & jForm & jFormIndex & ":" & GroupIndex
+    '    If jInv <> vbNullString Then
+    '        jStringAssembler = jStringAssembler & jInv & LineIndex
+    '        If jInvIndex <> vbNullString Then jStringAssembler = jStringAssembler & ":" & jID & jInvIndex
+    '    End If
+    'End Function
+    '
+    '
+    'Public Function Fill_jQ() As jQueryTags
+    '    Fill_jQ.mainFrm = "mainFrm"
+    '    Fill_jQ.firstInv = "lstOfInv"
+    '    Fill_jQ.eachInv = "eachInv"
+    '    Fill_jQ.buttons = "buttons"
+    '    Fill_jQ.lHeader = "LIHeader"
+    '    Fill_jQ.iHeader = "infoHeader"
+    '    Fill_jQ.LineItemList = "lineItemlist"
+    '    Fill_jQ.addButton = "AddLIButtonHeader"
+    '    Fill_jQ.id = "j_id"
+    '    Fill_jQ.sel2result = "select2-result-item__title"
+    '    Fill_jQ.sel2selection = "select2-selection"
+    '    Fill_jQ.sel2search = "select2-search__field"
+    '    Fill_jQ.homeButton = "rU00000005K9w_Tab"
+    '    Fill_jQ.fileNameField = "uploader:j_id26:component:attForm:j_id2058:j_id2061:0:files:j_id2062:test"
+    '    Fill_jQ.uploadFile = "uploader: j_id26: component: attForm: j_id2058: j_id2084"
+    '    Fill_jQ.doneButton = "uploader: j_id26: component: attForm: j_id2058: j_id2087"
+    '    Fill_jQ.payInvoice = "apTypes"
+    '    Fill_jQ.payInvoiceText = "Invoices"
+    '    Fill_jQ.scrollBottom = "bPageFooter"
+    'End Function
+    '
+    '
+    

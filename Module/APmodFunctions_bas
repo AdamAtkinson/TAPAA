@@ -1,0 +1,1025 @@
+Attribute VB_Name = "APmodFunctions"
+Option Explicit
+
+Private mAllMatchingHWNDL As String
+
+Sub testingfunction(testStr As String)
+dbP iifPathWithBackSlash(testStr)
+dbP iifPathWithoutBackSlash(testStr)
+End Sub
+
+Public Function iifPathWithBackSlash(ByVal targetPath As String) As String
+    Dim formattedPath As String
+    iifPathWithBackSlash = IIf(PathFormatAppendBackslash(targetPath, formattedPath), formattedPath, targetPath)
+End Function
+
+Public Function iifPathWithoutBackSlash(ByVal targetPath As String) As String
+    Dim formattedPath As String
+    iifPathWithoutBackSlash = IIf(PathFormatRemoveBackslash(targetPath, formattedPath), formattedPath, targetPath)
+End Function
+
+Public Function PathFormatAppendBackslash(ByVal targetPath As String, ByRef returnPath As String) As Boolean
+    If Right(targetPath, 4) Like "*.*" Then Exit Function
+    If Right(targetPath, 1) <> Chr(92) Then
+        returnPath = targetPath & Chr(92)
+    Else
+        returnPath = targetPath
+    End If
+    PathFormatAppendBackslash = True
+End Function
+Public Function PathFormatRemoveBackslash(ByVal targetPath As String, ByRef returnPath As String) As Boolean
+    If Right(targetPath, 4) Like "*.*" Then Exit Function
+    If Right(targetPath, 1) = Chr(92) Then
+        returnPath = Left(targetPath, Len(targetPath) - 1)
+    Else
+        returnPath = targetPath
+    End If
+    PathFormatRemoveBackslash = True
+End Function
+
+Public Function ChooseSingularOrPluralString(ByVal singular As String, ByVal plural As String, ByVal determinant As Long, ByVal zeroIsPlural As Boolean) As String
+    Dim returnString As String
+    Select Case determinant
+        Case 0
+            If zeroIsPlural Then
+                returnString = plural
+            Else
+                returnString = singular
+            End If
+        Case 1
+            returnString = singular
+        Case Else
+            returnString = plural
+        End Select
+    ChooseSingularOrPluralString = returnString
+End Function
+
+Public Function XOR_VBA_Function(Arg1 As Boolean, Arg2 As Boolean) As Boolean
+    XOR_VBA_Function = Arg1 Xor Arg2
+End Function
+
+Public Function MaxOfTwoAsLong(longValue1 As Long, longValue2 As Long) As Long
+    If longValue1 > longValue2 Then
+        MaxOfTwoAsLong = longValue1
+    Else
+        MaxOfTwoAsLong = longValue2
+    End If
+End Function
+
+Public Function LostRangeReference(testRange As Range) As Boolean
+    Dim testAddress As String
+    On Error Resume Next
+    If Not testRange Is Nothing Then
+        testAddress = testRange.Address
+        If Err.Number = 424 Then LostRangeReference = True
+    End If
+End Function
+
+Public Function CreateStringToQualifyExternalFormulaReferences(ByVal workbookName As String, ByVal worksheetName As String) As String
+    CreateStringToQualifyExternalFormulaReferences = "'[" & workbookName & "]" & worksheetName & "'!"
+End Function
+
+
+Public Function GetBooleanFromTrueFalseString(ByVal stringValue As String, Optional ByRef returnSuccess As Boolean) As Boolean
+    Dim returnValue As Boolean
+    Select Case stringValue
+        Case "F", "FALSE", "False", "false", "f", vbNullString
+            returnValue = False
+            returnSuccess = True
+        Case "T", "TRUE", "True", "true", "t"
+            returnValue = True
+            returnSuccess = True
+    End Select
+    GetBooleanFromTrueFalseString = returnValue
+End Function
+
+Public Function GetAllFilenamesInFolder(ByVal folderPath As String) As String
+    Dim myfile As String
+    Dim returnString As String
+    If Right(folderPath, 1) <> "\" Then folderPath = folderPath & "\"
+    myfile = Dir(folderPath & "\*.*")
+    returnString = folderPath & myfile
+    Do While Len(myfile) > 0
+        myfile = Dir
+        If Len(myfile) > 0 Then returnString = returnString & Chr(124) & folderPath & myfile
+    Loop
+    GetAllFilenamesInFolder = returnString
+End Function
+
+
+Public Function ReadFile(ByVal fileToRead As String) As String
+    Dim fsoConst_ForReading As Long: fsoConst_ForReading = 1
+    Dim fsoConst_TristateUseDefault As Long: fsoConst_TristateUseDefault = -2
+    Dim fso As Object
+    Dim fsoTextStream As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set fsoTextStream = fso.GetFile(fileToRead).OpenAsTextStream(fsoConst_ForReading, fsoConst_TristateUseDefault)
+    ReadFile = fsoTextStream.ReadAll
+    fsoTextStream.Close
+End Function
+
+
+Public Function GetFromFileDialogWindow(ByVal DialogType As MsoFileDialogType, ByRef returnPath As String, _
+                               Optional ByVal defaultFolder As String, _
+                               Optional ByVal WindowTitle As String, _
+                               Optional ByVal buttonCaption As String, _
+                               Optional ByVal allowMultiple As Boolean _
+                               ) As Boolean
+    Dim returnString As String
+    Dim i As Long
+    On Error GoTo FUNCTIONFAILED
+    
+    With Application.FileDialog(DialogType)
+        .AllowMultiSelect = allowMultiple
+        .Title = WindowTitle
+        .InitialFileName = iifPathWithBackSlash(defaultFolder)
+        .ButtonName = buttonCaption
+        If .Show = -1 Then
+            For i = 1 To .SelectedItems.Count
+                If InStr(1, .SelectedItems(i), Chr(124)) > 0 Then Err.Raise 999, "selected item contained string delimiter"
+                If i < .SelectedItems.Count Then
+                    returnString = returnString & .SelectedItems(i) & Chr(124)
+                Else
+                    returnString = returnString & .SelectedItems(i)
+                End If
+            Next
+        End If
+    End With
+
+    GetFromFileDialogWindow = CBool(Len(returnString))
+    
+NORMALEXIT:
+    returnPath = returnString
+    Exit Function
+    
+FUNCTIONFAILED:
+    returnString = Err.Description
+    Resume NORMALEXIT
+    
+End Function
+
+Public Function ReplaceSpecialCharacters(ByVal txt As String, _
+                                        Optional replaceWith As String, _
+                                        Optional allowSpace As Boolean _
+                                        ) As String
+    Dim regexPattern As String
+    If allowSpace Then
+        regexPattern = "[^A-Z\s0-9()]+"
+    Else
+        regexPattern = "[^A-Z0-9]+"
+    End If
+    With CreateObject("VBScript.RegExp")
+        .Pattern = regexPattern
+        .Global = True
+        .ignoreCase = True
+        ReplaceSpecialCharacters = Trim(.Replace(txt, replaceWith))
+    End With
+End Function
+
+Public Function TableRowIsEmpty(tableListRow As ListRow) As Boolean
+    TableRowIsEmpty = Application.WorksheetFunction.CountA(tableListRow.Range) = 0
+End Function
+
+Public Function TableRowIsComplete(tableListRow As ListRow, Optional ByVal maxEmptyCellCount As Long) As Boolean
+    TableRowIsComplete = Application.WorksheetFunction.CountA(tableListRow.Range) >= tableListRow.Parent.ListColumns.Count - maxEmptyCellCount
+End Function
+
+Public Function GetLastNonEmptyListRowInTable(listObjectTable As ListObject) As ListRow
+    With listObjectTable
+        Dim i As Long
+        i = .ListRows.Count
+        Do While TableRowIsEmpty(.ListRows(i)) And i > 1
+            i = i - 1
+        Loop
+        Set GetLastNonEmptyListRowInTable = .ListRows(i)
+    End With
+End Function
+
+Public Function GetInvalidLinksInBatch() As String
+    Dim returnString As String
+    Dim i As Long
+    With APsheetBatch.ListObjects(1)
+        For i = .ListRows(1).Index To .ListRows.Count
+            With .ListColumns(sTABLE_COL_BATCH_FILENAME).DataBodyRange(i)
+                If Len(.Value2) > 0 And Not .Font.Strikethrough Then
+                    If .Hyperlinks.Count = 1 Then
+                        If Not CBool(Len(Dir(.Hyperlinks(1).Address, vbNormal))) Then
+                            If CBool(Len(returnString)) Then returnString = returnString & DBLLN
+                            returnString = returnString & .Address & "=" & .Hyperlinks(1).Address
+                        End If
+                    Else
+                        If CBool(Len(returnString)) Then returnString = returnString & DBLLN
+                        returnString = returnString & .Address & "=" & .Value2
+                    End If
+                End If
+            End With
+        Next i
+    End With
+    GetInvalidLinksInBatch = returnString
+End Function
+
+Public Function NoNullStringValues(ParamArray inString() As Variant) As Boolean
+    Dim i As Long
+    Dim returnValue As Boolean
+    returnValue = True
+    For i = LBound(inString) To UBound(inString)
+        returnValue = CBool(Len(inString(i))) And returnValue
+    Next i
+    NoNullStringValues = returnValue
+End Function
+
+Public Function ExcelIsActive() As Boolean
+    Dim nm As String
+    Dim XLwnd As Long
+    Dim hwnd As Long
+    nm = Application.Caption        ' get Excel window title       '
+    XLwnd = FindWindow(CLng(0), nm) ' get Excel window number      '
+    hwnd = GetActiveWindow()        ' get active window number     '
+    If hwnd = XLwnd Then
+        ExcelIsActive = True
+    Else
+        ExcelIsActive = False
+    End If
+End Function
+
+
+Public Function GetShortNameFromLongFileName(longFilename As String, Optional ByVal excludeExtension As Boolean) As String
+    Dim returnString As String
+    returnString = Replace(longFilename, Left(longFilename, InStrRev(longFilename, Chr(92))), vbNullString)
+    If excludeExtension Then returnString = Replace(returnString, GetFileNameExtension(returnString, False), vbNullString)
+    GetShortNameFromLongFileName = returnString
+End Function
+Public Function GetPathFromLongFileName(longFilename As String, Optional ByVal excludeBackSlash As Boolean) As String
+    Dim returnString As String
+    Dim changeStringLength As Single
+    If excludeBackSlash Then changeStringLength = -1
+    returnString = Left(longFilename, InStrRev(longFilename, Chr(92)) + changeStringLength)
+    GetPathFromLongFileName = returnString
+End Function
+Public Function GetFileNameExtension(ByVal longORshortFileName As String, Optional ByVal excludeDecimal As Boolean) As String
+    Dim returnString As String
+    Dim changeStringLength As Single
+    If Not excludeDecimal Then changeStringLength = 1
+    If longORshortFileName Like "*.???" Or longORshortFileName Like "*.????" Then
+        returnString = Right(longORshortFileName, Len(longORshortFileName) - InStrRev(longORshortFileName, ".") + changeStringLength)
+    End If
+    GetFileNameExtension = returnString
+End Function
+
+Public Function GetTableNamesOnWorksheet(SheetName As String) As String
+    Dim ws As Worksheet
+    Dim i As Long
+    For Each ws In ActiveWorkbook.Worksheets
+        If ws.Name = SheetName Then
+            For i = 1 To ws.ListObjects.Count
+                GetTableNamesOnWorksheet = GetTableNamesOnWorksheet & ws.ListObjects(i).Name
+                If i < ws.ListObjects.Count Then GetTableNamesOnWorksheet = GetTableNamesOnWorksheet & ", "
+            Next
+        End If
+    Next
+End Function
+
+Public Function DevToolsAddress(Optional VendorAddress As String) As String
+    Dim ws As Worksheet
+    Dim s As String
+    Dim i As Integer
+    i = ActiveCell.Row
+    Set ws = ActiveSheet
+    If VendorAddress = vbNullString Then VendorAddress = ws.Cells(ActiveCell.Row, 12).Value
+    s = Replace(VendorAddress, "  ", " ")
+    DevToolsAddress = ws.ListObjects(1).ListColumns("Supplier Name").Range(i) & Chr(10) & "VENDOR" & Chr(10) & s
+End Function
+
+Public Function CapsLock() As Boolean
+    CapsLock = KeyState(kCAPITAL)
+End Function
+Public Function NumLock() As Boolean
+    NumLock = KeyState(kNUMLOCK)
+End Function
+Private Function KeyState(lKey As Long) As Boolean 'this is a private function for public functions
+    KeyState = CBool(GetKeyState(lKey))
+End Function
+
+Public Function CellIsInVisibleRange(cell As Range) As Boolean
+If Not gcAP Is Nothing Then
+        If Not gcAP.wbAPapp Is Nothing Then
+            gcAP.wbAPapp.Windows(1).Activate
+        End If
+    End If
+    CellIsInVisibleRange = Not Intersect(ActiveWindow.VisibleRange, cell) Is Nothing
+End Function
+
+
+
+Function FindAndGetAccountDetails(ByVal lookupString As String, Optional ByRef returnSuccess As Boolean) As String
+    Dim rngSearch As Range
+    Dim returnString As String
+    Set rngSearch = loChartOfAccounts.ListColumns(sTABLE_COL_COA_ACCOUNTNUMBER).DataBodyRange _
+                .Find(lookupString, lookat:=xlWhole, MatchCase:=False)
+    If Not rngSearch Is Nothing Then
+        returnString = rngSearch.Offset(0, 1).Value2
+        returnSuccess = True
+    Else
+        returnString = "Account Not Found"
+        returnSuccess = False
+    End If
+       FindAndGetAccountDetails = returnString
+End Function
+
+Public Function ConvertRangeFromFormulaToVBA(ExcelRange As String) As Range
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim rng As Range
+    Dim workbookName As String
+    Dim SheetName As String
+    Dim rangeAddress As String
+    Dim errorFound As Boolean
+    If Left(ExcelRange, 1) = "=" Then ExcelRange = Right(ExcelRange, Len(ExcelRange) - 1)
+    If ExcelRange Like "'*.xls*?*'!?*#" Then
+        workbookName = Left(ExcelRange, InStr(1, ExcelRange, "]") - 1)
+        workbookName = Replace(workbookName, "'[", vbNullString)
+        On Error Resume Next
+        Set wb = Excel.Workbooks(workbookName)
+        If Err.Number <> 0 Then
+            errorFound = True
+            MsgBox "Workbook " & workbookName & " was not found!", vbCritical
+        End If
+        Err.Clear
+        On Error GoTo 0
+    End If
+    If Not errorFound Then
+        If wb Is Nothing Then Set wb = ActiveWorkbook
+        If ExcelRange Like "?*!?*#" Then
+            SheetName = Left(ExcelRange, InStr(1, ExcelRange, "!") - 1)
+            SheetName = Replace(SheetName, "[" & workbookName & "]", vbNullString)
+            SheetName = Replace(SheetName, "'", vbNullString)
+            If WorksheetExists(SheetName, wb) Then
+                Set ws = wb.Worksheets(SheetName)
+            Else
+                Set wb = Nothing
+                errorFound = True
+                MsgBox "Worksheet " & SheetName & " was not found!", vbCritical
+            End If
+        End If
+    End If
+    If Not errorFound Then
+        If ws Is Nothing Then Set ws = wb.ActiveSheet
+        If ExcelRange Like "*?*#" Then
+            If InStr(1, ExcelRange, "!") <> 0 Then
+                rangeAddress = Right(ExcelRange, Len(ExcelRange) - InStrRev(ExcelRange, "!"))
+            Else
+                rangeAddress = ExcelRange
+            End If
+            On Error Resume Next
+            Set rng = ws.Range(rangeAddress)
+            If Err.Number = 0 Then
+                If Not rng Is Nothing Then Set ConvertRangeFromFormulaToVBA = rng
+                If Err.Number <> 0 Then MsgBox "An error occured setting the range " & ExcelRange, vbCritical
+            Else
+                MsgBox "The range " & rangeAddress & " is invalid!", vbCritical
+            End If
+            Err.Clear
+            On Error GoTo 0
+        Else
+            MsgBox "The format " & ExcelRange & " is invalid!", vbCritical
+        End If
+    End If
+End Function
+
+Public Function CreateUniqueName(ByVal originalFileName As String, Optional ByVal destinationFolder As String) As String
+    Dim strIndex As String
+    Dim shortName As String
+    Dim docExt As String
+    Dim destinationPath As String
+    Dim implicitPath As String
+    Dim explicitPath As String
+        
+    If Len(destinationFolder) > 0 Then
+        explicitPath = destinationFolder
+        If Right(explicitPath, 1) <> "\" Then explicitPath = explicitPath & "\"
+    Else
+        implicitPath = GetPathFromLongFileName(originalFileName)
+    End If
+    
+    If Len(explicitPath) > 0 And Len(implicitPath) > 0 And explicitPath <> implicitPath Then
+        Select Case MsgBox("Click 'Ignore' to save in " & explicitPath & DBLLN & _
+                           "Click 'Retry' to save in " & implicitPath & DBLLN & _
+                           "Click 'Abort' to continue without saving.", vbAbortRetryIgnore, "Multiple Save Paths Used")
+            Case vbIgnore
+                destinationPath = explicitPath
+            Case vbRetry
+                destinationPath = implicitPath
+            Case vbAbort
+                GoTo USERABORT
+        End Select
+    Else
+        If Len(explicitPath) > 0 Then
+            destinationPath = explicitPath
+        ElseIf Len(implicitPath) > 0 Then
+            destinationPath = implicitPath
+        End If
+    End If
+    
+    docExt = GetFileNameExtension(originalFileName)
+    
+    shortName = Replace(originalFileName, destinationPath, vbNullString)
+    shortName = Replace(shortName, docExt, vbNullString)
+    
+    Do
+        If Len(Dir(destinationPath, vbDirectory)) = 0 Then
+            Select Case MsgBox("Create folder at " & destinationPath, vbYesNo, "Folder Does Not Exist")
+                Case vbYes
+                    MkDir destinationPath
+                Case vbNo
+                    GoTo USERABORT
+            End Select
+        End If
+    Loop Until Len(Dir(destinationPath, vbDirectory)) > 0
+
+    Do
+        DoEvents
+        If Len(Dir(destinationPath & shortName & strIndex & docExt)) > 0 Then
+            strIndex = " (" & CStr(Val(Replace(Replace(strIndex, " (", vbNullString), ")", vbNullString)) + 1) & ")"
+        End If
+    Loop Until Len(Dir(destinationPath & shortName & strIndex & docExt)) = 0
+    
+    CreateUniqueName = destinationPath & shortName & strIndex & docExt
+ 
+USERABORT:
+End Function
+
+Public Function WorksheetExists(SheetName As String, Optional InWorkbook As Workbook) As Boolean
+    Dim sh As Worksheet
+    If InWorkbook Is Nothing Then Set InWorkbook = ActiveWorkbook
+    For Each sh In InWorkbook.Worksheets
+        If sh.Name = SheetName Then WorksheetExists = True
+    Next sh
+End Function
+
+Function GetLastSaveTime(targetWorkbook As Workbook) As Date
+    GetLastSaveTime = targetWorkbook.BuiltinDocumentProperties("Last Save Time")
+End Function
+
+
+Function IsFileOpen(fileFullName As String)
+    Dim FileNumber As Integer
+    Dim errorNum As Integer
+
+    On Error Resume Next
+    FileNumber = FreeFile()   ' Assign a free file number.
+    ' Attempt to open the file and lock it.
+    Open fileFullName For Input Lock Read As #FileNumber
+    Close FileNumber       ' Close the file.
+    errorNum = Err         ' Assign the Error Number which occured
+    On Error GoTo 0        ' Turn error checking on.
+    ' Now Check and see which error occurred and based
+    ' on that you can decide whether file is already
+    ' open
+    Select Case errorNum
+        ' No error occurred so ErroNum is Zero (0)
+        ' File is NOT already open by another user.
+        Case 0
+         IsFileOpen = False
+
+        ' Error number for "Permission Denied." is 70
+        ' File is already opened by another user.
+        Case 70
+            IsFileOpen = True
+
+        ' For any other Error occurred
+        Case Else
+            Error errorNum
+    End Select
+
+End Function
+
+
+Function FuzzyFind(ByVal lookup_value As String, ByVal lookup_field As Variant) As String
+Dim tbl_array
+
+    Select Case TypeName(lookup_field)
+        Case "Range"
+        Set tbl_array = lookup_field
+        Case "String"
+        Case "ListObject"
+    End Select
+    Dim cell As Variant
+    Dim returnString As String
+    For Each cell In tbl_array
+        Dim str As String
+        str = cell
+        Dim a As Integer
+        Dim i As Integer
+        For i = 1 To Len(lookup_value)
+            If InStr(cell, Mid(lookup_value, i, 1)) > 0 Then
+                a = a + 1
+                cell = Mid(cell, 1, InStr(cell, Mid(lookup_value, i, 1)) - 1) & Mid(cell, InStr(cell, Mid(lookup_value, i, 1)) + 1, 9999)
+            End If
+        Next i
+        a = a - Len(cell)
+        Dim B As Integer
+        If a > B Then
+            B = a
+            returnString = str
+        End If
+        a = 0
+    Next cell
+    FuzzyFind = returnString
+    End Function
+    
+    
+Public Function FindAllMatches(ByVal searchFor As String, ByVal searchRange As Range, _
+                                    Optional ByVal columnOffset As Long, _
+                                    Optional ByVal rowOffset As Long, _
+                                    Optional ByVal countMatches As Boolean, _
+                                    Optional ByVal showAddresses As Boolean, _
+                                    Optional ByVal delimiter As String, _
+                                    Optional ByVal findPartialMatch As Boolean = True, _
+                                    Optional ByVal searchByColumn As Boolean = False, _
+                                    Optional ByVal reverseDirection As Boolean = False, _
+                                    Optional ByVal caseSensitive As Boolean = False, _
+                                    Optional ByVal lookAtFormat As Boolean = False, _
+                                    Optional ByVal lookInside As XlFindLookIn = xlValues _
+                                    ) As String
+    Dim firstMatchCellAddress As String
+    Dim searchResult As Range
+    Dim returnString As String
+    Dim matchCount As Long
+    Dim includePartial As Single: includePartial = -findPartialMatch + 1
+    Dim previousDirection As Single: previousDirection = -reverseDirection + 1
+    Dim searchAxis As Single: searchAxis = -searchByColumn + 1
+    If Not CBool(Len(delimiter)) Then delimiter = Chr(44)
+    Set searchResult = searchRange
+    Do
+        Set searchResult = searchRange.Find(what:=searchFor, after:=searchResult.Cells(searchResult.Cells.Count), LookIn:=lookInside, _
+                lookat:=includePartial, searchorder:=searchAxis, searchDirection:=previousDirection, _
+                MatchCase:=caseSensitive, SearchFormat:=lookAtFormat)
+        Select Case True
+            Case searchResult Is Nothing
+                Exit Do
+            Case firstMatchCellAddress = searchResult.Address
+                Exit Do
+            Case CBool(Len(returnString))
+                If showAddresses Then
+                    returnString = returnString & delimiter & searchResult.Offset(rowOffset, columnOffset).Address
+                Else
+                    returnString = returnString & delimiter & searchResult.Offset(rowOffset, columnOffset)
+                End If
+            Case Else
+                If showAddresses Then
+                    returnString = searchResult.Offset(rowOffset, columnOffset).Address
+                Else
+                    returnString = searchResult.Offset(rowOffset, columnOffset)
+                End If
+                firstMatchCellAddress = searchResult.Address
+        End Select
+        matchCount = matchCount + 1
+    Loop While True
+    If countMatches Then
+        If CBool(matchCount) Then
+            returnString = matchCount & delimiter & returnString
+        Else
+            returnString = 0
+        End If
+    End If
+    FindAllMatches = returnString
+End Function
+
+Public Function IsVisible(rangeToTest As Range) As Boolean()
+'returns an boolean array indicating if cells in the test range are visible
+    Dim rng As Range
+    Dim returnArray() As Boolean
+    Dim rowIndex As Integer
+    Dim colIndex As Integer
+    ReDim returnArray(1 To rangeToTest.Rows.Count, 1 To rangeToTest.Columns.Count)
+    For rowIndex = 1 To rangeToTest.Rows.Count
+        For colIndex = 1 To rangeToTest.Columns.Count
+            Set rng = rangeToTest(rowIndex, colIndex)
+            If rng.EntireRow.Hidden = True Or rng.EntireColumn.Hidden = True Then
+                returnArray(rowIndex, colIndex) = False
+            Else
+                returnArray(rowIndex, colIndex) = True
+            End If
+        Next colIndex
+    Next rowIndex
+    IsVisible = returnArray
+End Function
+
+'
+'Public Function CheckForLockedFiles( _
+'  Files() As String _
+') As Boolean
+'On Error GoTo ErrHandler
+'  Dim i As Long
+'  Dim lngLocks As Long
+'  Dim strFiles() As String
+'  Dim strMessage As String
+'
+'  Do
+'    lngLocks = 0
+'    For i = 0 To UBound(Files)
+'      If IsFileOpen(Files(i)) Then
+'        ReDim Preserve strFiles(lngLocks)
+'        strFiles(lngLocks) = Files(i)
+'        lngLocks = lngLocks + 1
+'      End If
+'    Next
+'    If lngLocks Then
+'      strMessage = "The following files are in use. " &amp; _
+'                   "Please close the application that may have it open." _
+'                   &amp; vbNewLine &amp; vbNewLine
+'      For i = 0 To UBound(strFiles)
+'        strMessage = strMessage &amp; strFiles(i) &amp; vbNewLine
+'      Next
+'      If vbCancel = MsgBox(strMessage, vbRetryCancel, "Files in use") Then
+'        CheckForLockedFiles = False
+'        Exit Do
+'      End If
+'    End If
+'  Loop Until lngLocks = 0
+'  If lngLocks = 0 Then
+'    CheckForLockedFiles = True
+'  End If
+'
+'ExitProc:
+'  On Error GoTo 0
+'  Exit Function
+'
+'ErrHandler:
+'  Select Case Err.Number
+'    Case 53 'File doesn't exist, ignore
+'      Resume Next
+'    Case Else
+'      MsgBox "Error " &amp; Err.Number &amp; " (" &amp; Err.Description &amp; ")"
+'  End Select
+'  Resume ExitProc
+'  Resume
+'End Function
+'
+'
+'Function BookOpen(wbName As String) As Boolean
+'On Error Resume Next
+'BookOpen = Len(Workbooks(wbName).Name)
+'End Function
+'
+'
+'If BookOpen("test.xls") Then
+'    MsgBox "File is open"
+'Else
+'    'code to open file
+'End If
+'
+'
+
+Public Function FnFindAllWindowsLike(ByVal strWindowTitle As String) As Long()
+    Dim Parameters As tFIND_WINDOW_PARAMETERS
+    Dim strArray() As String
+    Dim returnArray() As Long
+    Dim i As Long
+    mAllMatchingHWNDL = vbNullString
+    Parameters.strTitle = strWindowTitle
+    Call EnumWindows(AddressOf EnumAllWindows, VarPtr(Parameters))
+    If CBool(Len(mAllMatchingHWNDL)) Then
+        strArray = Split(mAllMatchingHWNDL, ",")
+        ReDim returnArray(LBound(strArray) + 1 To UBound(strArray) + 1)
+        For i = LBound(strArray) To UBound(strArray)
+            returnArray(i + 1) = CStr(strArray(i))
+        Next i
+    Else
+        ReDim returnArray(0 To 0)
+    End If
+    FnFindAllWindowsLike = returnArray
+End Function
+
+Private Function EnumAllWindows(ByVal hwnd As Long, _
+                               lParam As tFIND_WINDOW_PARAMETERS) As Long
+   Dim strWindowTitle As String
+   recursionCounter = recursionCounter + 1
+   strWindowTitle = Space(260)
+   Call GetWindowText(hwnd, strWindowTitle, 260)
+   strWindowTitle = TrimNull(strWindowTitle)
+    Dim str1 As String
+    Dim str2 As String
+    str1 = Replace(strWindowTitle, "[", vbNullString)
+    str2 = Replace(lParam.strTitle, "[", vbNullString)
+    If str1 Like str2 Then
+   'If strWindowTitle Like lParam.strTitle Then
+        If CBool(Len(mAllMatchingHWNDL)) Then
+            mAllMatchingHWNDL = mAllMatchingHWNDL & "," & str(hwnd)
+        Else
+            mAllMatchingHWNDL = str(hwnd)
+        End If
+    End If
+    EnumAllWindows = 1
+
+End Function
+Function ntrim(ByVal theString As String) As String
+  Dim iPos As Long
+  iPos = InStr(theString, Chr$(0))
+  If iPos > 0 Then theString = Left$(theString, iPos - 1)
+  ntrim = theString
+End Function
+
+'=======================================================================================================================================
+'#######################################################################################################################################
+'=======================================================================================================================================
+'
+'    Used in BRING APPLICATION WINDOW TO FRONT
+'
+'----------------------------------------------------------------------------------------------------------------------------------------
+    Public Function FnFindWindowLike(strWindowTitle As String) As Long
+        'We'll pass a custom structure in as the parameter to store our result...
+        Dim Parameters As tFIND_WINDOW_PARAMETERS
+        Parameters.strTitle = strWindowTitle ' Input parameter
+        Call EnumWindows(AddressOf EnumWindowProc, VarPtr(Parameters))
+        FnFindWindowLike = Parameters.hwnd
+    End Function
+'
+'=======================================================================================================================================
+'#######################################################################################################################################
+'=======================================================================================================================================
+'
+'    BRING APPLICATION WINDOW TO FRONT
+    Public Function FnSetForegroundWindow(strWindowTitle As String, Optional targetHWnd As Long = 0) As Boolean
+        Dim myAppHWND As Long
+        Dim CurrentForegroundThreadID As Long
+        Dim NewForegroundThreadID As Long
+        Dim lngRetVal As Long
+        Dim blnSuccessful As Boolean
+        If targetHWnd > 0 Then
+            myAppHWND = targetHWnd
+        Else
+            myAppHWND = FnFindWindowLike(strWindowTitle)
+        End If
+        If myAppHWND <> 0 Then
+            'We've found the application window by the Caption
+                CurrentForegroundThreadID = GetWindowThreadProcessId(GetForegroundWindow(), ByVal 0&)
+                NewForegroundThreadID = GetWindowThreadProcessId(myAppHWND, ByVal 0&)
+            'AttachThreadInput is used to ensure SetForegroundWindow will work
+            'even if our application isn't currently the foreground window
+            '(e.g. an automated app running in the background)
+                Call AttachThreadInput(CurrentForegroundThreadID, NewForegroundThreadID, True)
+                lngRetVal = SetForegroundWindow(myAppHWND)
+                Call AttachThreadInput(CurrentForegroundThreadID, NewForegroundThreadID, False)
+            If lngRetVal <> 0 Then
+                'Now that the window is active, let's restore it from the taskbar
+                If IsIconic(myAppHWND) Then
+                    Call ShowWindow(myAppHWND, SW_RESTORE)
+                Else
+                    Call ShowWindow(myAppHWND, SW_SHOW)
+                End If
+                blnSuccessful = True
+            Else
+                MsgBox "Found the window, but failed to bring it to the foreground!"
+            End If
+        Else
+            'Failed to find the window Caption
+            'Therefore the app is probably closed.
+            MsgBox "Application Window '" + strWindowTitle + "' not found!"
+        End If
+        FnSetForegroundWindow = blnSuccessful
+    End Function
+' PART OF BRING APPLICATION WINDOW TO FRONT
+    Private Function EnumWindowProc(ByVal hwnd As Long, _
+                                   lParam As tFIND_WINDOW_PARAMETERS) As Long
+       Dim strWindowTitle As String
+       strWindowTitle = Space(260)
+       Call GetWindowText(hwnd, strWindowTitle, 260)
+       strWindowTitle = TrimNull(strWindowTitle) ' Remove extra null terminator
+       If lParam.strTitle Like strWindowTitle Then
+            lParam.hwnd = hwnd 'Store the result for later.
+            EnumWindowProc = 0 'This will stop enumerating more windows
+       Else
+            EnumWindowProc = 1
+       End If
+    End Function
+' PART OF BRING APPLICATION WINDOW TO FRONT
+    Private Function TrimNull(strNullTerminatedString As String)
+        Dim lngPos As Long
+        'Remove unnecessary null terminator
+        lngPos = InStr(strNullTerminatedString, Chr$(0))
+        If lngPos Then
+            TrimNull = Left$(strNullTerminatedString, lngPos - 1)
+        Else
+            TrimNull = strNullTerminatedString
+        End If
+    End Function
+'---------------------------------------------------------------------------------------------------------------------------------------
+'   BRING APPLICATION WINDOW TO FRONT
+'=======================================================================================================================================
+'#######################################################################################################################################
+'=======================================================================================================================================
+
+
+
+
+
+
+
+
+Public Function ConvertStringToScanCode(KeyString As String) As Long
+    Select Case UCase(KeyString)
+        Case Is = "LEFT MOUSE"
+            ConvertStringToScanCode = vbKeyLButton
+        Case Is = "CANCEL"
+            ConvertStringToScanCode = vbKeyCancel
+        Case Is = "BACKSPACE"
+            ConvertStringToScanCode = vbKeyBack
+        Case Is = "CLEAR"
+            ConvertStringToScanCode = vbKeyClear
+        Case Is = "SHIFT"
+            ConvertStringToScanCode = vbKeyShift
+        Case Is = "ALT"
+            ConvertStringToScanCode = vbKeyMenu
+        Case Is = "CAPS LOCK"
+            ConvertStringToScanCode = vbKeyCapital
+        Case Is = "SPACEBAR"
+            ConvertStringToScanCode = vbKeySpace
+        Case Is = "PAGE DOWN"
+            ConvertStringToScanCode = vbKeyPageDown
+        Case Is = "HOME"
+            ConvertStringToScanCode = vbKeyHome
+        Case Is = "UP ARROW"
+            ConvertStringToScanCode = vbKeyUp
+        Case Is = "DOWN ARROW"
+            ConvertStringToScanCode = vbKeyDown
+        Case Is = "PRINT SCREEN"
+            ConvertStringToScanCode = vbKeyPrint
+        Case Is = "SNAPSHOT"
+            ConvertStringToScanCode = vbKeySnapshot
+        Case Is = "DELETE"
+            ConvertStringToScanCode = vbKeyDelete
+        Case Is = "NUMBER LOCK"
+            ConvertStringToScanCode = vbKeyNumlock
+        Case Is = "RIGHT MOUSE"
+            ConvertStringToScanCode = vbKeyRButton
+        Case Is = "MIDDLE MOUSE"
+            ConvertStringToScanCode = vbKeyMButton
+        Case Is = "TAB"
+            ConvertStringToScanCode = vbKeyTab
+        Case Is = "ENTER"
+            ConvertStringToScanCode = vbKeyReturn
+        Case Is = "CONTROL"
+            ConvertStringToScanCode = vbKeyControl
+        Case Is = "PAUSE"
+            ConvertStringToScanCode = vbKeyPause
+        Case Is = "ESCAPE"
+            ConvertStringToScanCode = vbKeyEscape
+        Case Is = "PAGE UP"
+            ConvertStringToScanCode = vbKeyPageUp
+        Case Is = "END"
+            ConvertStringToScanCode = vbKeyEnd
+        Case Is = "LEFT ARROW"
+            ConvertStringToScanCode = vbKeyLeft
+        Case Is = "RIGHT ARROW"
+            ConvertStringToScanCode = vbKeyRight
+        Case Is = "SELECT"
+            ConvertStringToScanCode = vbKeySelect
+        Case Is = "EXECUTE"
+            ConvertStringToScanCode = vbKeyExecute
+        Case Is = "INSERT"
+            ConvertStringToScanCode = vbKeyInsert
+        Case Is = "HELP"
+            ConvertStringToScanCode = vbKeyHelp
+        Case Is = "1"
+            ConvertStringToScanCode = vbKey1
+        Case Is = "3"
+            ConvertStringToScanCode = vbKey3
+        Case Is = "5"
+            ConvertStringToScanCode = vbKey5
+        Case Is = "7"
+            ConvertStringToScanCode = vbKey7
+        Case Is = "9"
+            ConvertStringToScanCode = vbKey9
+        Case Is = "#0"
+            ConvertStringToScanCode = vbKeyNumpad0
+        Case Is = "#2"
+            ConvertStringToScanCode = vbKeyNumpad2
+        Case Is = "#4"
+            ConvertStringToScanCode = vbKeyNumpad4
+        Case Is = "#6"
+            ConvertStringToScanCode = vbKeyNumpad6
+        Case Is = "#8"
+            ConvertStringToScanCode = vbKeyNumpad8
+        Case Is = "*"
+            ConvertStringToScanCode = vbKeyMultiply
+        Case Is = "#1"
+            ConvertStringToScanCode = vbKeyNumpad1
+        Case Is = "#3"
+            ConvertStringToScanCode = vbKeyNumpad3
+        Case Is = "#5"
+            ConvertStringToScanCode = vbKeyNumpad5
+        Case Is = "#7"
+            ConvertStringToScanCode = vbKeyNumpad7
+        Case Is = "#9"
+            ConvertStringToScanCode = vbKeyNumpad9
+        Case Is = "+"
+            ConvertStringToScanCode = vbKeyAdd
+        Case Is = "-"
+            ConvertStringToScanCode = vbKeySubtract
+        Case Is = "/"
+            ConvertStringToScanCode = vbKeyDivide
+        Case Is = "#ENTER"
+            ConvertStringToScanCode = vbKeySeparator
+        Case Is = "."
+            ConvertStringToScanCode = vbKeyDecimal
+        Case Is = "F2"
+            ConvertStringToScanCode = vbKeyF2
+        Case Is = "F4"
+            ConvertStringToScanCode = vbKeyF4
+        Case Is = "F6"
+            ConvertStringToScanCode = vbKeyF6
+        Case Is = "F8"
+            ConvertStringToScanCode = vbKeyF8
+        Case Is = "F10"
+            ConvertStringToScanCode = vbKeyF10
+        Case Is = "F12"
+            ConvertStringToScanCode = vbKeyF12
+        Case Is = "F14"
+            ConvertStringToScanCode = vbKeyF14
+        Case Is = "F16"
+            ConvertStringToScanCode = vbKeyF16
+        Case Is = "F1"
+            ConvertStringToScanCode = vbKeyF1
+        Case Is = "F3"
+            ConvertStringToScanCode = vbKeyF3
+        Case Is = "F5"
+            ConvertStringToScanCode = vbKeyF5
+        Case Is = "F7"
+            ConvertStringToScanCode = vbKeyF7
+        Case Is = "F9"
+            ConvertStringToScanCode = vbKeyF9
+        Case Is = "F11"
+            ConvertStringToScanCode = vbKeyF11
+        Case Is = "F13"
+            ConvertStringToScanCode = vbKeyF13
+        Case Is = "F15"
+            ConvertStringToScanCode = vbKeyF15
+        Case Is = "A"
+            ConvertStringToScanCode = vbKeyA
+        Case Is = "C"
+            ConvertStringToScanCode = vbKeyC
+        Case Is = "E"
+            ConvertStringToScanCode = vbKeyE
+        Case Is = "G"
+            ConvertStringToScanCode = vbKeyG
+        Case Is = "I"
+            ConvertStringToScanCode = vbKeyI
+        Case Is = "K"
+            ConvertStringToScanCode = vbKeyK
+        Case Is = "M"
+            ConvertStringToScanCode = vbKeyM
+        Case Is = "O"
+            ConvertStringToScanCode = vbKeyO
+        Case Is = "Q"
+            ConvertStringToScanCode = vbKeyQ
+        Case Is = "S"
+            ConvertStringToScanCode = vbKeyS
+        Case Is = "U"
+            ConvertStringToScanCode = vbKeyU
+        Case Is = "W"
+            ConvertStringToScanCode = vbKeyW
+        Case Is = "Y"
+            ConvertStringToScanCode = vbKeyY
+        Case Is = "B"
+            ConvertStringToScanCode = vbKeyB
+        Case Is = "D"
+            ConvertStringToScanCode = vbKeyD
+        Case Is = "F"
+            ConvertStringToScanCode = vbKeyF
+        Case Is = "H"
+            ConvertStringToScanCode = vbKeyH
+        Case Is = "J"
+            ConvertStringToScanCode = vbKeyJ
+        Case Is = "L"
+            ConvertStringToScanCode = vbKeyL
+        Case Is = "N"
+            ConvertStringToScanCode = vbKeyN
+        Case Is = "P"
+            ConvertStringToScanCode = vbKeyP
+        Case Is = "R"
+            ConvertStringToScanCode = vbKeyR
+        Case Is = "T"
+            ConvertStringToScanCode = vbKeyT
+        Case Is = "V"
+            ConvertStringToScanCode = vbKeyV
+        Case Is = "X"
+            ConvertStringToScanCode = vbKeyX
+        Case Is = "Z"
+            ConvertStringToScanCode = vbKeyZ
+        Case Is = "0"
+            ConvertStringToScanCode = vbKey0
+        Case Is = "2"
+            ConvertStringToScanCode = vbKey2
+        Case Is = "4"
+            ConvertStringToScanCode = vbKey4
+        Case Is = "6"
+            ConvertStringToScanCode = vbKey6
+        Case Is = "8"
+            ConvertStringToScanCode = vbKey8
+        Case Else
+            ConvertStringToScanCode = 0
+    End Select
+End Function
+
+

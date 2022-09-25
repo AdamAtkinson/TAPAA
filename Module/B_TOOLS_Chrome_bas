@@ -1,0 +1,45 @@
+Attribute VB_Name = "B_TOOLS_Chrome"
+Option Explicit
+    Private Const mTEST_ENVIRONMENT_PARAMETER As String = "-test"
+    Public driver As Selenium.ChromeDriver
+    Public webE As Selenium.WebElement
+    Public selE As Selenium.SelectElement
+    Public chromeWindow As Selenium.Window
+Sub startChrome()
+    loadChromeDriver
+End Sub
+Sub startChromeTest()
+    loadChromeDriver True
+End Sub
+
+Sub loadChromeDriver(Optional UseTestEnvironment As Boolean)
+    Dim DevTestModifier As String
+    Dim sfWindows() As Long
+    If UseTestEnvironment Then DevTestModifier = mTEST_ENVIRONMENT_PARAMETER
+    sfWindows = FnFindAllWindowsLike("*Salesforce*")
+    Set driver = New Selenium.ChromeDriver
+    gSalesforceChromeHWND = LoginSalesforce(driver, DevTestModifier)
+    If Not CBool(gSalesforceChromeHWND) Then MsgBox "Login Failed"
+    dbP gSalesforceChromeHWND
+End Sub
+
+Sub QuitTest()
+    If Not CloseSalesforce(driver) Then MsgBox "Error Closing"
+End Sub
+
+
+Sub TestFrames()
+
+    If gSalesforceChromeHWND <> 0 Then
+        MsgBox ("Window handle not = 0.  Debug here")
+    End If
+    gSalesforceChromeHWND = FnFindWindowLike("*Salesforce - Google Chrome") '*Login*Salesforce*")
+    If gSalesforceChromeHWND <> 0 Then
+        MsgBox "The restore window option may not work accurately when multiple iServe instances are open.", vbExclamation, "Found iServe Window"
+        gSalesforceChromeHWND = -1 'iServeWindowConflict
+    End If
+    If gSalesforceChromeHWND > -1 Then gSalesforceChromeHWND = FnFindWindowLike("*Salesforce*")
+    'If gSalesforceChromeHWND > iServeWindowConflict Then gSalesforceChromeHWND = FnFindWindowLike("Salesforce*")
+    driver.SwitchToFrame (driver.FindElementsByTag("force-aloha-page")(1).FindElementsByTag("iframe")(1).Attribute("name"))
+End Sub
+

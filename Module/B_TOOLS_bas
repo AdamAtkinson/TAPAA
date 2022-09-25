@@ -1,0 +1,570 @@
+Attribute VB_Name = "B_TOOLS"
+'gets process information for grabbing a window
+Option Explicit
+Option Private Module
+
+
+Private Declare Function apiGetClassName Lib "User32" Alias _
+                "GetClassNameA" (ByVal hwnd As Long, _
+                ByVal lpClassName As String, _
+                ByVal nMaxCount As Long) As Long
+Private Declare Function apiGetDesktopWindow Lib "User32" Alias _
+                "GetDesktopWindow" () As Long
+Private Declare Function apiGetWindow Lib "User32" Alias _
+                "GetWindow" (ByVal hwnd As Long, _
+                ByVal wCmd As Long) As Long
+Private Declare Function apiGetWindowLong Lib "User32" Alias _
+                "GetWindowLongA" (ByVal hwnd As Long, ByVal _
+                nIndex As Long) As Long
+Private Declare Function apiGetWindowText Lib "User32" Alias _
+                "GetWindowTextA" (ByVal hwnd As Long, ByVal _
+                lpString As String, ByVal aint As Long) As Long
+Private Declare Function GetWindowThreadProcessId Lib "User32" _
+                (ByVal hwnd As Long, lpdwProcessId As Long) As Long
+                
+
+
+Private Const mcGWCHILD = 5
+Private Const mcGWHWNDNEXT = 2
+Private Const mcGWLSTYLE = (-16)
+Private Const mcWSVISIBLE = &H10000000
+Private Const mconMAXLEN = 255
+
+
+'BEGIN ======== Used for MergeAllSheetsIntoOne()
+    Type SourceInfo
+        BookName As Workbook
+        SheetName As Worksheet
+        CopyRange As Range
+    End Type
+    
+    Type DestinationInfo
+        BookName As Workbook
+        SheetName As Worksheet
+        CopyRange As Range
+        firstRow As Long
+        lastRow As Long
+    End Type
+    
+    Type CopyData
+        Source As SourceInfo
+        Destination As DestinationInfo
+    End Type
+'END ========Used for MergeAllSheetsIntoOne()
+
+Sub SelectWorkbookAndMergeAllSheets()
+    Dim frm As UserForm_SelectWorkbook
+    If frm Is Nothing Then Set frm = New UserForm_SelectWorkbook
+    Select Case MsgBox("Include worksheets in search?", vbYesNo)
+        Case vbYes
+            frm.Show
+        Case vbNo
+            frm.WorkbookOnly = True
+            MergeAllSheetsIntoOne frm.selectedWorkbook
+    End Select
+End Sub
+
+
+Sub ListAllOpenWorkbooksInAllInstances()
+
+    Dim s As String
+    Dim ts As Word.Task
+    With CreateObject("Word.Application")
+        If .Tasks.Exists("Microsoft Excel") Then
+           For Each ts In .Tasks
+              If InStr(ts.Name, "Microsoft Excel") = 1 Or InStr(ts.Name, ".xls") Then s = s & vbLf & ts.Name
+           Next
+        End If
+        .Quit
+    End With
+    Debug.Print s
+End Sub
+
+
+Sub List_All_Command_Bars()
+    Dim ComBar As CommandBar
+    Dim KeepIt As Boolean
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim j As Long
+    Set ws = Worksheets.Add
+    i = 2
+    j = 2
+    ws.Cells(1, 1) = "CommandBar Name"
+    ws.Cells(1, 2) = "Index"
+    ws.Cells(1, 3) = "Visible"
+    ws.Cells(1, 5) = "CommandBar Name"
+    ws.Cells(1, 6) = "Index"
+    ws.Cells(1, 7) = "Visible"
+ 
+    On Error Resume Next
+
+    For Each ComBar In Application.CommandBars
+        KeepIt = ComBar.Visible
+        Err.Number = 0
+        ComBar.Visible = True
+
+        If Err.Number = 0 Then
+            ws.Cells(i, 1) = ComBar.Name
+            ws.Cells(i, 2) = ComBar.Index
+            ws.Cells(i, 3) = ComBar.Visible
+            i = i + 1
+        Else
+            ws.Cells(j, 5) = ComBar.Name
+            ws.Cells(j, 6) = ComBar.Index
+            ws.Cells(j, 7) = ComBar.Visible
+            ws.Cells(j, 8) = ">>> Visible Property Failed"
+            j = j + 1
+        End If
+        
+        ComBar.Visible = KeepIt
+        
+    Next ComBar
+End Sub
+
+
+Sub CreatePIDTable()
+    Dim strBuffer As String * mconMAXLEN 'fixed length string required for api call
+    Dim lnghWnd As Long
+    Dim lngLen As Long
+    Dim lngThread As Long
+    Dim lngProcess As Long
+    Dim lngStyle As Long
+    Dim blnVisOnly As Boolean 'used for print.debug only - limits results to visible windows with titles if true
+    Dim blnOutFile As Boolean 'creates excel output if true, print.debug if false
+    Dim strTitle As String
+    Dim strClass As String
+    Dim intRow As Integer
+    Select Case MsgBox("Do you want to create an output file?", vbYesNo)
+        Case VbMsgBoxResult.vbYes 'create and format excel output
+            blnOutFile = True
+            'turn off screen updating to speed report generation
+            Application.ScreenUpdating = False
+            Workbooks.Add
+            ActiveSheet.Name = "PID Table"
+            Cells(1, 1) = "Class"
+            Cells(1, 2) = "Title"
+            Cells(1, 3) = "Process"
+            Cells(1, 4) = "Thread"
+            Cells(1, 5) = "Visible"
+            Columns("A:A").ColumnWidth = 75
+            Columns("B:B").ColumnWidth = 100
+            With Columns("C:E")
+                .ColumnWidth = 12
+                .HorizontalAlignment = xlCenter
+            End With
+            With Rows("1:1")
+                With .Font
+                    .Bold = True
+                    .Name = "Calibri"
+                    .size = 14
+                End With
+                .HorizontalAlignment = xlCenter
+                .AutoFilter
+            End With
+            With ActiveWindow
+                .SplitColumn = 0
+                .SplitRow = 1
+                .FreezePanes = True
+            End With
+        Case VbMsgBoxResult.vbNo 'output goes to print.debug - option to exclude invisible windows for smaller report
+            blnOutFile = False
+            Select Case MsgBox("Do you want to to skip invisible and untitled windows?", vbYesNo)
+                Case VbMsgBoxResult.vbYes 'do not send invisible and untitled windows to debug.print
+                    blnVisOnly = True
+                Case VbMsgBoxResult.vbNo 'send everything to debug.print
+                    blnVisOnly = False
+            End Select
+    End Select
+    'set row index
+    intRow = 1
+    'get desktop window
+    lnghWnd = apiGetDesktopWindow()
+    'get first child window
+    lnghWnd = apiGetWindow(lnghWnd, mcGWCHILD)
+    Do While Not lnghWnd = 0 'loop through all "next" windows
+            'get window title (API requires strBuffer to be fixed length - trim null characters after fetching)
+            lngLen = apiGetWindowText(lnghWnd, strBuffer, mconMAXLEN)
+            strTitle = Left(strBuffer, lngLen)
+            'get window class (API requires strBuffer to be fixed length - trim null characters after fetching)
+            lngLen = apiGetClassName(lnghWnd, strBuffer, mconMAXLEN)
+            strClass = Left(strBuffer, lngLen)
+            'get window style (needed for visible attribute)
+            lngStyle = apiGetWindowLong(lnghWnd, mcGWLSTYLE)
+            'get process id and process thread
+            lngThread = GetWindowThreadProcessId(lnghWnd, lngProcess)
+            Select Case blnOutFile
+                Case True
+                    intRow = intRow + 1
+                    Cells(intRow, 1) = strClass
+                    Cells(intRow, 2) = strTitle
+                    Cells(intRow, 3) = lngProcess
+                    Cells(intRow, 4) = lngThread
+                    Cells(intRow, 5) = (lngStyle And mcWSVISIBLE) = mcWSVISIBLE
+                Case False
+                    If (blnVisOnly = True _
+                    And (lngStyle And mcWSVISIBLE) _
+                    And Len(strTitle) > 0) _
+                    Or blnVisOnly = False Then
+                        Debug.Print "Class = " & strClass,
+                        Debug.Print "Title = " & strTitle,
+                        Debug.Print "Process ID = " & lngProcess,
+                        Debug.Print "Thread ID = " & lngThread
+                    End If
+            End Select
+        'advances to next window
+        lnghWnd = apiGetWindow(lnghWnd, mcGWHWNDNEXT)
+    Loop
+    Application.ScreenUpdating = True
+End Sub
+
+
+
+
+
+Sub MergeAllSheetsIntoOne(Optional sourceWB As Workbook)
+
+    Dim x As CopyData
+    Dim i As Integer
+    
+    If sourceWB Is Nothing Then
+        Set x.Source.BookName = ActiveWorkbook
+    Else
+        Set x.Source.BookName = sourceWB
+    End If
+    
+    Set x.Source.SheetName = x.Source.BookName.Sheets(1)
+    
+    Set x.Destination.BookName = ActiveWorkbook
+    x.Destination.BookName.Sheets.Add before:=Sheets(1)
+    Set x.Destination.SheetName = x.Destination.BookName.Sheets(1)
+    
+    x.Destination.firstRow = 1
+    x.Destination.lastRow = 1
+        
+        For i = 2 To x.Source.BookName.Sheets.Count
+            Set x.Source.SheetName = x.Source.BookName.Sheets(i)
+            Set x.Source.CopyRange = x.Source.SheetName.UsedRange
+            x.Source.CopyRange.Copy Destination:=x.Destination.SheetName.Range("A" & x.Destination.firstRow)
+            x.Destination.firstRow = x.Destination.firstRow + 1 + x.Source.CopyRange.Rows.Count
+        Next i
+End Sub
+
+
+
+'Reset the UsedRange
+Sub ResetUsedRange()
+    ActiveSheet.UsedRange
+End Sub
+
+
+
+
+Sub DeselectCells()
+    Dim rng As Range
+    Dim InputRng As Range
+    Dim DeleteRng As Range
+    Dim result As Range
+    Dim xTitleID As String
+    xTitleID = "Deselect Cells"
+
+    Set InputRng = Application.Selection
+    If InputRng.Count <= 1 Then
+        Set InputRng = Application.InputBox("Range is not determined, please select a range :", xTitleID, InputRng.Address, Type:=8)
+    End If
+    Set DeleteRng = Application.InputBox("Deselect Range", xTitleID, Type:=8)
+    For Each rng In InputRng
+        If Application.Intersect(rng, DeleteRng) Is Nothing Then
+            If result Is Nothing Then
+                Set result = rng
+            Else
+                Set result = Application.Union(result, rng)
+            End If
+        End If
+    Next
+    result.Select
+End Sub
+
+
+
+
+Sub CleanData()
+    Dim rng As Range
+    Dim c As Range
+    Dim var As Variant
+    Dim cIndex As Long
+    Dim cCount As Long
+    Dim frmProgressIndicator As New frmProgressIndicator
+    On Error GoTo ESCAPE
+    Set rng = Application.InputBox("Numbers stored as text will be converted to numbers" & vbNewLine _
+                & "and all currency/date/text formats will be removed." & vbNewLine & vbNewLine _
+                & "CAUTION: THIS CANNOT BE UNDONE!!" & vbNewLine & vbNewLine _
+                & "Use the mouse or keyboard to select a range." & vbNewLine, "Select a range", Type:=8)
+    Application.ScreenUpdating = False
+    cCount = rng.Cells.Count
+    Call frmProgressIndicator.StartIndicator(cIndex, cCount)
+    For Each c In rng
+        With c
+            .NumberFormat = "General"
+            .Value2 = Application.WorksheetFunction.Clean(.Value2)
+            cIndex = cIndex + 1
+            Call frmProgressIndicator.UpdateProgressIndicator(cIndex, cCount)
+            If Not frmProgressIndicator.Visible Then GoTo ESCAPE
+            DoEvents
+        End With
+    Next
+    Call frmProgressIndicator.CloseIndicator(cIndex, cCount)
+    Application.ScreenUpdating = True
+    MsgBox ("Finished!")
+    Exit Sub
+ESCAPE:
+    Application.ScreenUpdating = True
+    var = MsgBox("User canceled or an error occured.", vbExclamation, Title:="Forced Exit")
+End Sub
+
+
+'create or update a table of contents listing every worksheet in the workbook
+Sub PopulateTableOfContents(Optional ByVal PromptBeforeClear As Boolean = False)
+Dim wb As Workbook
+Dim ws As Worksheet
+Dim ToC As Worksheet
+Dim SheetName As String
+Dim IsFound As Boolean
+Dim Answer As String
+Dim ToCFound As Boolean
+SheetName = "Contents"
+ToCFound = False
+Set wb = ActiveWorkbook
+For Each ws In wb
+    If ws.Name = SheetName Then ToCFound = True
+Next ws
+If ToCFound = False Then
+    Set ToC = Worksheets.Add(before:=Worksheets(1))
+    ToC.Name = SheetName
+Else
+    Set ToC = Sheets(SheetName)
+End If
+ToC.Activate
+If PromptBeforeClear = True And ToCFound = True Then
+    Answer = MsgBox("Clear the full sheet before writing the table of contents?" & vbNewLine & _
+                    "Selecting 'No' will clear the first column.", vbYesNoCancel, "Clear Old Table of Contents")
+    Select Case Answer
+        Case Answer = vbYes
+            ToC.Cells.Clear
+        Case Answer = vbNo
+            ToC.Columns(1).ClearContents
+        Case Answer = vbCancel
+            GoTo UserCanceled:
+    End Select
+Else
+    ToC.Cells.Clear
+End If
+For Each ws In Worksheets
+    ToC.Cells(ws.Index, 1) = ws.Name
+Next ws
+Columns("A:A").EntireColumn.AutoFit
+With Range("A1")
+    .Font.Bold = True
+    .HorizontalAlignment = xlCenter
+End With
+UserCanceled:
+End Sub
+
+'replace the string in all worksheets
+Sub ReplaceStringInAllSheetNames()
+Dim wb As Workbook
+Dim ws As Worksheet
+Dim str As String
+str = " Totals"
+Set wb = ActiveWorkbook
+For Each ws In wb.Worksheets
+    ws.Name = Replace(ws.Name, str, "")
+Next
+End Sub
+
+
+'insert table in the used range for all sheets
+Sub InsertTableInAllSheets()
+Dim wb As Workbook
+Dim ws As Worksheet
+Set wb = ActiveWorkbook
+For Each ws In wb.Worksheets
+    ws.Activate
+    If ws.ListObjects.Count = 0 Then
+    ws.ListObjects.Add(xlSrcRange, Range(ws.UsedRange.Address), , xlYes).Name = ws.Name & "Transactions2016"
+    End If
+Next
+End Sub
+
+
+Sub BypassWorksheetProtection()
+'unlocks a protected worksheet
+    Dim i As Integer, j As Integer, k As Integer
+    Dim l As Integer, m As Integer, N As Integer
+    Dim i1 As Integer, i2 As Integer, i3 As Integer
+    Dim i4 As Integer, i5 As Integer, i6 As Integer
+    On Error Resume Next
+    For i = 65 To 66: For j = 65 To 66: For k = 65 To 66
+    For l = 65 To 66: For m = 65 To 66: For i1 = 65 To 66
+    For i2 = 65 To 66: For i3 = 65 To 66: For i4 = 65 To 66
+    For i5 = 65 To 66: For i6 = 65 To 66: For N = 32 To 126
+        ActiveSheet.Unprotect Chr(i) & Chr(j) & Chr(k) & _
+            Chr(l) & Chr(m) & Chr(i1) & Chr(i2) & Chr(i3) & _
+            Chr(i4) & Chr(i5) & Chr(i6) & Chr(N)
+        If ActiveSheet.ProtectContents = False Then
+            MsgBox "Password is " & Chr(i) & Chr(j) & _
+                Chr(k) & Chr(l) & Chr(m) & Chr(i1) & Chr(i2) & _
+                Chr(i3) & Chr(i4) & Chr(i5) & Chr(i6) & Chr(N)
+            Exit Sub
+        End If
+    Next: Next: Next: Next: Next: Next
+    Next: Next: Next: Next: Next: Next
+End Sub
+
+
+Sub TopRow()
+'loops through every worksheet
+'removes all frozen/split windows
+'freezes top row and adds an autofilter if it wasn't previously set
+Dim wb As Workbook
+Dim ws As Worksheet
+Dim iwsvis As Integer
+For Each ws In Worksheets
+    iwsvis = ws.Visible
+    If iwsvis > -1 Then ws.Visible = -1
+    ws.Activate
+    With ActiveWindow
+    'reset to splits and freezes
+        .FreezePanes = False
+        .SplitColumn = 0
+        .SplitRow = 0
+    End With
+    ws.Cells(1, 1).Select
+    With ActiveWindow
+    'freeze top row
+        .SplitRow = 1
+        .FreezePanes = True
+    End With
+    If Not ws.AutoFilterMode Then
+        On Error Resume Next
+        ws.Range("a1").AutoFilter
+        On Error GoTo 0
+    End If
+    ws.Visible = iwsvis
+Next ws
+Sheets(1).Activate
+End Sub
+
+
+Sub ResetStyles()
+'delete all styles that aren't default
+    Dim objStyle As Style
+    Dim ConfirmDelete As Integer
+    Dim PromptBefore As Integer
+    PromptBefore = MsgBox("Prompt before removing each style?", vbYesNo)
+    For Each objStyle In ActiveWorkbook.Styles
+        If Not objStyle.BuiltIn Then
+            If PromptBefore = vbYes Then
+                ConfirmDelete = MsgBox("Delete style '" & objStyle.Name & "'?", vbYesNo)
+                If ConfirmDelete = vbYes Then objStyle.Delete
+            Else 'do not prompt before delete
+                objStyle.Delete
+            End If
+        End If
+    Next objStyle
+End Sub
+
+
+
+Sub OpenAndImportAllExcel()
+    Dim wb As Workbook
+    Dim wbMaster As Workbook
+    Dim ws As Worksheet
+    Dim fldFolder As FileDialog
+    Dim strFileType As String
+    Dim strRootDir As String
+    Dim strFileName As String
+    Dim strFilePath As String
+    Dim strFileSearchName As String
+    Dim strSearch As String
+    Dim strDir As String
+    Dim lngFileCount As Long
+    Dim lngFileIndex As Long
+    '===================================
+    strFileType = ".xl*"
+    strRootDir = "C:\"
+    '===================================
+    Set wbMaster = ActiveWorkbook
+    Set fldFolder = Application.FileDialog(msoFileDialogFolderPicker)
+    With fldFolder
+        .Title = "Select the Folder to Search"
+        .AllowMultiSelect = False
+        .InitialFileName = strRootDir
+        If .Show <> -1 Then GoTo UserQuit
+        strFilePath = .SelectedItems(1)
+    End With
+    strFileSearchName = Application.InputBox("Leave this field blank to search every Excel workbook in the folder" _
+            & vbNewLine & "or enter a file name to constrain the search." & vbNewLine & vbNewLine & _
+            "Wild cards can be used but this program will only search Excel files." & vbNewLine & vbNewLine & " ", _
+            "Enter File Name Constraints")
+        Select Case strFileSearchName
+            Case Is = ""
+                strFileSearchName = "*"
+            Case Is = "False"
+                GoTo UserQuit
+        End Select
+    If Right(strFilePath, 1) <> "\" Then strFilePath = strFilePath & "\"
+    strFileName = strFilePath & strFileSearchName & strFileType
+    strDir = Dir(strFileName)
+    Do While strDir <> ""
+        lngFileCount = lngFileCount + 1
+        strDir = Dir
+    Loop
+    strDir = Dir(strFileName)
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.AutomationSecurity = msoAutomationSecurityForceDisable
+    Application.Calculation = xlCalculationManual
+    Call frmProgressIndicator.StartIndicator(lngFileIndex, lngFileCount)
+    While (strDir <> "")
+        Workbooks.Open strFilePath & strDir, ReadOnly:=True
+        ActiveWindow.Visible = False
+        If cGetInputState() <> 0 Then DoEvents
+        lngFileIndex = lngFileIndex + 1
+        Call frmProgressIndicator.UpdateProgressIndicator(lngFileIndex, lngFileCount)
+        If cGetInputState() <> 0 Then DoEvents
+        Set wb = Workbooks(strDir)
+        For Each ws In wb.Worksheets
+            ws.Copy before:=wbMaster.Sheets(1)
+        Next
+        strDir = Dir
+        wb.Close savechanges:=False
+    Wend
+    Call frmProgressIndicator.CloseIndicator(lngFileIndex, lngFileCount)
+UserQuit:
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Set fldFolder = Nothing
+End Sub
+
+
+
+
+
+Sub DeleteEmptySheets()
+    Dim i As Long
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim cnt As Long
+    Set wb = ActiveWorkbook
+    cnt = wb.Worksheets.Count
+    Application.DisplayAlerts = False
+    For i = cnt To 1 Step -1
+        If wb.Worksheets(i).UsedRange.Address = "$A$1" Then wb.Worksheets(i).Delete
+        DoEvents
+    Next
+    Application.DisplayAlerts = True
+End Sub
+
+
+

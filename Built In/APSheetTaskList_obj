@@ -1,0 +1,249 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APSheetTaskList"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+
+Private Const mLINKEDCOLINDEX As Long = 1
+Private Const mCHECKBOXCOLINDEX As Long = 2
+Private Const mTASKCOLINDEX As Long = 3
+Private Const mSPACELENGTH As Long = 4
+Private Const mINSTRUCTIONTEXT As String = "         Add New Task Here"
+Private Const mFORMATFORMULA_NEXTLINE As String = "=LEN($C2)=0=TRUE"
+Private Const mFORMATFORMULA_NOTEMPTY As String = "=LEN($A2)>1=TRUE"
+Private Const mFORMATFORMULA_TRUE As String = "=AND($A2=TRUE,LEN($A2)>1)=TRUE"
+Private Const mFORMATFORMULA_FALSE As String = "=AND($A2=FALSE,LEN($A2)>1)=TRUE"
+
+Private Sub Worksheet_Change(ByVal target As Range)
+    If target.Column = mTASKCOLINDEX And target.Row <> 1 Then
+    
+        Dim excelState As APApplication.APclsExcelStates
+        Set excelState = New APclsExcelStates
+        excelState.RestoreDefaultOnTerminate
+        Dim sheetProtection As APApplication.APclsWorksheetProtectionState
+        Set sheetProtection = New APclsWorksheetProtectionState
+        
+        Me.Unprotect
+        Application.EnableEvents = False
+        Application.CutCopyMode = False
+        Application.ScreenUpdating = False
+        
+        Dim rng As Range
+        For Each rng In target
+            Dim flagUpdateFormat As Boolean
+            If rng.Value2 = vbNullString Then
+                If CBool(HasCheckbox(Me.Cells(rng.Row, mCHECKBOXCOLINDEX))) Then
+                    RemoveCheckBox Me.Cells(rng.Row, mCHECKBOXCOLINDEX)
+                    flagUpdateFormat = True
+                End If
+            Else
+                If Not CBool(HasCheckbox(Me.Cells(rng.Row, mCHECKBOXCOLINDEX))) Then
+                    rng.Value2 = Space(mSPACELENGTH) & rng.Value2
+                    AddCheckBox Me.Cells(rng.Row, mCHECKBOXCOLINDEX)
+                    flagUpdateFormat = True
+                End If
+            End If
+        Next rng
+        Small_Caps target
+        If flagUpdateFormat Then ResetCustomFormat
+
+    End If
+End Sub
+
+Private Sub ResetCustomFormat()
+    Me.Cells.FormatConditions.Delete
+    Me.Range("B2:B" & LastUsedRow(mTASKCOLINDEX) + 1).Value2 = vbNullString
+    
+    Dim rng As Range
+    Set rng = Me.Range("C2:C" & LastUsedRow(mLINKEDCOLINDEX))
+    With rng.Cells
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_TRUE
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .Strikethrough = True
+            End With
+            .StopIfTrue = False
+        End With
+        
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_NOTEMPTY
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Borders(xlBottom)
+                .LineStyle = xlContinuous
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+    Set rng = Me.Range("C2:C" & LastUsedRow(mTASKCOLINDEX) + 1)
+    With rng.Cells
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_NEXTLINE
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .Color = vbWhite
+            End With
+            With .Interior
+                .Color = vbBlue
+            End With
+            With .Borders(xlBottom)
+                .LineStyle = xlContinuous
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+
+    Set rng = Me.Range("B2:B" & LastUsedRow(mLINKEDCOLINDEX))
+    With rng.Cells
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_TRUE
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Interior
+                .Color = vbGreen
+            End With
+            .StopIfTrue = False
+        End With
+        
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_FALSE
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Interior
+                .Color = vbRed
+            End With
+            .StopIfTrue = False
+        End With
+
+        .FormatConditions.Add Type:=xlExpression, Formula1:=mFORMATFORMULA_NOTEMPTY
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Borders(xlBottom)
+                .LineStyle = xlContinuous
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+    
+    Me.Range("B2:B" & LastUsedRow(mTASKCOLINDEX) + 1).Value2 = mINSTRUCTIONTEXT
+    
+End Sub
+
+Private Sub AddCheckBox(toCell As Range)
+    Dim cb As Excel.CheckBox
+    Set cb = Me.CheckBoxes.Add(toCell.Left + 1, toCell.Top + 1, 0, 0)
+    cb.Width = 13
+    cb.height = 13
+    cb.Name = "checkbox_" & toCell.Address
+    cb.Caption = vbNullString
+    Me.Cells(toCell.Row, mLINKEDCOLINDEX).Value = False
+    Me.Shapes(cb.Name).AlternativeText = toCell.Address
+    cb.LinkedCell = Me.Cells(toCell.Row, mLINKEDCOLINDEX).Address
+
+End Sub
+
+Sub RemoveCheckBox(fromCell As Range)
+    Dim indx As Long
+    indx = HasCheckbox(fromCell)
+    If indx > 0 Then
+        Me.CheckBoxes(indx).Delete
+        Me.Cells(fromCell.Row, mLINKEDCOLINDEX).Value = vbNullString
+    End If
+End Sub
+
+Public Function HasCheckbox(rng As Range) As Long
+    Dim cb As CheckBox
+    For Each cb In ActiveSheet.CheckBoxes
+        If Not Application.Intersect(rng, cb.TopLeftCell) Is Nothing Then
+            HasCheckbox = cb.Index
+            Exit Function
+        End If
+    Next cb
+    HasCheckbox = 0
+End Function
+
+Private Function LastUsedRow(inColumn As Long) As Long
+    LastUsedRow = Me.Cells(Me.Rows.Count, inColumn).End(xlUp).Row
+End Function
+
+Sub Small_Caps(ByVal target As Range)
+Dim o As Object
+Dim sCap As Integer, _
+            lCap As Integer, _
+            i As Integer
+Dim testStr As String
+    Application.ScreenUpdating = False
+    For Each o In target ' Selection
+        With o
+            If Application.IsText(.Value) Then
+                lCap = .Characters(1, 1).Font.size
+                sCap = Int(lCap * 0.85)  'alter factor to suit
+    'Small caps for everything.
+                .Font.size = sCap
+                .Value = UCase(.Value)
+                testStr = .Value
+    'Large caps for 1st letter of words.
+                testStr = Application.Proper(testStr)
+                For i = 1 To Len(testStr)
+                    If Mid(testStr, i, 1) = UCase(Mid(testStr, i, 1)) Then
+                        .Characters(i, 1).Font.size = lCap
+                    End If
+                Next i
+            End If
+        End With
+    Next o
+    Application.ScreenUpdating = True
+End Sub
+
+
+'Private Sub RemoveAllTextBoxes()
+'    Me.Unprotect
+'    Dim i As Long
+'    For i = Me.Shapes.Count To 1 Step -1
+'        If Me.Shapes(i).Type = msoTextBox Then Me.Shapes(i).Delete
+'    Next i
+'    Me.Protect
+'End Sub
+'Public Sub AddTextBoxToRow(toCell As Range)
+'Me.Unprotect
+'    With Me.Shapes.AddTextbox(msoTextOrientationHorizontal, 5, toCell.top + 1, 10, toCell.height - 2)
+'        .Placement = xlFreeFloating 'xlMove
+'        .Fill.Visible = msoTrue
+'        .Line.Visible = msoFalse
+'        .OnAction = "APApplication.APSheetTaskList.ClickThrough"
+'        .Name = "textbox_" & toCell.Address
+'        With .TextFrame
+'            .HorizontalOverflow = xlOartHorizontalOverflowOverflow
+'        End With
+'        With .TextFrame2
+'            .VerticalAnchor = msoAnchorBottom
+'            .HorizontalAnchor = msoAnchorNone
+'            .AutoSize = msoAutoSizeNone
+'            .MarginLeft = toCell.left + Me.Columns(1).Width + 20
+'            .MarginBottom = 0
+'            .MarginTop = 0
+'            .MarginRight = 0
+'            .WordWrap = msoFalse
+'            .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+'        End With
+'
+'        With .TextEffect
+'            .Text = "Add New Task Here"
+'            .FontBold = msoTrue
+'        End With
+'
+'        .Locked = True
+'    End With
+'Me.Protect
+'End Sub
+'
+'Sub ClickThrough()
+'APSheetTaskList.Cells(APSheetTaskList.Shapes(Application.caller).TopLeftCell.Row, 3).Select
+'End Sub
+'
+'Sub callit()
+'AddTextBoxToRow ActiveCell
+'End Sub

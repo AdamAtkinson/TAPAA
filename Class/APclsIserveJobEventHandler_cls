@@ -1,0 +1,202 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsIserveJobEventHandler"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+Public Event BeforeModeUpdate(ByRef Cancel As Boolean)
+Public Event AfterWindowsClose()
+Public Event iServeClosed(iServeMode As eISERVECLASSMODE)
+Public WithEvents uploadForm As APformiServeUploadStatus
+Attribute uploadForm.VB_VarHelpID = -1
+Public WithEvents addressForm As APformiServeAddressQuery
+Attribute addressForm.VB_VarHelpID = -1
+Public WithEvents job As APclsIserveJob
+Attribute job.VB_VarHelpID = -1
+
+
+Private mIsLoaded As Boolean
+Private mMode As eISERVECLASSMODE
+
+Private Sub addressForm_PopulateBatch()
+Me.job.PopulateBatch (Me.addressForm.SpinButton_SelectAddress.Value)
+End Sub
+
+Private Sub addressForm_SendToCell(ByVal SupplierAddress As String)
+    Me.job.SendAddressToCell (Me.addressForm.SpinButton_SelectAddress.Value)
+End Sub
+
+Private Sub addressForm_SpinSelectChange(ByVal SupplierAddress As String)
+    Me.job.GetValueAfterChange (Me.addressForm.SpinButton_SelectAddress.Value)
+End Sub
+
+Private Sub addressForm_SupplierSearchClicked(ByVal SupplierAddress As String)
+    Me.job.PopulateAddresses
+End Sub
+
+Private Sub Class_Initialize()
+    If job Is Nothing Then Set job = New APclsIserveJob
+End Sub
+
+Private Sub Class_Terminate()
+    If Not uploadForm Is Nothing Then
+        Unload uploadForm
+        Set uploadForm = Nothing
+    End If
+    If Not addressForm Is Nothing Then
+        Unload addressForm
+        Set addressForm = Nothing
+    End If
+End Sub
+
+Private Sub job_AfterLoadingInitializationFile(ByVal success As Boolean)
+    mIsLoaded = success
+End Sub
+
+
+
+Public Property Let SetMode(p_Mode As eISERVECLASSMODE)
+    Dim Cancel As Boolean
+    RaiseEvent BeforeModeUpdate(Cancel)
+    If Not Cancel Then
+        mMode = p_Mode
+        job.ChangeMode = mMode
+    Else
+    
+    End If
+End Property
+Public Property Get IsLoaded() As Boolean
+    IsLoaded = mIsLoaded
+End Property
+Public Property Get JobMode() As eISERVECLASSMODE
+    JobMode = mMode
+End Property
+Public Sub InitializeUploadForm()
+    If uploadForm Is Nothing Then Set uploadForm = New APformiServeUploadStatus
+    uploadForm.Show
+'    If gcAP.iServeInvoiceUpload.addressForm Is Nothing Then Set gcAP.iServeInvoiceUpload.uploadForm = New APformiServeUploadStatus
+'    gcAP.iServeInvoiceUpload.uploadForm.Show
+End Sub
+
+Public Sub InitializeAddressForm()
+    If addressForm Is Nothing Then Set addressForm = New APformiServeAddressQuery
+    addressForm.Show
+'    If gcAP.iServeAddressQuery.addressForm Is Nothing Then Set gcAP.iServeAddressQuery.addressForm = New APformiServeAddressQuery
+'    gcAP.iServeAddressQuery.addressForm.Show
+End Sub
+
+Public Sub Load(ByVal LoadMode As eISERVECLASSMODE)
+    If job Is Nothing Then Set job = New APclsIserveJob
+    SetMode = LoadMode
+End Sub
+
+
+Private Sub job_BeforeActivateAddressForm()
+    If Me.addressForm Is Nothing Then Set Me.addressForm = New APformiServeAddressQuery
+    Me.addressForm.Show
+End Sub
+
+
+
+Private Sub job_BeforeTerminate(ByVal iServeMode As eISERVECLASSMODE)
+    If mMode Then MsgBox "mmode set to" & mMode
+    If iServeMode Then MsgBox "job mode set to " & iServeMode
+End Sub
+
+Private Sub addressForm_BeforeUserQuit(ByVal showPrompt As Boolean, Cancel As Boolean)
+    Me.job.CloseIserve Cancel, showPrompt
+End Sub
+Private Sub uploadForm_BeforeUserQuit(ByVal showPrompt As Boolean, Cancel As Boolean)
+    Me.job.CloseIserve Cancel, showPrompt
+End Sub
+
+Private Sub job_BeforeiServeClose(ByVal iServeMode As eISERVECLASSMODE, ByVal showPrompt As Boolean, Cancel As Boolean)
+    If mMode <> iServeMode Then
+        Cancel = True
+        MsgBox "Modes not equal, iserve will not be closed"
+    Else
+        If showPrompt Then
+            Select Case MsgBox("Really quit iServe?", vbYesNo)
+                Case vbYes
+                    If mMode = InvoiceMode Then ModifyFormButton gcAP.iServeInvoiceUpload.uploadForm.CommandButton_StartUpload, styleOff, "Click to Start Upload"
+
+                Case vbNo
+                    Cancel = True
+            End Select
+        End If
+    End If
+End Sub
+
+Private Sub job_IserveClosed(ByVal iServeMode As eISERVECLASSMODE)
+    Select Case iServeMode
+        Case AddressMode
+            If Not Me.addressForm Is Nothing Then
+                Unload Me.addressForm
+                Set Me.addressForm = Nothing
+            End If
+        Case InvoiceMode
+            If Not Me.uploadForm Is Nothing Then
+                Unload Me.uploadForm
+                Set Me.uploadForm = Nothing
+            End If
+        Case NotSet
+            'does this actually happen?
+    End Select
+    Set Me.job = Nothing
+    RaiseEvent iServeClosed(iServeMode)
+End Sub
+
+Private Sub uploadForm_BeforeInitialized()
+    'do something i guess
+End Sub
+
+Private Sub addressForm_BeforeInitialized()
+    'do something i guess
+End Sub
+
+
+Private Sub job_BeforeCloseWindows()
+' i dont think this event actually triggers
+    MsgBox "job_beforeclosewindows was actually called"
+'    If Not gcAP.iServeInvoiceUpload.addressForm Is Nothing Then
+'        Unload gcAP.iServeInvoiceUpload.addressForm
+'        Set gcAP.iServeInvoiceUpload.addressForm = Nothing
+'    End If
+'    If Not gcAP.iServeInvoiceUpload.uploadForm Is Nothing Then
+'        Unload gcAP.iServeInvoiceUpload.uploadForm
+'        Set gcAP.iServeInvoiceUpload.uploadForm = Nothing
+'    End If
+'    RaiseEvent AfterWindowsClose
+End Sub
+
+
+
+Private Sub uploadForm_UploadButtonClicked()
+    If Len(GetInvalidLinksInBatch) = 0 Then
+        If Not gcAP.iServeInvoiceUpload.job Is Nothing Then
+            ModifyFormButton gcAP.mainAPform.CommandButton_iServeInvoiceUpload, styleLoad
+            ModifyFormButton gcAP.iServeInvoiceUpload.uploadForm.CommandButton_StartUpload, styleLoad
+            ModifyFormButton gcAP.iServeInvoiceUpload.uploadForm.CommandButton_StartUpload, styleLoad, "Loading iServe"
+    '            With gcAP.iServeInvoiceUpload.uploadForm
+    '                .EnableFormEvents = False
+    '                .chkAutoSubmit = allowSubmit
+    '                .EnableFormEvents = True
+    '            End With
+            
+            If gcAP.iServeInvoiceUpload.job.LoginSuccess Then
+                ModifyFormButton gcAP.mainAPform.CommandButton_iServeInvoiceUpload, styleOn
+                ModifyFormButton gcAP.iServeInvoiceUpload.uploadForm.CommandButton_StartUpload, styleOn, "Upload Running"
+                If gcAP.iServeInvoiceUpload.job.CurrentMode <> eISERVECLASSMODE.InvoiceMode Then gcAP.iServeInvoiceUpload.job.ChangeMode = eISERVECLASSMODE.InvoiceMode
+                gcAP.iServeInvoiceUpload.job.UploadInvoiceBatchToIserve
+            Else
+                ModifyFormButton gcAP.iServeInvoiceUpload.uploadForm.CommandButton_StartUpload, styleOff, "Click to Start Upload"
+            End If
+        End If
+    Else
+        MsgBox "Links are not valid" & DBLLN & GetInvalidLinksInBatch
+    End If
+End Sub

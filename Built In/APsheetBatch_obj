@@ -1,0 +1,485 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APsheetBatch"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+
+Private previousTarget As Range
+Private pPageLabel As Shape
+
+Public Property Get PDFPageCounter() As Shape
+    Set PDFPageCounter = pPageLabel
+End Property
+
+Public Sub UpdatePDFPageCounter(Optional ByRef handlingError As Boolean)
+On Error GoTo HANDLER
+    If pPageLabel Is Nothing Then SetPDFPageCounter
+    pPageLabel.Top = ActiveCell.Top + ActiveCell.height + 20
+    Dim pdfPageCount As Long
+    If Not gPDFddDoc Is Nothing Then
+        pdfPageCount = gPDFddDoc.GetNumPages
+    Else
+        pdfPageCount = -1
+    End If
+    With pPageLabel
+        .Fill.Solid
+        .TextFrame2.TextRange.Font.size = 20
+        .TextFrame2.TextRange.Text = pdfPageCount & ChooseSingularOrPluralString(" page", " pages", pdfPageCount, True)
+        Select Case pdfPageCount
+            Case 0
+                .Fill.ForeColor.RGB = RGB(150, 150, 150)
+                .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            Case 1
+                .Fill.ForeColor.RGB = RGB(79, 129, 189)
+                .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            Case Is > 1
+                .Fill.ForeColor.RGB = RGB(255, 200, 50)
+                .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 0, 0)
+            Case Else
+                KillPDFPageCounter
+        End Select
+    End With
+    
+NORMALEXIT:
+    Exit Sub
+        
+HANDLER:
+    If handlingError Then Resume SAFEEXIT
+    If Err.Number = 424 Then
+        Resume RESETPAGECOUNTER
+    Else
+        MsgBox "Unexpected error updating PDF page Counter" & DBLLN & Err.Number & " - " & Err.Description
+    End If
+SAFEEXIT:
+    Exit Sub
+RESETPAGECOUNTER:
+    KillPDFPageCounter
+    SetPDFPageCounter
+    UpdatePDFPageCounter True
+End Sub
+Public Sub KillPDFPageCounter(Optional ByRef handlingError As Boolean)
+    On Error GoTo HANDLER
+    If Not pPageLabel Is Nothing Then
+        pPageLabel.Delete
+        Set pPageLabel = Nothing
+    End If
+    Dim i As Long
+    For i = Me.Shapes.Count To 1 Step -1
+        If Shapes(i).Name = "Page Count" Then Shapes(i).Delete
+    Next
+NORMALEXIT:
+    Exit Sub
+HANDLER:
+    If handlingError Then Resume SAFEEXIT
+    handlingError = True
+    If Err.Number = 424 Then Resume Next 'the user deleted the box so there's nothing for us to delete
+    MsgBox "Unexpected error closing the PDF page counter" & DBLLN & Err.Number & " - " & Err.Description
+SAFEEXIT:
+End Sub
+Public Sub SetPDFPageCounter(Optional ByRef handlingError As Boolean)
+On Error GoTo HANDLER
+    If pPageLabel Is Nothing Then
+        Dim i As Long
+        For i = 1 To Me.Shapes.Count
+            If Shapes(i).Name = "Page Count" Then Set pPageLabel = Shapes(i)
+        Next
+        If pPageLabel Is Nothing Then
+            Set pPageLabel = Me.Shapes.AddLabel(msoTextOrientationHorizontal, 20, ActiveCell.Top + ActiveCell.height + 20, 100, 30)
+            With pPageLabel
+                .Name = "Page Count"
+                .Fill.Solid
+                .Fill.ForeColor.RGB = RGB(79, 129, 189)
+                With .TextFrame2.TextRange.Font
+                    .size = 20
+                    .Fill.Solid
+                    .Fill.ForeColor.RGB = RGB(255, 255, 255)
+                End With
+
+            End With
+        End If
+    End If
+NORMALEXIT:
+    Exit Sub
+SAFEEXIT:
+    MsgBox "Error encounterd in the error handler while creating the PDF page counter" & DBLLN & Err.Number & " - " & Err.Description
+    Exit Sub
+HANDLER:
+    If handlingError Then Resume SAFEEXIT
+    Select Case Err.Number
+        Case 424
+            KillPDFPageCounter  'the user deleted the box so we'll kill everything we can and start over
+            SetPDFPageCounter True
+            Resume NORMALEXIT
+        Case Else
+            MsgBox "Unexpected error creating the PDF page counter" & DBLLN & _
+                        Err.Number & " - " & Err.Description & DBLLN & _
+                        "The counter may not have been added but is okay to continue", _
+                        vbInformation, "Handled Error"
+    End Select
+End Sub
+
+
+Private Sub Worksheet_Activate()
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    Call ShowEntryForms
+    If Not gcAP.mainAPform Is Nothing Then
+        gcAP.mainAPform.CommandButton_GoToBatchSheet.Visible = False
+    End If
+
+End Sub
+
+
+Private Sub Worksheet_Change(ByVal target As Range)
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    If target.Column = 1 Then
+        If target.Interior.Color = vbBlue Then target.Interior.Color = xlNone
+        If target.Interior.Color = vbGreen Then target.Interior.Color = xlNone
+        If target.Font.Color = vbWhite Then target.Font.Color = vbBlack
+    End If
+End Sub
+
+Private Sub Worksheet_Deactivate()
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    Call HideEntryForms
+    If Not gcAP.mainAPform Is Nothing Then
+        gcAP.mainAPform.CommandButton_GoToBatchSheet.Visible = True
+    End If
+End Sub
+
+Private Sub Worksheet_BeforeDoubleClick(ByVal target As Range, Cancel As Boolean)
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    If gcIni.Configured = False Then Exit Sub
+    If target.Column = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Index Then
+        Application.EnableEvents = False
+        Dim pdfFilename As String
+        pdfFilename = UploadFolder & "\" & target.Value2
+        If CBool(Len(Dir(pdfFilename))) Then
+            Dim pdfDocument As APclsPDF
+            Set pdfDocument = New APclsPDF
+            pdfDocument.OpenDocumentFull pdfFilename, False
+        End If
+        Cancel = True
+        Application.EnableEvents = True
+        AppFocus
+    End If
+End Sub
+
+Private Sub Worksheet_BeforeRightClick(ByVal target As Range, Cancel As Boolean)
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    If gcIni.Configured = False Then Exit Sub
+    If InvoiceEntryMode Then
+        Cancel = True
+        Application.EnableEvents = False
+        Call UnloadEntryForms
+        target.Select
+        Call CheckHistoryForDuplicate(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(target.Row))
+        Application.EnableEvents = True
+    End If
+End Sub
+
+
+'========================================================================================================================================
+'   WORKSHEET SELECTION CHANGE IS THE MAIN                                                                                              '
+'   TRIGGER FOR THE BATCH ENTRY                                                                                                         '
+'========================================================================================================================================
+' we look for conditions to exit early and then                                                                                         '
+' and then call the main sub in a code module                                                                                           '
+
+Private Sub Worksheet_SelectionChange(ByVal target As Range)
+
+
+    If gcAP Is Nothing Then
+        GoTo SAFEEXIT
+    Else
+        If Not gcAP.mainAPform Is Nothing Then
+            If gcAP.mainAPform.BREAKBOX Then Stop
+        End If
+    End If
+
+
+    'at all times we assume 1 and only 1 cell so immediately exit if 1 cell is not selected
+    'we use resume next because counting cells may cause an overflow error if the user selected a very large range
+    If target.Cells.CountLarge <> 1 Then GoTo SAFEEXIT
+        
+
+    Dim newTarget As Range
+    Dim tgt As Range
+    Dim rowOffset1 As Long
+    Dim rowOffset2 As Long
+    Dim trapError As String
+
+'    If Not hook Is Nothing Then Set hook = Nothing
+    
+    'we do not want code execution to interfere with copy and paste
+    If Application.CutCopyMode <> 0 Then
+        If InvoiceBatchEnvironmentWasInitialized Then
+
+            If Not InvoiceEntryMode Then GoTo SAFEEXIT
+
+        End If
+        If gfrmQuitCopyMode Is Nothing Then
+            Set gfrmQuitCopyMode = New APformCutCopyModeIsOn
+            gfrmQuitCopyMode.Show
+        End If
+
+         GoTo SAFEEXIT
+
+    Else
+        If Not gfrmQuitCopyMode Is Nothing Then Set gfrmQuitCopyMode = Nothing
+    End If
+
+    Dim excelState As New APclsExcelStates
+    excelState.ResetToDefault
+    excelState.SaveCurrentState
+    excelState.RestoreDefaultOnTerminate
+    
+    
+    'we never use this row so exit if anything in the first row is selected
+
+    If target.Row = 1 Then GoTo SAFEEXIT
+    If IsError(target) Then GoTo SAFEEXIT
+    If Not InvoiceBatchEnvironmentWasInitialized Then GoTo SAFEEXIT
+
+
+    Call UnloadEntryForms
+
+    'used for looking up the previously selected cell value
+    If previousTarget Is Nothing Then
+        Set previousTarget = target
+    End If
+    
+    
+'testing inline error handling
+    'reset previousTarget if it was removed from the worksheet
+    On Error Resume Next
+    trapError = previousTarget.Address
+    Select Case Err.Number
+        Case 0
+            'do nothing
+        Case 424
+            Set previousTarget = target
+            Err.Clear
+            Resume
+        Case Else
+            'unhandled
+    End Select
+    On Error GoTo 0
+    
+
+'set the strikethrough for the entire previous row based on the previous cell and the entire current row based on the current cell
+    With APsheetBatch
+        Set tgt = Intersect(previousTarget, loInvoiceBatch.DataBodyRange)
+        If Not tgt Is Nothing Then
+                loInvoiceBatch.ListRows(previousTarget.Row - 1).Range.Font.Strikethrough = .Cells(previousTarget.Row, 1).Font.Strikethrough
+        End If
+        Set tgt = Intersect(target, loInvoiceBatch.DataBodyRange)
+        If Not tgt Is Nothing Then
+                loInvoiceBatch.ListRows(target.Row - 1).Range.Font.Strikethrough = .Cells(target.Row, 1).Font.Strikethrough
+                If tgt.Font.Strikethrough Then
+                    gcAP.mainAPform.Label_FakeButton_LockedRow.ZOrder 1
+                Else
+                    gcAP.mainAPform.Label_FakeButton_UnlockedRow.ZOrder 1
+                End If
+        End If
+    End With
+
+    
+    If Not InvoiceEntryMode Then
+        'we're not in reviewmode and the main tool is off so we'll perform a lookup before exiting the sub
+        If target = vbNullString And target.Offset(-1, 0).Address = previousTarget.Address Then
+            'lookup the previously selected cell if the current cell is in the same column 1 row down and empty
+            'this can happen if the user is not in any mode and keys an invoice followed by enter - we assume they want a one off lookup
+            Call CheckHistoryForDuplicate(previousTarget)
+        Else
+            Call CheckHistoryForDuplicate(target)
+        End If
+        Set previousTarget = target
+
+         GoTo SAFEEXIT
+
+    Else
+        Set previousTarget = target
+    End If
+
+
+    'we will exit the procedure in this block if the target is not currently inside the table
+    'before we exit, we test the target row and add a table row if the target is in the first row below the table
+    Set tgt = Intersect(target, loInvoiceBatch.DataBodyRange)
+    If tgt Is Nothing Then
+        With loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER)
+            If target.Address <> .Range(.Range.Rows.Count).Offset(1, 0).Address _
+                    And Application.WorksheetFunction.CountA(.Range.Rows(.Range.Rows.Count)) > 1 Then
+                loInvoiceBatch.ListRows.Add
+                loInvoiceBatch.ListRows(loInvoiceBatch.ListRows.Count).Range.RowHeight = DESIREDROWHEIGHT
+
+                 GoTo SAFEEXIT
+
+            End If
+        End With
+    End If
+
+    'target is read only and cannot be modified so we use newtarget to work from here forward different range selection
+    Set newTarget = target
+
+    Select Case newTarget.Column
+        'we will perform a few different functions if the invoice number is the selected column
+        Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Index
+            
+            Select Case newTarget.Row
+                'we will be testing the previous 2 rows but this presents problems when we're at the top of the table so we use variables to adjust
+                'if the following are true then newtarget becomes the next cell to the right in the row above
+                '   current cell is empty
+                '   the cell 1 up is not empty
+                '   the cell 1 up 1 right is empty
+                '   the cell 2 up is not empty
+                '   the cell 2 up 1 right is not empty
+                Case 1 'we've already exited the sub if anything in the first row was selected
+                    MsgBox "How are you working with the first row?", vbCritical
+
+                     GoTo SAFEEXIT
+
+                Case 2 'if the current row is 2 then we know there isn't data above us so we offset 0 (current rows)
+                    rowOffset1 = 0
+                    rowOffset2 = 0
+                Case Else 'if the current row is 3 or more than we know there is at least 1 data row and 1 header row, we can safely test 2 rows up
+                    rowOffset1 = -1
+                    rowOffset2 = -2
+            End Select
+
+            'if the current cell is empty, the cell above is the only populated cell in the row, and the row above that has more than 1 cell populated
+            'then we assume the user keyed an invoice number and hit enter so we move back to that row row and select the next cell to the right
+            If newTarget = vbNullString _
+                    And newTarget.Offset(rowOffset1, 0) <> vbNullString _
+                    And Application.WorksheetFunction.CountA(APsheetBatch.Rows(newTarget.Row + rowOffset1)) = 1 _
+                    And Application.WorksheetFunction.CountA(APsheetBatch.Rows(newTarget.Row + rowOffset2)) > 1 Then
+                Set newTarget = newTarget.Offset(rowOffset1, 1)
+                'we turn events off to prevent a recursive call to this routine (selection change)
+                Application.EnableEvents = False
+                newTarget.Select
+                Application.EnableEvents = True
+            End If
+    End Select
+
+    Set tgt = Intersect(newTarget, loInvoiceBatch.DataBodyRange)
+
+    If tgt Is Nothing Then
+'        MsgBox "Does this happen?", vbQuestion 'YES IT DOES !!!, NEED TO CREATE NEW ROW
+        If newTarget.Address = loInvoiceBatch.ListColumns(1).Range(loInvoiceBatch.Range.Rows.Count).Offset(1, 0).Address Then
+            If newTarget.Offset(-1, 0).Value <> vbNullString Then
+                Application.ScreenUpdating = False
+                loInvoiceBatch.ListRows.Add
+                loInvoiceBatch.ListRows(loInvoiceBatch.ListRows.Count).Range.RowHeight = DESIREDROWHEIGHT
+                newTarget.Offset(-1, 0).Select
+                Set tgt = newTarget.Offset(-1, 0)
+                Application.ScreenUpdating = True
+            Else
+                MsgBox "Does this really happen?", vbExclamation
+
+                 GoTo SAFEEXIT
+
+            End If
+        Else
+             GoTo SAFEEXIT
+        End If
+    End If
+
+    Call CheckHistoryForDuplicate(newTarget)
+
+    If tgt <> vbNullString Then
+        If (Not flgPDFisOpen) _
+            And (UBound(PDF_Array) >= IndexPDF _
+            And LBound(PDF_Array) <= IndexPDF) _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row) = vbNullString Then
+            Call OpenPDF_App(tgt)
+            Call ResetEntryFormFocus
+        End If
+
+    End If
+
+    If Not gflgCancel Then
+        If gcAP.mainAPform.CheckBox_CapsLock And Not CapsLock Then Call SendKeysToApplication(KeysToSend:="caps lock")
+        If gcAP.mainAPform.CheckBox_NumLock And Not NumLock Then Call SendKeysToApplication(KeysToSend:="number lock")
+
+        If tgt.Column = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Index Then GoTo SAFEEXIT
+
+        APsheetBatch.UpdatePDFPageCounter
+        
+        
+        'proceed with batch entry algorithm
+        Call BatchEntryChange(tgt)
+
+    Else
+        If gfrmSelectInvoiceDetails Is Nothing Then
+            gflgCancel = False
+        Else
+            If gfrmSelectInvoiceDetails.Tag <> "Hide" Then gflgCancel = False
+        End If
+    End If
+
+NORMALEXIT:
+'    If Not gfrmVendorName Is Nothing Then
+'        If gfrmVendorName.Visible = True Then
+''            Application.OnTime Now + TimeValue("00:00:01"), "APmodMethods.GetFocus_gfrmVendorName"
+'        End If
+'    End If
+SAFEEXIT:
+    Exit Sub
+HANDLER:
+    Select Case Err.Number
+        Case 6
+            '- do nothing
+            'memory overflow from trying to count too many selected cells
+            'usually happens when whole sheet is selected
+        Case 91
+            '- do nothing
+            'object not set: intersect not found
+        Case 424
+            'an object became unset somehow
+            InvoiceBatchEnvironmentWasInitialized = False
+            Call InitializeInvoiceBatchEnvironment
+
+        Case Else
+            'NOT SURE IF I SHOULD DO THIS - ITS ABOUT AS EQUAL TO RESUME NEXT
+'            MsgBox "Error triggered during worksheet selection change." & _
+'                    vbCr & vbCr & _
+'                    "Description: " & Err.Description
+    End Select
+    Resume NORMALEXIT
+End Sub
+
+
+
+Private Sub RefreshTableRanges()
+    Dim rowCounter As Long
+    Dim loCounter As Long
+    Dim ws As Worksheet
+    Dim lo As ListObject
+    loTableRanges.DataBodyRange.Delete
+    loTableRanges.ListRows.Add
+    For Each ws In ActiveWorkbook.Sheets
+        For loCounter = 1 To ws.ListObjects.Count
+            With ws.ListObjects(loCounter)
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 0) = ws.Name
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 1) = .Name
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 2) = .HeaderRowRange.Row
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 3) = .DataBodyRange.Row
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 4) = .DataBodyRange.Row + .DataBodyRange.Rows.Count - 1
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 5) = .DataBodyRange.Column
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 6) = .DataBodyRange.Columns.Count
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 7) = .Range.Address
+                rowCounter = rowCounter + 1
+            End With
+        Next
+    Next
+    Debug.Print rowCounter
+End Sub
+
+
+Sub addthing()
+dbP "hi"
+End Sub

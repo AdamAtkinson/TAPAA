@@ -1,0 +1,56 @@
+Attribute VB_Name = "APmodFunctions_Array"
+Option Explicit
+
+Public Function ExpandArray(arrayToExpand() As Variant, _
+                                    Optional ByRef returnSuccess As Boolean, _
+                                    Optional ByVal useBase1 As Boolean = False, _
+                                    Optional ByVal newElements As Long = 1 _
+                            ) As Variant()
+    On Error GoTo HANDLER
+    Dim returnArray() As Variant
+    returnArray = arrayToExpand
+    If UBound(returnArray) + newElements < LBound(returnArray) Then Err.Raise 999, "invalid array dimensions"
+    If UBound(returnArray) = 0 And useBase1 Then
+        ReDim returnArray(1 To newElements)
+        returnSuccess = True
+    Else
+        ReDim Preserve returnArray(LBound(returnArray) To UBound(returnArray) + newElements)
+        returnSuccess = True
+    End If
+    ExpandArray = returnArray
+    Exit Function
+HANDLER:
+    ExpandArray = arrayToExpand
+End Function
+
+Public Function CreateStringArrayFromParameters(ParamArray TheseStrings() As Variant) As String()
+   Dim i As Long
+   Dim strArray() As String
+   ReDim strArray(UBound(TheseStrings)) As String
+   For i = 0 To UBound(TheseStrings)
+       strArray(i) = TheseStrings(i)
+   Next
+   CreateStringArrayFromParameters = strArray
+End Function
+
+
+Public Function AddElementToRightOfStringArray(StringArray() As String, ByVal StringToAdd As String) As String()
+    Dim tA() As String
+    tA = StringArray
+    ReDim Preserve tA(LBound(tA) To UBound(tA) + 1)
+    tA(UBound(tA)) = StringToAdd
+    AddElementToRightOfStringArray = tA
+End Function
+
+
+Public Function ConcatenateArrays(ArrayToChange() As Variant, ArrayToAdd() As Variant) As Variant()
+    Dim i As Long
+    Dim temparray() As Variant
+    temparray = ArrayToChange
+    For i = LBound(temparray) To UBound(temparray)
+        ReDim Preserve temparray(LBound(temparray) To UBound(temparray) + 1)
+        temparray(UBound(temparray)) = ArrayToAdd(i)
+    Next i
+    ConcatenateArrays = temparray
+End Function
+

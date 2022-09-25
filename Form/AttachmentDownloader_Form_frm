@@ -1,0 +1,98 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} AttachmentDownloader_Form 
+   Caption         =   "Download Configuration"
+   ClientHeight    =   3750
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   4590
+   OleObjectBlob   =   "AttachmentDownloader_Form_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "AttachmentDownloader_Form"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+
+Option Explicit
+
+Private Const mCOMPACTHEIGHT = 142
+Private Const mEXTENDEDHEIGHT = 216
+Private mCancelEvents As Boolean
+
+
+
+Private Sub UserForm_Initialize()
+    Me.height = mCOMPACTHEIGHT
+    Me.Frame_Panel_ProgressBar.Visible = False
+    Me.Label_CenteredText.Caption = vbNullString
+    Me.Label_ProgressBar_DetailedText.Caption = vbNullString
+    Me.Label_ProgressBar_DetailedBackGround.BackColor = 8421504
+    Me.Label_ProgressBar_DetailedText.BackColor = 8421504
+End Sub
+Private Sub UserForm_Terminate()
+    APappOutlook.ClearDownloader
+End Sub
+
+Public Property Let CancelEvents(p_CancelEvents As Boolean)
+    mCancelEvents = p_CancelEvents
+End Property
+
+Private Sub CommandButton_StartDownload_Click()
+    APappOutlook.SaveAttachmentsFromSelection
+End Sub
+Private Sub Label_ProgressBar_DetailedText_Click()
+    APappOutlook.ShowSkippedForm
+End Sub
+Private Sub Label_ProgressBar_DetailedBackGround_Click()
+    APappOutlook.ShowSkippedForm
+End Sub
+Private Sub CommandButton_HideBar_Click()
+    Me.StopAttachmentIndicator
+End Sub
+
+Private Sub CheckBox_AP_Change()
+    If CheckBox_AP And CheckBox_iServeQueue And Not mCancelEvents Then CheckBox_iServeQueue = Not CheckBox_iServeQueue
+End Sub
+Private Sub CheckBox_iServeQueue_Change()
+    If CheckBox_AP And CheckBox_iServeQueue And Not mCancelEvents Then CheckBox_AP = Not CheckBox_AP
+End Sub
+
+Sub StartAttachmentIndicator(ByVal emailsProcessed As Long, ByVal selectedEmailsCount As Long)
+    Me.height = mEXTENDEDHEIGHT
+    Me.Frame_Panel_ProgressBar.Visible = True
+    UpdateAttachmentIndicator emailsProcessed, selectedEmailsCount
+End Sub
+Sub UpdateAttachmentIndicator(ByVal emailsProcessed As Long, ByVal selectedEmailsCount As Long, Optional emailsNotMovedCount As Long, _
+                                Optional savedAttachmentsCount As Long, Optional skippedAttachmentsCount As Long, Optional lngTotalCount As Long)
+    Dim intPercentComplete As Integer
+    Dim pluralNounAttachments As String
+    Dim gap As String
+    gap = Space(5)
+    pluralNounAttachments = "  ATTACHMENTS:"
+    If lngTotalCount = 1 Then pluralNounAttachments = Replace(pluralNounAttachments, "S", vbNullString)
+    intPercentComplete = Int(emailsProcessed / selectedEmailsCount * 100)
+    Me.Label_CenteredText.Caption = selectedEmailsCount & "  SELECTED:" & gap & emailsProcessed & "  PROCESSED" & _
+                                                                          gap & emailsNotMovedCount & "  NOT MOVED"
+    Me.Label_ProgressBar_DetailedText.Caption = lngTotalCount & pluralNounAttachments & gap & savedAttachmentsCount & "  SAVED" & _
+                                                                                        gap & skippedAttachmentsCount & "  SKIPPED"
+    Me.Label_ProgressBar.Width = CInt(intPercentComplete * 2)
+    If skippedAttachmentsCount > 0 Then
+        Me.Label_ProgressBar_DetailedText.BackColor = 8421631
+        Me.Label_ProgressBar_DetailedBackGround.BackColor = 8421631
+    End If
+End Sub
+Sub StopAttachmentIndicator(Optional ByVal emailsProcessed As Long)
+    Me.height = mCOMPACTHEIGHT
+    Me.Frame_Panel_ProgressBar.Visible = False
+    Me.CommandButton_HideBar.Visible = False
+    Me.Label_ProgressBar_DetailedText.BackColor = 8421504
+    Me.Label_ProgressBar_DetailedBackGround.BackColor = 8421504
+End Sub
+
+
+
+
+

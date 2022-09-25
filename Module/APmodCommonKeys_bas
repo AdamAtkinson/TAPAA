@@ -1,0 +1,566 @@
+Attribute VB_Name = "APmodCommonKeys"
+'____________________________________________________________________________
+'-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯-¯
+Option Explicit
+Private mSuppressKeyUpstroke As Boolean
+
+        '           APPLICATION.ONKEY KEYBINDINGS            '
+
+'============================================================================
+'   PRIMARY KEYBOARD SHORTCUTS - ALWAYS AVAILABLE                           '
+'============================================================================
+
+
+'add shortcut for gcAP.mainAPform.ToggleWidth
+
+'
+'   warning - may not be run because superceded by class
+'   warning - may not be run because superceded by class
+'   warning - may not be run because superceded by class
+'   warning - may not be run because superceded by class
+'   warning - may not be run because superceded by class
+'   warning - may not be run because superceded by class
+'
+Function GetHotKeyArray() As String()
+'    Dim tA() As String
+'    tA = APmodFunctions.CreateStringArrayFromParameters("+{DELETE} APmodCommonKeys.CallMoveCurrentPDFtoTrashFolder")
+'                                                    '   SHIFT DELETE                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "+{END} APmodCommonKeys.CallMoveCurrentPDFtoRootFolder")
+'                                                    '   SHIFT END                       '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "+{PGUP} APmodCommonKeys.CallPDFPageUp")
+'                                                    '   SHIFT PAGE UP                   '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "+{PGDN} APmodCommonKeys.CallPDFPageDown")
+'                                                    '   SHIFT PAGE DOWN                 '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "{144} APmodCommonKeys.CallTemporarilyDisableKeyboardShortcuts")
+'                                                    '   NUM LOCK                        '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "^{144} APmodCommonKeys.CallDisableKeyboardShortcuts")
+'                                                    ' CTRL NUM LOCK                     '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "{112} APmodCommonKeys.CallToggleMainFormSize")
+'                                                    '  F1                               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{112} APmodCommonKeys.CallToggleMainFormHeight")
+'                                                    '  ALT F1                           '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{113} APmodCommonKeys.CallToggleMainFormHeight")
+'                                                    '  ALT F2                           '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "^{`} APmodCommonKeys.CallCreatePDFQueue")
+'                                                    '   CTRL ~                          '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "{`} APmodCommonKeys.CallToggleEntryMode")
+'                                                    '   ~                               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "+{`} APmodCommonKeys.CallUploadToiServe")
+'                                                    '   SHIFT ~                         '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{`} APmodCommonKeys.CallLoadFrontEnd")
+'                                                    '   ALT ~                           '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{38} APmodCommonKeys.CallShowEntryForms")
+'                                                    '   ALT UP ARROW                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%+{38} APmodCommonKeys.CallCopyInvoiceRowFromAbove")
+'                                                    '   ALT SHIFT UP ARROW              '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{101} APmodCommonKeys.CallPDFShowFullScreen")
+'                                                    '   ALT CTRL NUMPAD 5               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{96} APmodCommonKeys.CallPDFShownNone")
+'                                                    '   ALT CTRL NUMPAD 0               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{104} APmodCommonKeys.CallPDFFitWidth")
+'                                                    '   ALT CTRL NUMPAD 8               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{98} APmodCommonKeys.CallPDFFitHeight")
+'                                                    '   ALT CTRL NUMPAD 2               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{97} APmodCommonKeys.CallPDFShowThumbs")
+'                                                    '   ALT CTRL NUMPAD 1               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{96} APmodCommonKeys.CallPDFHideApp")
+'                                                    '   ALT NUMPAD 0                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{110} APmodCommonKeys.CallPDFShowApp")
+'                                                    '   ALT NUMPAD .                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{111} APmodCommonKeys.CallViewSupplierInvoiceHistory")
+'                                                    '   ALT NUMPAD /                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{106} APmodCommonKeys.CallViewMatchingInvoiceHistory")
+'                                                    '   ALT NUMPAD *                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{109} APmodCommonKeys.CallActivateHistorySheet")
+'                                                    '   ALT NUMPAD -                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%{107} APmodCommonKeys.CallActivateBatchSheet")
+'                                                    '   ALT NUMPAD +                    '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{107} APmodCommonKeys.CallGLQuery")
+'                                                    '   ALT CTRL SHIFT NUMPAD +         '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "%^{109} APmodCommonKeys.CallManualInvoiceHistorySearch")
+'                                                    '   ALT CTRL NUMPAD -               '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "^{20} APmodCommonKeys.CallGiveMainFormFocus")
+'                                                    '   CTRL CAPS LOCK                  '
+'
+'    tA = APmodFunctions.AddElementToRightOfStringArray(tA, "+{20} APmodCommonKeys.ToggleRowStrikeThrough")
+'                                                    '  SHIFT  CAPS LOCK                 '
+'
+'    GetHotKeyArray = tA
+MsgBox "HOTKEYS MODULE NOT CONFIGURED"
+End Function
+
+'============================================================================
+'   SECONDARY KEYBOARD SHORTCUTS - ONLY CONDITIONALLY AVAILABLE             '
+'============================================================================
+'   FOR SPLIT GL ,   ONLY AVAILABLE WHEN WORKSHEET IS ACTIVE                '
+'----------------------------------------------------------------------------
+'       SHORTCUT KEYS ENABLED WITH WORKSHEET ACTIVATE                   '   '
+' - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Sub EnableRegistryShortcut()                                                                '   '
+    Application.OnKey "{a}", "APaInvoiceBatchEntry.TransferDetailsFromSplitToBatch"         '   '
+    Application.OnKey "{q}", "APaInvoiceBatchEntry.ReturnFromSplit"                         '   '
+    Application.OnKey "{r}", "APaInvoiceBatchEntry.ResetSplitAllocations"                   '   '
+    Application.OnKey "{n}", "APaInvoiceBatchEntry.AddAccountToAllocate"                    '   '
+    Application.OnKey "{l}", "APaInvoiceBatchEntry.AddNewAllocationLine"                    '   '
+End Sub                                                                 '   '
+' - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+' SHORTCUT KEYS DISABLED WITH WORKSHEET ACTIVATE                        '   '
+' - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Sub DisableRegistryShortcut()                                           '   '
+    Application.OnKey "{a}"                                             '   '
+    Application.OnKey "{q}"                                             '   '
+    Application.OnKey "{r}"                                             '   '
+    Application.OnKey "{n}"                                             '   '
+    Application.OnKey "{l}"                                             '   '
+End Sub                                                                 '   '
+' - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+'============================================================================
+
+
+'============================================================================
+'   APPLICATION.ONKEY CALL LIBRARY                                          '
+'============================================================================
+Public Sub CallToggleMainForm()
+    Call APaInvoiceBatchEntry.ToggleMainForm
+End Sub
+Private Sub CallLoadFrontEnd()
+    Call APaInvoiceBatchEntry.LoadFrontEnd
+End Sub
+Private Sub CallCopyInvoiceRowFromAbove()
+    Call APaInvoiceBatchEntry.CopyInvoiceRowFromAbove
+End Sub
+Private Sub CallShowEntryForms()
+    Call APaInvoiceBatchEntry.ShowEntryForms
+End Sub
+Private Sub CallGiveMainFormFocus()
+    Call APaInvoiceBatchEntry.GiveMainFormFocus
+'    Application.OnTime Now + TimeValue("00:00:01"), "APaInvoiceBatchEntry.GiveMainFormFocus"
+End Sub
+Private Sub CallToggleAutoPopuplate()
+    Call gcAP.mainAPform.ToggleAutoPopuplate
+End Sub
+'Private Sub CallShowOptionsForm()
+'    Call APmodMethods.ShowOptionsForm
+'End Sub
+Private Sub CallToggleMainFormSize()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.mainAPform Is Nothing Then gcAP.mainAPform.ToggleMainFormSize
+    Else
+        ShowObjectNotSetErrorMessage "gcAP As APclsMainApplication"
+    End If
+End Sub
+Private Sub CallToggleRowStrikeThrough()
+If Not gcAP Is Nothing Then
+    If Not gcAP.mainAPform Is Nothing Then
+        Call gcAP.mainAPform.ToggleRowStrikeThrough
+    End If
+End If
+End Sub
+Private Sub CallTemporarilyDisableKeyboardShortcuts()
+    Call gcAP.kbHotKeys.TemporarilyDisableKeyboardShortcuts
+End Sub
+Private Sub CallActivateHistorySheet()
+    Call APaInvoiceBatchEntry.ActivateHistorySheet
+End Sub
+Private Sub CallFocusMainForm()
+    Call APaInvoiceBatchEntry.FocusMainForm
+End Sub
+ Private Sub CallGLQuery()
+    Call APaInvoiceBatchEntry.GLQuery
+ End Sub
+Private Sub CallDisableKeyboardShortcuts()
+    Call gcAP.kbHotKeys.DisableKeyboardShortcuts
+End Sub
+Private Sub CallManualInvoiceHistorySearch()
+    Call APaInvoiceBatchEntry.ManualInvoiceHistorySearch
+End Sub
+Private Sub CallViewMatchingInvoiceHistory()
+    Call APaInvoiceBatchEntry.ViewMatchingInvoiceHistory
+End Sub
+Private Sub CallViewSupplierInvoiceHistory()
+    Call APaInvoiceBatchEntry.ViewSupplierInvoiceHistory
+End Sub
+Private Sub CallActivateBatchSheet()
+    Call APaInvoiceBatchEntry.ActivateBatchSheet
+End Sub
+Private Sub CallUploadToiServe()
+MsgBox "not configured"
+'    If Not gcAP Is Nothing Then
+'        If Not gcAP.mainAPform Is Nothing Then gcAP.mainAPform.
+'    Else
+'        ShowObjectNotSetErrorMessage "gcAP As APclsMainApplication"
+'    End If
+End Sub
+Private Sub CallCreatePDFQueue()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.mainAPform Is Nothing Then gcAP.mainAPform.CreatePDFQueue
+    Else
+        ShowObjectNotSetErrorMessage "gcAP As APclsMainApplication"
+    End If
+End Sub
+Private Sub CallToggleEntryMode()
+    If Not gcAP Is Nothing Then
+        If Not gcAP.mainAPform Is Nothing Then gcAP.mainAPform.ToggleEntryMode
+    Else
+        ShowObjectNotSetErrorMessage "gcAP As APclsMainApplication"
+    End If
+End Sub
+Private Sub CallMoveCurrentPDFtoTrashFolder()
+    If flgPDFisOpen Then APmodPDF.MoveCurrentPDFtoTrashFolder
+End Sub
+Private Sub CallMoveCurrentPDFtoRootFolder()
+    If flgPDFisOpen Then APmodPDF.MoveCurrentPDFtoRootFolder
+End Sub
+Private Sub CallPDFPageUp()
+    If flgPDFisOpen Then APmodPDF.PDFPageUp
+End Sub
+Private Sub CallPDFPageDown()
+    If flgPDFisOpen Then APmodPDF.PDFPageDown
+End Sub
+Private Sub CallPDFShowApp()
+    If flgPDFisOpen Then APmodPDF.PDFShowApp
+End Sub
+Private Sub CallPDFHideApp()
+    If flgPDFisOpen Then APmodPDF.PDFHideApp
+End Sub
+Private Sub CallPDFShowThumbs()
+    If flgPDFisOpen Then APmodPDF.PDFShowThumbs
+End Sub
+Private Sub CallPDFShownNone()
+    If flgPDFisOpen Then APmodPDF.PDFShownNone
+End Sub
+Private Sub CallPDFShowFullScreen()
+    If flgPDFisOpen Then APmodPDF.PDFShowFullScreen
+End Sub
+Private Sub CallPDFFitHeight()
+    If flgPDFisOpen Then APmodPDF.PDFFitHeight
+End Sub
+Private Sub CallPDFFitWidth()
+    If flgPDFisOpen Then APmodPDF.PDFFitWidth
+End Sub
+
+
+
+
+'=========================================================================================================.
+'                   KEY EVENTS SENT FROM USER FORM OR USER FORM CONTROLS                                  |
+'=========================================================================================================|
+'___________________________________________________________________________________________________      |
+'                                                                                                  '|     |
+'   this happens when a key is pressed while the userform has focus                                '|     |
+'   the userform should not retain focus so we send focus to the batch sheet                       '|     |
+'__________________________________________________________________________________________________'|     |
+Sub UserFormKeyDownEvent(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)           '|     |
+    Call CallActivateBatchSheet                                                                    '|     |
+End Sub                                                                                            '|     |
+Sub UserFormKeyUpEvent(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Select Case KeyCode
+        Case vbKeyF1
+            If Shift Then
+            Else
+                Call SendKeysToApplication(KeysToSend:="F1")
+            End If
+    End Select                                                                                     '|     |
+    Call CallActivateBatchSheet                                                                    '|     |
+End Sub                                                                                            '|     |
+'__________________________________________________________________________________________________'|     |
+'                                                                                                  '|     |
+'   userform keypress event (not the same as keyup or keydown                                      '|     |
+'__________________________________________________________________________________________________'|     |
+Sub CommonFormEvents_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)                             '|     |
+                                                                                                   '|     |
+End Sub                                                                                            '|     |
+'__________________________________________________________________________________________________'|     |
+'                                                                                                  '|     |
+'   function keys that are common among user forms                                                 '|     |
+'__________________________________________________________________________________________________'|     |
+Sub CommonFormEvents_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)       '|     |
+    APmodCommonKeys.CommonFormEvents_KeyUpOrDown KeyCode, Shift                                    '|     |
+    mSuppressKeyUpstroke = True                                                                    '|     |
+End Sub                                                                                            '|     |
+Sub CommonFormEvents_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)         '|     |
+    If Not mSuppressKeyUpstroke Then APmodCommonKeys.CommonFormEvents_KeyUpOrDown KeyCode, Shift   '|     |
+    mSuppressKeyUpstroke = False                                                                   '|     |
+End Sub                                                                                            '|     |
+Sub CommonFormEvents_KeyUpOrDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)   '|     |
+    Select Case KeyCode                                                                            '|     |
+        Case vbKeyPageUp                                                                           '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallPDFPageUp                                                 '|     |
+            End If                                                                                 '|     |
+        Case vbKeyPageDown                                                                         '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallPDFPageDown                                                 '|     |
+            End If                                                                                 '|     |
+        Case vbKeyEnd                                                                              '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallMoveCurrentPDFtoRootFolder                                  '|     |
+            End If                                                                                 '|     |
+        Case vbKeyDelete                                                                           '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallMoveCurrentPDFtoTrashFolder                                 '|     |
+            End If                                                                                 '|     |
+        Case vbKeyMultiply                                                                         '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallViewMatchingInvoiceHistory                                  '|     |
+            End If                                                                                 '|     |
+        Case vbKeyDivide                                                                           '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallViewSupplierInvoiceHistory                                  '|     |
+            End If                                                                                 '|     |
+        Case vbKeySubtract                                                                         '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallManualInvoiceHistorySearch                                  '|     |
+            End If                                                                                 '|     |
+        Case vbKeyAdd                                                                              '|     |
+            If flgPDFisOpen And Shift = SHIFT_MASK Then                                            '|     |
+                Call APmodCommonKeys.CallActivateBatchSheet                                          '|     |
+            End If                                                                                 '|     |
+        Case 192                                                                                   '|     |
+            Call APmodCommonKeys.CallToggleEntryMode                                                 '|     |
+    End Select                                                                                     '|     |
+End Sub                                                                                            '|     |
+'___________________________________________________________________________________________________|     |
+'                                                                                                         |
+'========================================================================================================='
+
+
+
+
+'===================================================================.
+'                            KeyA through KeyZ                      :
+'                     NOTE:  and Key0 through Key9                  :
+'                            are equivalent to ASCII                :
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   A                        65        vbKeyA                      '|
+'   B                        66        vbKeyB                      '|
+'   C                        67        vbKeyC                      '|
+'   D                        68        vbKeyD                      '|
+'   E                        69        vbKeyE                      '|
+'   F                        70        vbKeyF                      '|
+'   G                        71        vbKeyG                      '|
+'   H                        72        vbKeyH                      '|
+'   I                        73        vbKeyI                      '|
+'   J                        74        vbKeyJ                      '|
+'   K                        75        vbKeyK                      '|
+'   L                        76        vbKeyL                      '|
+'   M                        77        vbKeyM                      '|
+'   N                        78        vbKeyN                      '|
+'   O                        79        vbKeyO                      '|
+'   P                        80        vbKeyP                      '|
+'   Q                        81        vbKeyQ                      '|
+'   R                        82        vbKeyR                      '|
+'   S                        83        vbKeyS                      '|
+'   T                        84        vbKeyT                      '|
+'   U                        85        vbKeyU                      '|
+'   V                        86        vbKeyV                      '|
+'   W                        87        vbKeyW                      '|
+'   X                        88        vbKeyX                      '|
+'   Y                        89        vbKeyY                      '|
+'   Z                        90        vbKeyZ                      '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   0                        48        vbKey0                      '|
+'   1                        49        vbKey1                      '|
+'   2                        50        vbKey2                      '|
+'   3                        51        vbKey3                      '|
+'   4                        52        vbKey4                      '|
+'   5                        53        vbKey5                      '|
+'   6                        54        vbKey6                      '|
+'   7                        55        vbKey7                      '|
+'   8                        56        vbKey8                      '|
+'   9                        57        vbKey9                      '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   Numpad 0                 96        vbKeyNumpad0                '|
+'   Numpad 1                 97        vbKeyNumpad1                '|
+'   Numpad 2                 98        vbKeyNumpad2                '|
+'   Numpad 3                 99        vbKeyNumpad3                '|
+'   Numpad 4                 100       vbKeyNumpad4                '|
+'   Numpad 5                 101       vbKeyNumpad5                '|
+'   Numpad 6                 102       vbKeyNumpad6                '|
+'   Numpad 7                 103       vbKeyNumpad7                '|
+'   Numpad 8                 104       vbKeyNumpad8                '|
+'   Numpad 9                 105       vbKeyNumpad9                '|
+'   Numpad *                 106       vbKeyMultiply               '|
+'   Numpad +                 107       vbKeyAdd                    '|
+'   Numpad Enter             108       vbKeySeparator              '|
+'   Numpad -                 109       vbKeySubtract               '|
+'   Numpad .                 110       vbKeyDecimal                '|
+'   Numpad /                 111       vbKeyDivide                 '|
+'   Num Lock                 144       vbKeyNumlock                '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   F1                       112       vbKeyF1                     '|
+'   F2                       113       vbKeyF2                     '|
+'   F3                       114       vbKeyF3                     '|
+'   F4                       115       vbKeyF4                     '|
+'   F5                       116       vbKeyF5                     '|
+'   F6                       117       vbKeyF6                     '|
+'   F7                       118       vbKeyF7                     '|
+'   F8                       119       vbKeyF8                     '|
+'   F9                       120       vbKeyF9                     '|
+'   F10                      121       vbKeyF10                    '|
+'   F11                      122       vbKeyF11                    '|
+'   F12                      123       vbKeyF12                    '|
+'   F13                      124       vbKeyF13                    '|
+'   F14                      125       vbKeyF14                    '|
+'   F15                      126       vbKeyF15                    '|
+'   F16                      127       vbKeyF16                    '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   Backspace                8         vbKeyBack                   '|
+'   Tab                      9         vbKeyTab                    '|
+'   Shift                    16        vbKeyShift                  '|
+'   Control                  17        vbKeyControl                '|
+'   Alt                      18        vbKeyMenu                   '|
+'   Pause                    19        vbKeyPause                  '|
+'   Caps Lock                20        vbKeyCapital                '|
+'   Escape                   27        vbKeyEscape                 '|
+'   Space                    32        vbKeySpace                  '|
+'   Page Up                  33        vbKeyPageUp                 '|
+'   Page Down                34        vbKeyPageDown               '|
+'   End                      35        vbKeyEnd                    '|
+'   Home                     36        vbKeyHome                   '|
+'   Left Arrow               37        vbKeyLeft                   '|
+'   Up Arrow                 38        vbKeyUp                     '|
+'   Right Arrow              39        vbKeyRight                  '|
+'   Down Arrow               40        vbKeyDown                   '|
+'   Print Screen             42        vbKeyPrint                  '|
+'   Insert                   45        vbKeyInsert                 '|
+'   Delete                   46        vbKeyDelete                 '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   Left Mouse Button        1         vbKeyLButton                '|
+'   Right Mouse Button       2         vbKeyRButton                '|
+'   Middle Mouse Button      4         vbKeyMButton                '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     vbKeyConstant               '|
+'-------------------------------------------------------------------|
+'   Cancel                   3         vbKeyCancel                 '|
+'   Clear                    12        vbKeyClear                  '|
+'   Select                   41        vbKeySelect                 '|
+'   Execute                  43        vbKeyExecute                '|
+'   Snapshot                 44        vbKeySnapshot               '|
+'   Help                     47        vbKeyHelp                   '|
+'-------------------------------------------------------------------|
+'   DESCRIPTION              VALUE     No vbKeyConstant for these  '|
+'-------------------------------------------------------------------|
+'   ;  Semicolon             186                                   '|
+'   =  Equals sign           187                                   '|
+'   ,  Comma                 188                                   '|
+'   -  Minus                 189                                   '|
+'   .  Period                190                                   '|
+'   ?  Question mark         191                                   '|
+'   `  Backtick              192                                   '|
+'   [  Open Bracket          219                                   '|
+'   \  Backslash             220                                  '|
+'   ]  Close Bracket         221                                   '|
+'   '  Apostrophe            222                                   '|
+'==================================================================='
+
+
+
+
+
+'Option Explicit
+'
+'Dim WithEvents kp As KeyPreview
+'
+'Private Sub UserForm_Initialize()
+'Set kp = New KeyPreview
+'kp.AddToPreview Me, 114
+'End Sub
+'
+'Private Sub kp_KeyDown(ByVal KeyCode As Integer, ByVal Shift As Integer)
+'MsgBox "F3 was pressed..."
+'End Sub
+
+
+'
+'This code in a class module named "KeyPreview":
+'Option Explicit
+'
+'Dim WithEvents u As MSForms.UserForm
+'Dim WithEvents t As MSForms.textbox
+'Dim WithEvents ob As MSForms.OptionButton
+'Dim WithEvents lb As MSForms.ListBox
+'Dim WithEvents dp As MSComCtl2.DTPicker
+'
+'Event KeyDown(ByVal KeyCode As Integer, ByVal Shift As Integer)
+''Event KeyPress(ByVal KeyAscii As Integer)
+'
+'Private FireOnThisKeyCode As Integer
+'
+'Friend Sub AddToPreview(Parent As UserForm, KeyCode As Integer)
+'Dim c As Control
+'Set u = Parent
+'FireOnThisKeyCode = KeyCode
+'For Each c In Parent.Controls
+'Select Case TypeName(c)
+'Case "TextBox"
+'Set t = c
+'Case "OptionButton"
+'Set ob = c
+'Case "ListBox"
+'Set lb = c
+'Case "DTPicker"
+'Set dp = c
+'End Select
+'Next c
+'End Sub
+'
+'Private Sub u_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'If KeyCode = FireOnThisKeyCode Then RaiseEvent KeyDown(KeyCode, Shift)
+'End Sub
+'
+'Private Sub t_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'If KeyCode = FireOnThisKeyCode Then RaiseEvent KeyDown(KeyCode, Shift)
+'End Sub
+'
+'Private Sub ob_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'If KeyCode = FireOnThisKeyCode Then RaiseEvent KeyDown(KeyCode, Shift)
+'End Sub
+'
+'Private Sub lb_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'If KeyCode = FireOnThisKeyCode Then RaiseEvent KeyDown(KeyCode, Shift)
+'End Sub
+'
+'Private Sub dp_KeyDown(KeyCode As Integer, ByVal Shift As Integer)
+'If KeyCode = FireOnThisKeyCode Then RaiseEvent KeyDown(KeyCode, Shift)
+'End Sub

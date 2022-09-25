@@ -1,0 +1,166 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsExcelStates"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = True
+Option Explicit
+'by default, this class will restore default excel state on terminate
+'setting a save state overrides the default
+
+
+Private mSavedStateFlag As Boolean
+Private mStateOfStatusBarDisplay As Boolean
+Private mStateOfStatusBar As Variant
+Private mStateOfCutCopyMode As XlCutCopyMode
+Private mStateOfAskToUpdateLinks As Boolean
+Private mStateOfScreenUpdating As Boolean
+Private mStateOfEnableEvents As Boolean
+Private mStateOfDisplayAlerts As Boolean
+Private mStateOfAutomationSecurity As MsoAutomationSecurity
+Private mStateOfCalculation As XlCalculation
+
+Private Sub Class_Initialize()
+    #If Debugging Then
+       dbP "INITIALIZING - APclsExcelStates"
+    #End If
+End Sub
+
+Private Sub Class_Terminate()
+    #If Debugging Then
+       dbP "TERMINATING - APclsExcelStates"
+    #End If
+    If mSavedStateFlag Then
+        Me.RestoreFromSaved
+    Else
+        Me.ResetToDefault
+    End If
+End Sub
+
+
+Public Property Get SavedStateStatusBarDisplay() As Boolean
+    SavedStateStatusBarDisplay = mStateOfStatusBarDisplay
+End Property
+Public Property Get SavedStateStatusBar() As Variant
+    SavedStateStatusBar = mStateOfStatusBar
+End Property
+Public Property Get SavedStateCutCopyMode() As XlCutCopyMode
+    SavedStateCutCopyMode = mStateOfCutCopyMode
+End Property
+Public Property Get SavedStateAskToUpdateLinks() As Boolean
+    SavedStateAskToUpdateLinks = mStateOfAskToUpdateLinks
+End Property
+Public Property Get SavedStateScreenUpdating() As Boolean
+    SavedStateScreenUpdating = mStateOfScreenUpdating
+End Property
+Public Property Get SavedStateEnableEvents() As Boolean
+    SavedStateEnableEvents = mStateOfEnableEvents
+End Property
+Public Property Get SavedStateDisplayAlerts() As Boolean
+    SavedStateDisplayAlerts = mStateOfDisplayAlerts
+End Property
+Public Property Get SavedStateAutomationSecurity() As MsoAutomationSecurity
+    SavedStateAutomationSecurity = mStateOfAutomationSecurity
+End Property
+Public Property Get SavedStateCalculation() As XlCalculation
+    SavedStateCalculation = mStateOfCalculation
+End Property
+
+
+
+
+Public Sub ResetToDefault()
+    #If Debugging Then
+        dbP "ResetToDefault"
+    #End If
+    With Application
+        .DisplayStatusBar = True
+        .StatusBar = False
+        .CutCopyMode = False
+        .AskToUpdateLinks = True
+        .ScreenUpdating = True
+        .EnableEvents = True
+        .DisplayAlerts = True
+        .AutomationSecurity = msoAutomationSecurityLow
+        .Calculation = xlCalculationAutomatic
+    End With
+End Sub
+
+
+Public Sub MaxSpeed()
+    #If Debugging Then
+       dbP "MaxSpeed"
+    #End If
+    With Application
+        .DisplayStatusBar = False
+        .CutCopyMode = False
+        .AskToUpdateLinks = False
+        .ScreenUpdating = False
+        .EnableEvents = True
+        .DisplayAlerts = False
+        .Calculation = xlCalculationManual
+    End With
+End Sub
+
+Public Sub RestoreDefaultOnTerminate()
+    mSavedStateFlag = False
+End Sub
+
+Public Sub RestoreFromSaved()
+    #If Debugging Then
+       dbP "RestoreFromSaved"
+    #End If
+    If mSavedStateFlag Then
+        With Application
+            .DisplayStatusBar = mStateOfStatusBarDisplay
+            .StatusBar = mStateOfStatusBar
+            .CutCopyMode = mStateOfCutCopyMode
+            .AskToUpdateLinks = mStateOfAskToUpdateLinks
+            .ScreenUpdating = mStateOfScreenUpdating
+            .EnableEvents = mStateOfEnableEvents
+            .DisplayAlerts = mStateOfDisplayAlerts
+            .AutomationSecurity = mStateOfAutomationSecurity
+            .Calculation = mStateOfCalculation
+        End With
+    Else
+        ResetToDefault
+    End If
+End Sub
+
+Public Sub SaveCurrentState()
+    #If Debugging Then
+        dbP "SaveCurrentState"
+    #End If
+    With Application
+        mStateOfStatusBarDisplay = .DisplayStatusBar
+        mStateOfStatusBar = .StatusBar
+        mStateOfCutCopyMode = .CutCopyMode
+        mStateOfAskToUpdateLinks = .AskToUpdateLinks
+        mStateOfScreenUpdating = .ScreenUpdating
+        mStateOfEnableEvents = .EnableEvents
+        mStateOfDisplayAlerts = .DisplayAlerts
+        mStateOfAutomationSecurity = .AutomationSecurity
+        mStateOfCalculation = .Calculation
+    End With
+    mSavedStateFlag = True
+End Sub
+
+Public Sub PrintCurrentState()
+    Dim a As Long: a = 20
+    Dim B As Long: B = 30
+    Dim output(): ReDim output(1 To 3)
+    With Application
+        output(1) = Array("ScreenUpdating", .ScreenUpdating, "DisplayAlerts", .DisplayAlerts, "DisplayStatusBar", .DisplayStatusBar)
+        output(2) = Array("EnableEvents", .EnableEvents, "Calculation", .Calculation, "StatusBar", .StatusBar)
+        output(3) = Array("CutCopyMode", .CutCopyMode, "AskToUpdateLinks", .AskToUpdateLinks, "AutomationSecurity", .AutomationSecurity)
+        Dim i As Long
+        For i = 1 To 3
+            Debug.Print output(i)(0); Tab(a); "="; Spc(1); output(i)(1); Tab(B); output(i)(2); Tab(a + B); "="; Spc(1); output(i)(3); Tab(2 * B); output(i)(4); Tab(a + 2 * B); "="; Spc(1); output(i)(5)
+        Next i
+    End With
+End Sub
+
+

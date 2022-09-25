@@ -1,0 +1,102 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APsheetSplit"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+Private Const mTABLECOLUMN_WIDTH As Long = 24
+Private pReturnTarget As Range
+Private excelState As APclsExcelStates
+
+
+
+Public Property Get ReturnTarget() As Range
+    Set ReturnTarget = pReturnTarget
+End Property
+Public Property Set ReturnTarget(p As Range)
+    Set pReturnTarget = p
+End Property
+
+Private Sub Worksheet_Activate()
+    Set excelState = New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    Dim c As Range
+    Dim rng As Range
+    EnableRegistryShortcut
+    If Me.Range("B3") = True Then
+        StopScreen
+        Me.Range("TotalAmountToSplit") = vbNullString
+        Set rng = Me.Range("H4:" & Split(Me.UsedRange.Address, ":")(1))
+        For Each c In rng
+            If Not c.Locked And c <> vbNullString Then c = vbNullString
+        Next c
+        Me.Range("TotalAmountToSplit").Select
+        ResumeScreen
+    End If
+End Sub
+Private Sub Worksheet_Deactivate()
+'    If Me.Visible > xlSheetVisible Then
+'        Set pReturnTarget = Nothing
+'        DisableRegistryShortcut
+'        Set excelState = Nothing
+'    End If
+End Sub
+
+Private Sub Worksheet_Change(ByVal target As Range)
+    If target.Address = "$E$2" Or target.Address = "$F$2" Then Me.Range("h4").Select
+    Dim i As Long
+    Dim isValidAccount As Boolean
+    Dim accountDescription As String
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    With loSplitAllocations
+        If Not Intersect(target, .ListColumns(sTABLE_COL_SPLIT_SUMMARY_ACCOUNT).Range) Is Nothing Then
+            APsheetSplit.Unprotect
+            accountDescription = FindAndGetAccountDetails(target.Value, isValidAccount)
+            target.Offset(0, -1).Value = accountDescription
+            If isValidAccount Then
+                If loSplitDetails.ListColumns.Count >= target.Row - .Range.Row Then
+                    loSplitDetails.HeaderRowRange(target.Row - .Range.Row).Offset(-1, 0).Value = accountDescription
+                    loSplitDetails.HeaderRowRange(target.Row - .Range.Row).Value = target.Value
+                Else
+                    loSplitDetails.ListColumns.Add
+                    loSplitDetails.HeaderRowRange(target.Row - 1 - .Range.Row).Offset(-1, 0).Copy _
+                                loSplitDetails.HeaderRowRange(target.Row - .Range.Row).Offset(-1, 0)
+                    loSplitDetails.HeaderRowRange(target.Row - .Range.Row).Offset(-1, 0).Value = accountDescription
+                    loSplitDetails.HeaderRowRange(target.Row - .Range.Row).Value = target.Value
+                    loSplitDetails.HeaderRowRange(target.Row - .Range.Row).ColumnWidth = mTABLECOLUMN_WIDTH
+                End If
+            Else
+                If Not CBool(target.Value) Then
+                    If loSplitDetails.ListColumns.Count >= target.Row - .Range.Row Then
+                        loSplitDetails.HeaderRowRange(target.Row - .Range.Row).EntireColumn.Delete
+                    End If
+                    .ListRows(target.Row - .Range.Row).Delete
+                End If
+            End If
+            APsheetSplit.Protect
+        Else
+            APsheetSplit.Unprotect
+            With loSplitDetails
+                If Not Intersect(target, .Range) Is Nothing Then
+                    loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_AMOUNT).DataBodyRange(target.Column - .Range.Column + 1) = _
+                                Application.WorksheetFunction.Sum(.ListColumns(target.Column - .Range.Column + 1).Range)
+                End If
+            End With
+            APsheetSplit.Protect
+        End If
+    End With
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+End Sub
+
+
+
+
+
+

@@ -1,0 +1,123 @@
+Attribute VB_Name = "SCRAP"
+Option Explicit
+
+Sub test()
+    Dim strVal As String
+    Dim tgt As Range
+    
+    If Not InvoiceBatchEnvironmentWasInitialized Then LoadFrontEnd
+    Do
+        If (IndexPDF >= LBound(PDF_Array) And IndexPDF <= UBound(PDF_Array)) Then
+            On Error Resume Next
+            Set tgt = Application.InputBox("select row", Type:=8)
+            If Err.Number <> 0 Then Set tgt = Nothing
+            On Error GoTo 0
+            If Not tgt Is Nothing Then
+                strVal = APaInvoiceBatchEntry.GenerateFileName(tgt)
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row) = strVal
+                strVal = UploadFolder & Chr(92) & strVal
+            End If
+            Do
+                Sleep SLEEP_MIN
+                DoEvents
+                If Not gPDFddDoc Is Nothing Then
+                    gPDFddDoc.Close
+                    Set gPDFddDoc = Nothing
+                End If
+                If Not gPDFdvDoc Is Nothing Then
+                    gPDFdvDoc.Close 1
+                End If
+                
+                If Not gPDFapp Is Nothing Then
+                    If gPDFapp.GetNumDVDocs = 0 Then
+                        gPDFapp.Exit
+                        Set gPDFapp = Nothing
+                    End If
+                End If
+                Sleep SLEEP_MIN
+                DoEvents
+                If Not tgt Is Nothing Then Name PDF_Array(IndexPDF) As strVal
+                DoEvents
+            Loop Until Dir(strVal) <> vbNullString Or tgt Is Nothing
+            flgPDFisOpen = False
+            IndexPDF = IndexPDF + 1
+            AppActivate ActiveWorkbook.Parent.Caption
+    
+            If IndexPDF > UBound(PDF_Array) Then
+                MsgBox "No more PDF's to open"
+                ReDim PDF_Array(0 To 0)
+                IndexPDF = 1
+                If flgPDFisOpen Then
+                    MsgBox "THE flgPDFisOpen IS TRUE, SETTING TO FALSE"
+                    flgPDFisOpen = False
+                End If
+            Else
+                Call OpenPDF_App
+            End If
+        End If
+    Loop While IndexPDF <= UBound(PDF_Array)
+End Sub
+
+
+
+'
+'driver.Get "file:///C:\Users\e-aatkinson\AppData\Local\VBA\Temp\191126-2347_JWWRRC.png"
+'
+'Set the window's size in pixels
+'driver.Window.SetSize 1024, 768
+'
+'Capture the rendering with a 500ms delay
+'Set imageA = driver.TakeScreenshot(500)
+'
+'Save the image to a file without disposing it (False)
+'imageA.SaveAs "image-a.png", False
+'
+'Capture the rendering with a 500ms delay
+'Set imageB = driver.TakeScreenshot(500)
+'
+'Save the image to a file without disposing it (False)
+'imageB.SaveAs "image-b.png", False
+'
+'
+'Compare image A with image B in a new image
+'Dim imageDiff As Selenium.Image
+'Set imageDiff = imageA.CompareTo(imageB)
+'
+'Show a dialogue box with the number of different pixels
+'wscript.Echo imageDiff.DiffCount & " different pixels"
+'
+
+
+Sub thisismysub()
+    Dim driver As New Selenium.ChromeDriver
+
+    driver.Start
+'    Dim imageA As Object
+'    Dim imageB As Object
+'    Dim imageDiff As Object
+    
+'    Set imageA = createobjecct("C:\Users\e-aatkinson\AppData\Local\SeleniumBasic\Selenium32.tlb", Image)
+'    Set imageB = CreateObject("C:\Users\e-aatkinson\AppData\Local\SeleniumBasic\Selenium32.tlb", Image)
+'    Set imageDiff = CreateObject("C:\Users\e-aatkinson\AppData\Local\SeleniumBasic\Selenium32.tlb", Image)
+    
+    Dim imageA As Selenium.image
+    Dim imageB As Selenium.image
+    Dim imageDiff As Selenium.image
+
+    Set imageA = driver.TakeScreenShot
+    Set imageB = driver.TakeScreenShot
+    
+'    Set imageA = imageA.Load("C:\Users\e-aatkinson\AppData\Local\VBA\Temp\191126-2347_JWWRRC.png")
+'    Set imageB = imageB.Load("C:\Users\e-aatkinson\AppData\Local\VBA\Temp\191126-2347_JWWRRC.png")
+    Set imageDiff = imageA.CompareTo(imageB)
+    
+'    imageDiff.SaveAs "image-diff.png"
+    
+    MsgBox imageDiff.DiffCount & " different pixels"
+    
+    
+'    driver.Quit
+    
+
+End Sub
+

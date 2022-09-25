@@ -1,0 +1,214 @@
+Attribute VB_Name = "B_TOOLS_Windows_FilesEtc"
+Option Explicit
+
+Private Const GENERIC_READ As Long = &H80000000
+Private Const INVALID_HANDLE_VALUE As Long = -1
+Private Const OPEN_EXISTING As Long = 3
+Private Const FILE_ATTRIBUTE_NORMAL As Long = &H80
+Private Const MAX_PATH As Long = 260
+
+Private Type FILETIME
+   dwLowDateTime As Long
+   dwHighDateTime As Long
+End Type
+
+Private Type WIN32_FIND_DATA
+   dwFileAttributes As Long
+   ftCreationTime As FILETIME
+   ftLastAccessTime As FILETIME
+   ftLastWriteTime As FILETIME
+   nFileSizeHigh As Long
+   nFileSizeLow As Long
+   dwReserved0 As Long
+   dwReserved1 As Long
+   cFileName As String * MAX_PATH
+   cAlternate As String * 14
+End Type
+
+Private Declare Function FindFirstFile Lib "kernel32" Alias "FindFirstFileA" ( _
+        ByVal lpFileName As String, _
+        lpFindFileData As WIN32_FIND_DATA _
+        ) As Long
+
+Function FileIsLocked(sFile As String) As eTRUTHINESS
+   Dim hFile As Long
+   If TheFileExists(sFile) Then
+      hFile = CreateFile(sFile, _
+                         GENERIC_READ, _
+                         0, 0, _
+                         OPEN_EXISTING, _
+                         FILE_ATTRIBUTE_NORMAL, 0&)
+     'evaluates to -1  or 0
+      FileIsLocked = hFile = INVALID_HANDLE_VALUE
+      CloseHandle hFile
+   Else
+      FileIsLocked = isother
+   End If
+End Function
+Function TheFileExists(sSource As String) As Boolean
+   Dim WFD As WIN32_FIND_DATA
+   Dim hFile As Long
+   hFile = FindFirstFile(sSource, WFD)
+   TheFileExists = hFile <> INVALID_HANDLE_VALUE
+   Call FindClose(hFile)
+End Function
+
+Sub CreateFullPath(ByVal fullPath As String)
+    Dim aryFolders As Variant
+    aryFolders = Split(fullPath, "\")
+    Dim i As Long
+    For i = LBound(aryFolders) To UBound(aryFolders)
+        Dim buildPath As String
+        buildPath = buildPath & (aryFolders(i)) & "\"
+        If Dir(buildPath, vbDirectory) = vbNullString Then MkDir buildPath
+    Next i
+End Sub
+
+
+Sub RenameAllFilesInFolder(Optional ByVal targetFolder As String)
+    Dim docExt As String
+    Dim srch As String
+    docExt = FILENAME_EXTENSION_PDF
+    srch = ".tmp"
+    Dim myfile As String
+
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Filters.Clear
+        .AllowMultiSelect = False
+        .Title = "Select Folder"
+        .InitialView = msoFileDialogViewList
+        .InitialFileName = vbNullString
+        .ButtonName = "Open Folder"
+        If .Show <> -1 Then Exit Sub
+        myfile = Dir(.SelectedItems(1) & "\*" & srch)
+        Do While Len(myfile) > 0
+            Name (.SelectedItems(1) & "\" & myfile) As Replace(.SelectedItems(1) & "\" & myfile, srch, docExt)
+            myfile = Dir
+        Loop
+    End With
+End Sub
+
+Public Function MoveAllFilesInFolder_NoUI(ByVal targetFolder As String, ByVal destinationFolder As String, _
+                                          Optional ByVal incrementFolder As Boolean = True) As Boolean
+    Dim i As Long
+    Dim saveToFolder As String
+    Dim myfile As String
+    Dim errorFlag As Boolean
+    If Right(targetFolder, 1) <> "\" Then targetFolder = targetFolder & "\"
+    If Right(destinationFolder, 1) <> "\" Then destinationFolder = destinationFolder & "\"
+    On Error GoTo ERRORHANDLER
+    If Len(Dir(destinationFolder, vbDirectory)) = 0 Then
+        saveToFolder = destinationFolder
+        MkDir saveToFolder
+    ElseIf incrementFolder Then
+        Do
+            i = i + 1
+            saveToFolder = Left(destinationFolder, Len(destinationFolder) - 1) & "-" & Replace(str(i), " ", vbNullString) & "\"
+        Loop While Len(Dir(saveToFolder)) > 0
+        MkDir saveToFolder
+    Else
+        saveToFolder = destinationFolder
+    End If
+    myfile = Dir(saveToFolder & "*.*")
+    Do While Len(myfile) > 0
+        Name (saveToFolder & myfile) As (saveToFolder & myfile)
+        myfile = Dir
+    Loop
+    
+NORMALEXIT:
+    On Error GoTo 0
+    If Not errorFlag Then MoveAllFilesInFolder_NoUI = True
+    Exit Function
+    
+ERRORHANDLER:
+    If Err.Number <> 0 Then Debug.Print Err.Number, Err.Description
+    errorFlag = True
+    Resume Next
+End Function
+
+Public Sub CreateSeperateEmailsForAllFilesInFolder()
+    Dim myfile As String
+    Dim mypath As String
+    Dim ol_App As Outlook.Application
+    Dim ol_Mail As MailItem
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Filters.Clear
+        .AllowMultiSelect = False
+        .Title = "Select Folder"
+        .InitialView = msoFileDialogViewList
+        .InitialFileName = vbNullString
+        .ButtonName = "Open Folder"
+        If .Show <> -1 Then Exit Sub
+        mypath = .SelectedItems(1) & "\"
+        myfile = Dir(.SelectedItems(1) & "\*.*")
+        Do While CBool(Len(myfile))
+            Set ol_App = Outlook.Application
+            Set ol_Mail = ol_App.CreateItem(olMailItem)
+            With ol_Mail
+                .To = "adam.atkinson@neurorestorative.com"
+                .CC = ""
+                .BCC = ""
+                .Subject = "Post Acute "
+                .Body = ""
+                .Attachments.Add mypath & myfile
+                '.Send
+                .Display
+            End With
+            myfile = Dir
+        Loop
+    End With
+    Set ol_Mail = Nothing
+    Set ol_App = Nothing
+End Sub
+
+Public Function CreateNewFolder_Safe_noUI(ByVal DefaultFolderLocation As String) As String
+    Dim i As Long
+    Dim newfolder As String
+    newfolder = DefaultFolderLocation
+    If Right(newfolder, 1) <> "\" Then newfolder = newfolder & "\"
+    If Len(Dir(newfolder)) = 0 Then
+        MkDir newfolder
+    Else
+        Do
+            i = i + 1
+            newfolder = Left(DefaultFolderLocation, Len(DefaultFolderLocation) - 1) & "-" & Replace(str(i), " ", vbNullString) & "\"
+        Loop While Len(Dir(newfolder)) > 0
+        MkDir newfolder
+    End If
+    CreateNewFolder_Safe_noUI = newfolder
+End Function
+
+Sub RemoveAllEmptyFolders(HostFolder As String)
+    Dim FileSystem As Object
+    Set FileSystem = CreateObject("Scripting.FileSystemObject")
+    ClearFolders FileSystem.GetFolder(HostFolder)
+End Sub
+Sub ClearFolders(Folder As Object)
+    Dim SubFolder As Object
+    For Each SubFolder In Folder.SubFolders
+        ClearFolders SubFolder
+    Next
+    Sleep SLEEP_MIN
+    If Folder.Files.Count = 0 And Folder.SubFolders.Count = 0 Then RmDir Folder.Path
+End Sub
+
+ 
+Sub DoFolders(HostFolder As String)
+    Dim FileSystem As Object
+    Set FileSystem = CreateObject("Scripting.FileSystemObject")
+    DoFolder FileSystem.GetFolder(HostFolder)
+End Sub
+Sub DoFolder(Folder As Object)
+    Dim i As Long
+    Dim SubFolder As Object
+    For Each SubFolder In Folder.SubFolders
+        DoFolder SubFolder
+    Next
+    Dim File As Object
+
+    For Each File In Folder.Files
+
+        ' Operate on each file
+    Next
+    Debug.Print Folder.Path
+End Sub

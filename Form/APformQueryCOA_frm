@@ -1,0 +1,156 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APformQueryCOA 
+   Caption         =   "Account Inspector (GL - Alias - Approver)"
+   ClientHeight    =   6225
+   ClientLeft      =   45
+   ClientTop       =   375
+   ClientWidth     =   7905
+   OleObjectBlob   =   "APformQueryCOA_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APformQueryCOA"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+Private mSearchRange As Range
+Private Const strNoMatch As String = "Lookup Failed - No Matching Results"
+Private Const strCurrentCell As String = "Current Cell  =  "
+Private Const strGLNotFound As String = "GL Not Found"
+Private Const strAliasNotFound As String = "Alias Not Found"
+Private Const strDelim As String = "  -  "
+Private WithEvents mWorkBookEvents As Workbook
+Attribute mWorkBookEvents.VB_VarHelpID = -1
+Private WithEvents mApplicationEvents As Excel.Application
+Attribute mApplicationEvents.VB_VarHelpID = -1
+
+
+Private Sub ComboBox_OmniSearch_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+End Sub
+
+Private Sub mWorkBookEvents_SheetSelectionChange(ByVal sh As Object, ByVal target As Range)
+    Frame_CurrentCell.Caption = strCurrentCell & target.Address
+    Call LookupActiveCell
+End Sub
+
+
+
+
+
+Private Sub UserForm_Initialize()
+    Frame_CurrentCell.Caption = strCurrentCell & ActiveCell.Address
+    Set mWorkBookEvents = ActiveWorkbook
+    Set mApplicationEvents = Excel.Application
+    Call LookupActiveCell
+End Sub
+
+
+Private Sub UserForm_Terminate()
+    ModifyFormButton gcAP.mainAPform.CommandButton_GLQuery, styleHighContrast
+    Set gfrmGLQuery = Nothing
+End Sub
+
+Private Sub UserForm_Activate()
+    With Me.ComboBox_OmniSearch
+           .Visible = False
+           .Visible = True
+           .SetFocus
+           .SelStart = Len(.Text)
+       End With
+End Sub
+
+Private Sub ComboBox_OmniSearch_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Dim ri As Long
+        
+    Select Case KeyCode
+        Case vbKeyEscape
+            Unload Me
+        Case vbKeyDelete, vbKeyBack
+            ComboBox_OmniSearch.Text = vbNullString
+            Set mSearchRange = Nothing
+    
+        Case vbKeyReturn
+            Set mSearchRange = loChartOfAccounts.ListColumns(sTABLE_COL_COA_ACCOUNTNUMBERANDDESCRIPTION).DataBodyRange _
+                    .Find(ComboBox_OmniSearch.Text, lookat:=xlPart, MatchCase:=False)
+            
+            If Not mSearchRange Is Nothing Then
+                ri = mSearchRange.Row
+                
+                Do
+                    Me.ListBox_Results.AddItem
+                    Me.ListBox_Results.List(Me.ListBox_Results.ListCount - 1, 0) = mSearchRange.Offset(0, 1)
+                    Me.ListBox_Results.List(Me.ListBox_Results.ListCount - 1, 1) = mSearchRange.Offset(0, 2)
+                    Set mSearchRange = loChartOfAccounts.ListColumns(sTABLE_COL_COA_ACCOUNTNUMBERANDDESCRIPTION).DataBodyRange _
+                            .FindNext(mSearchRange)
+                Loop Until ri >= mSearchRange.Row
+                Me.ListBox_Results.ListIndex = Me.ListBox_Results.ListCount - 1
+                Me.ComboBox_OmniSearch.Text = vbNullString
+            Else
+                Me.ListBox_Results.AddItem
+                Me.ListBox_Results.List(Me.ListBox_Results.ListCount - 1, 0) = ComboBox_OmniSearch.Text
+                Me.ListBox_Results.List(Me.ListBox_Results.ListCount - 1, 1) = strNoMatch
+                Me.ListBox_Results.ListIndex = Me.ListBox_Results.ListCount - 1
+            End If
+    End Select
+End Sub
+
+
+Private Sub CommandButton_Clear_Click()
+    Me.ListBox_Results.Clear
+End Sub
+
+Private Sub CommandButton_Hide_Click()
+    With gcAP.mainAPform.CommandButton_GLQuery
+        ModifyFormButton gcAP.mainAPform.CommandButton_GLQuery, styleLoad
+'        .backColor = IDLE_BACKCOLOR
+'        .foreColor = IDLE_FORECOLOR
+    End With
+    Me.Hide
+End Sub
+
+
+Private Sub tbLookUp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+
+End Sub
+
+
+
+Private Sub ComboBox_OmniSearch_Enter()
+'    ComboBox_OmniSearch.Text = vbNullString
+End Sub
+
+Private Sub UserForm_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = vbKeyEscape Then Unload Me
+End Sub
+
+
+
+Private Sub LookupActiveCell()
+    If IsError(ActiveCell.Value2) Then Exit Sub
+    Set mSearchRange = loChartOfAccounts.ListColumns(sTABLE_COL_COA_ACCOUNTNUMBER).DataBodyRange _
+            .Find(ActiveCell.Value2, lookat:=xlWhole, MatchCase:=False)
+    If Not mSearchRange Is Nothing Then
+            Label_CurrentCellValue.Caption = ActiveCell.Value2
+            Label_CurrentCellResult.Caption = loChartOfAccounts.ListColumns(sTABLE_COL_COA_ACCOUNTDESCRIPTION).DataBodyRange(mSearchRange.Row - 1)
+    End If
+    If mSearchRange Is Nothing Then
+        Label_CurrentCellValue.Caption = ActiveCell.Value2
+        Label_CurrentCellResult.Caption = strGLNotFound
+    End If
+    
+    Set mSearchRange = loApproverList.ListColumns(sTABLE_COL_APPROVERS_ALIAS).DataBodyRange _
+            .Find(ActiveCell.Value2, lookat:=xlWhole, MatchCase:=False)
+    If Not mSearchRange Is Nothing Then
+        With loApproverList.ListRows(mSearchRange.Row - 1)
+            Label_Alias.Caption = .Range(1) & strDelim & .Range(4) & strDelim & .Range(2) & strDelim & .Range(3)
+        End With
+    Else
+        Label_Alias.Caption = strAliasNotFound
+    End If
+    On Error GoTo 0
+End Sub
+

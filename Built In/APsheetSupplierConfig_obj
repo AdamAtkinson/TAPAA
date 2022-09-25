@@ -1,0 +1,46 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APsheetSupplierConfig"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Private Sub Worksheet_Change(ByVal target As Range)
+    Dim lo As ListObject
+    Dim updateRange As Range
+    Dim siteAddress() As String
+    
+    Set lo = Me.ListObjects(1)
+    If Not Intersect(target, lo.DataBodyRange) Is Nothing And target.Row <> lo.Range.Row Then
+        If target.Column <> lo.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATE).Range.Column _
+                    And target.Column <> lo.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATE).Range.Offset(0, 1).Column _
+                    And target.Column <> lo.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SITELASTUSED).Range.Column Then
+            StopEvents
+            Set updateRange = Me.Cells(target.Row, lo.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATE).Range.Column)
+            If target.Cells.Count = 1 Then
+                If target.Value <> vbNullString Then
+                    If updateRange.Offset(0, 1).Value <> vbNullString Then updateRange.Offset(0, 1).Value = updateRange.Offset(0, 1).Value & Chr(10)
+                    updateRange.Value = Format(Now, "mm-dd-yyyy")
+                    If lo.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERADDRESS).Index = target.Column And CBool(InStr(1, target.Value, Chr(10))) Then
+                        siteAddress = Split(target.Value, Chr(10))
+                        updateRange.Offset(0, 1) = updateRange.Offset(0, 1).Value & lo.HeaderRowRange(target.Column) & " {""" & siteAddress(UBound(siteAddress)) & """}"
+                    ElseIf target.HasFormula Then
+                        updateRange.Offset(0, 1) = updateRange.Offset(0, 1).Value & lo.HeaderRowRange(target.Column) & " {FORMULA}"
+                    Else
+                        updateRange.Offset(0, 1) = updateRange.Offset(0, 1).Value & lo.HeaderRowRange(target.Column) & " {""" & target.Value & """}"
+                    End If
+                End If
+            Else
+                If Application.WorksheetFunction.CountA(target) > 1 Then
+                    If updateRange.Offset(0, 1).Value <> vbNullString Then updateRange.Offset(0, 1).Value = updateRange.Offset(0, 1).Value & Chr(10)
+                    updateRange.Value = Format(Now, "mm-dd-yyyy")
+                    updateRange.Offset(0, 1) = updateRange.Offset(0, 1).Value & "MULTIPLE FIELDS"
+                End If
+            End If
+            ResumeEvents
+        End If
+    End If
+End Sub
+

@@ -1,0 +1,852 @@
+Attribute VB_Name = "APmodMethods"
+Option Explicit
+Option Private Module
+
+Private Type KeyboardInput '    creating variable type                      '
+    dwType As Long         '    input type (keyboard or mouse)              '
+    wVk As Integer         '    the key to press/release as ASCSI scan code '
+    wScan As Integer       '    not required                                '
+    dwFlags As Long        '    specify if key is pressed or released       '
+    dwTime As Long         '    not required                                '
+    dwExtraInfo As Long    '    not required                                '
+    dwPadding As Currency  '    only required for mouse inputs              '
+End Type
+
+' SendInput constants                           '
+Private Const INPUT_KEYBOARD As Long = 1
+Private Const KEYEVENTF_EXTENDEDKEY As Long = 1
+Private Const KEYEVENTF_KEYUP As Long = 2
+
+' Member variables                              '
+Private TheKeys() As KeyboardInput
+Private NEvents As Long
+
+Private Const AUTOSAVE_REVERSION_PATH As String = "C:\Users\e-aatkinson\Documents\Dev\Excel AutoRecover\Reversion\" 'Public Const AUTOSAVE_NAS_PATH As String = "\\ALICA002\Home\AAtkinson\Autosave\Recent"
+Private Const mVBCOMPONENT_EXPORT_PATH As String = "C:\Users\e-aatkinson\Documents\Dev\Exported Modules\Excel\AP Batch\"
+
+'======================================= USED WITH:    SaveAndCreateBackup =======================================
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Private Const mBACKUP_PATH As String = AUTOSAVE_REVERSION_PATH
+Private Const mBACKUP_NAME_A As String = "AP_Bak_A.xlsm"
+Private Const mBACKUP_NAME_B As String = "AP_Bak_B.xlsm"
+Private Const mBACKUP_NAME_C As String = "AP_Bak_C.xlsm"
+',,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+'=================================================================================================================
+
+'-------------------------------------------------------------------|'
+'------------------------------------------------------------------||'
+Public Sub WriteToIni()                                          '8||'
+    Dim strVal As String                                         '8||'
+    Dim OpPassed As Boolean                                      '8||'
+    OpPassed = True                                              '8||'
+    gcIni.longFilename = "longfilename"                          '8||'
+    gcIni.SectionID = "Login"                                    '8||'
+    gcIni.keyID = "User"                                         '8||'
+    gcIni.KeyValue = "Dom"                                       '8||'
+    strVal = gcIni.WriteKey                                      '8||'
+    If strVal = vbNullString Then OpPassed = False               '8||'
+    If OpPassed Then                                             '8||'
+        gcIni.keyID = "Password"                                 '8||'
+        gcIni.KeyValue = "12345"                                 '8||'
+        strVal = gcIni.WriteKey                                  '8||'
+        If strVal = vbNullString Then OpPassed = False           '8||'
+    End If                                                       '8||'
+    If OpPassed Then                                             '8||'
+        gcIni.SectionID = "Filters"                              '8||'
+        gcIni.keyID = "Region"                                   '8||'
+        gcIni.KeyValue = "NONCA"                                 '8||'
+        strVal = gcIni.WriteKey                                  '8||'
+        If strVal = vbNullString Then OpPassed = False           '8||'
+    End If                                                       '8||'
+    If OpPassed Then                                             '8||'
+        MsgBox "File Updated"                                    '8||'
+    Else                                                         '8||'
+        MsgBox "Update Failed"                                   '8||'
+    End If                                                       '8||'
+End Sub                                                          '8||'
+Sub ReadFromIni()                                                '8||'
+    Dim strVal As String                                         '8||'
+    gcIni.longFilename = " longfilename "                        '8||'
+    gcIni.SectionID = "Login"                                    '8||'
+    gcIni.keyID = "User"                                         '8||'
+    strVal = gcIni.ReadKey                                       '8||'
+    Debug.Print strVal                                           '8||'
+    gcIni.keyID = "Password"                                     '8||'
+    strVal = gcIni.ReadKey                                       '8||'
+    Debug.Print strVal                                           '8||'
+    gcIni.SectionID = "Filters"                                  '8||'
+    gcIni.keyID = "Region"                                       '8||'
+    strVal = gcIni.ReadKey                                       '8||'
+    Debug.Print strVal                                           '8||'
+End Sub                                                          '8||'
+'------------------------------------------------------------------||'
+'-------------------------------------------------------------------|'
+
+Public Sub TakeScreenShot()
+    WordBasic.SendKeys "%{1068}"
+End Sub
+
+Public Sub ExportVBComponentCaller()
+    ExportVBA mVBCOMPONENT_EXPORT_PATH
+End Sub
+Public Sub ExportVBA(Optional sDestinationFolder As String)
+    Dim oVBComponent As VBComponent
+    If sDestinationFolder = vbNullString Then sDestinationFolder = ThisWorkbook.Path & "\VBComponents\"
+    If Dir(sDestinationFolder, vbDirectory) = vbNullString Then MkDir sDestinationFolder
+    For Each oVBComponent In ThisWorkbook.VBProject.VBComponents
+        oVBComponent.Export sDestinationFolder & oVBComponent.Name
+        DoEvents
+    Next oVBComponent
+End Sub
+
+Public Sub ListFormControls()
+    ListAllControlsInUserForm APformFindInvoiceInHistory
+End Sub
+
+Sub testarry()
+Dim a As Range
+Dim B As Range
+Set a = Range("A1")
+Set B = Range("L47:o53")
+Dim c As Range
+Set c = Application.Union(a, B)
+dbP c.Address
+End Sub
+
+Sub LookupRangeInHistory()
+
+  
+    On Error Resume Next
+    Dim selectedRange As Range
+    Set selectedRange = Application.InputBox("Select the area containing invoice numbers", "Invoice Number Lookup", Type:=8)
+    If selectedRange Is Nothing Or Application.WorksheetFunction.CountA(selectedRange) = 0 Then Exit Sub
+    On Error GoTo 0
+    Application.ScreenUpdating = False
+        
+    Dim lookupRange As Range
+    Set lookupRange = selectedRange.Find("*", selectedRange.Cells(selectedRange.Cells.Count), xlFormulas, xlPart, xlByColumns, xlNext, False)
+    If lookupRange Is Nothing Then Exit Sub
+    
+    Dim cel As Range
+    For Each cel In selectedRange
+        If CBool(Len(cel.Value)) And cel.Address <> lookupRange.Address Then Set lookupRange = Union(lookupRange, cel)
+    Next
+    
+
+    Dim wb As Workbook
+    Set wb = Workbooks.Add
+    Dim ws As Worksheet
+    Set ws = wb.Sheets(1)
+    
+    
+    
+    With APsheetiServeHistory
+        ws.Range("A1:K1").Value = .Range("A1:K1").Value
+        ws.Cells(12).Value = "Row"
+        Dim r As Long
+        r = 1
+        For Each cel In lookupRange
+            r = r + 1
+            ws.Cells(r, 5).Value = cel.Value
+            Dim returnRange As Range
+            Set returnRange = loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.Find(cel.Value, lookat:=xlPart, MatchCase:=False)
+            If Not returnRange Is Nothing Then
+                Dim finishCondition As Long
+                finishCondition = returnRange.Row
+                ws.Cells(r, 12) = finishCondition
+                ws.Range(ws.Cells(r, 1), ws.Cells(r, 11)).Value = .Range("A" & returnRange.Row & ":K" & returnRange.Row).Value
+                Do
+                    Set returnRange = loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.FindNext(returnRange)
+                    If returnRange.Row <> finishCondition Then
+                        r = r + 1
+                        ws.Range(ws.Cells(r, 1), ws.Cells(r, 11)).Value = .Range("A" & returnRange.Row & ":K" & returnRange.Row).Value
+                        ws.Cells(r, 12) = returnRange.Row
+                    End If
+                Loop Until returnRange.Row <= finishCondition
+            Else
+                ws.Cells(r, 7) = "N/A"
+            End If
+        Next cel
+    End With
+    
+    
+'
+'    With APsheetiServeHistory
+'        ws.Range("A1:K1").Value = .Range("A1:K1").Value
+'        ws.Cells(12).Value = "Row"
+'        Dim I As Long
+'        Dim r As Long
+'        r = 1
+'        For I = 1 To lookupRange.Cells.Count
+'            ws.Cells(I + r, 5).Value = lookupRange.Cells(I).Value
+'            Dim returnRange As Range
+'            Set returnRange = loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.Find(lookupRange.Cells(I).Value, lookat:=xlPart, MatchCase:=False)
+'            If Not returnRange Is Nothing Then
+'                Dim finishCondition As Long
+'                finishCondition = returnRange.Row
+'                ws.Cells(I + r, 12) = finishCondition
+'                ws.Range(ws.Cells(I + r, 1), ws.Cells(I + r, 11)).Value = .Range("A" & returnRange.Row & ":K" & returnRange.Row).Value
+'                Do
+'                    Set returnRange = loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICENUMBER).DataBodyRange.FindNext(returnRange)
+'                    If returnRange.Row <> finishCondition Then
+'                        r = r + 1
+'                        ws.Range(ws.Cells(I + r, 1), ws.Cells(I + r, 11)).Value = .Range("A" & returnRange.Row & ":K" & returnRange.Row).Value
+'                        ws.Cells(I + r, 12) = returnRange.Row
+'                    End If
+'                Loop Until returnRange.Row <= finishCondition
+'            Else
+'                ws.Cells(I + r, 7) = "N/A"
+'            End If
+'        Next I
+'    End With
+'
+    Dim ary() As Variant
+    ary = Array("Invoice Date", "Invoice Number", "Supplier Name", "Amount")
+
+    With ws.ListObjects.Add(xlSrcRange, ws.UsedRange, , xlYes, ws.UsedRange)
+        Dim i As Long
+        For i = 1 To 4
+            .ListColumns.Add i
+            .ListColumns(i).Range.ClearFormats
+            .ListColumns(i).DataBodyRange.Value = .ListColumns(ary(i - 1)).DataBodyRange.Value
+            .ListColumns(ary(i - 1)).Delete
+            .HeaderRowRange(i).Value = ary(i - 1)
+        Next i
+    End With
+    
+
+    ws.Range("A:L").Columns.AutoFit
+    Application.ScreenUpdating = True
+
+    
+End Sub
+
+
+
+
+Public Sub AddToStringArrayIfUnique(ByRef theArray() As String, ByVal theValue As String)
+    Dim i As Long
+    Dim foundDuplicate As Boolean
+    If LBound(theArray) = UBound(theArray) And Len(theArray(LBound(theArray))) = 0 Then
+        theArray(LBound(theArray)) = theValue
+    Else
+        For i = LBound(theArray) To UBound(theArray)
+            If theArray(i) = theValue Then foundDuplicate = True
+        Next i
+        If Not foundDuplicate Then
+            ReDim Preserve theArray(LBound(theArray) To UBound(theArray) + 1)
+            theArray(UBound(theArray)) = theValue
+        End If
+    End If
+End Sub
+
+Sub RunShellAndWait(ByVal Cmd As String, Optional ByVal windowStyle As VbAppWinStyle)
+    Static wsh As New WshShell
+    wsh.Run Cmd, windowStyle, True
+End Sub
+
+Sub RunShellFromBAT(ByVal batLongFileName As String, ByVal batCommands As String, Optional ByVal windowStyle As VbAppWinStyle)
+    Dim streamToFile As TextStream
+    Dim fso As FileSystemObject
+    Set fso = New FileSystemObject
+    If Not fso.FileExists(batLongFileName) Then
+        Set streamToFile = fso.CreateTextFile(batLongFileName)
+    Else
+        Set streamToFile = fso.OpenTextFile(batLongFileName, ForWriting)
+    End If
+    streamToFile.Write batCommands
+    streamToFile.Close
+    RunShellAndWait batLongFileName, windowStyle
+End Sub
+
+Sub ResetTableFilters(lo As ListObject)
+    Dim cnt As Long
+    On Error GoTo HANDLER
+
+    If lo.ShowAutoFilter Then lo.DataBodyRange.AutoFilter 'turn filters off to reset
+    lo.DataBodyRange.AutoFilter                           'turn filters on         '
+    Exit Sub
+HANDLER:
+    If Not lo Is Nothing And ActiveSheet.ListObjects.Count = 1 And cnt < 2 Then
+        Set lo = ActiveSheet.ListObjects(1)
+    ElseIf cnt < 3 Then
+        lo.AutoFilter.ShowAllData
+    Else
+        MsgBox "Unexpected table condition, table or filter does not exist"
+    End If
+    cnt = cnt + 1
+    Resume
+End Sub
+
+Sub DeleteFileWithoutFSO(longFilename As String)
+    If Len(Dir(longFilename)) > 0 Then
+        SetAttr longFilename, vbNormal
+        Kill longFilename
+    End If
+End Sub
+
+
+'===================================== SaveAndCreateBackup =======================================================
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Sub SaveAndCreateBackup(Optional NoText As Boolean, Optional NameModifier As String)
+    'SAVES A COPY WITH THE FILE NAME ROTATING AMONG THREE NAMES, ALLOWS RESTORING UP TO THREE SAVES IN THE PAST'
+    'RUNS EVERY TIME THE WORKBOOK IS SAVED
+    'REQUIRES MODULE CONSANTS
+    Dim shortName As String
+    Dim filepath As String
+    Dim longName As String
+    Dim a As String
+    Dim B As String
+    Dim c As String
+    Dim foundSheet As Boolean
+    Dim ws As Worksheet
+    Dim backupVersion As String
+    For Each ws In ThisWorkbook.Sheets
+        If ws.CodeName = "APsheetBatch" Then
+            foundSheet = True
+            Exit For
+        End If
+    Next ws
+    Select Case foundSheet
+        Case True
+            Application.DisplayAlerts = False
+            shortName = ThisWorkbook.Name
+            filepath = ThisWorkbook.Path & Chr(92)
+            longName = filepath & shortName
+            a = mBACKUP_PATH & mBACKUP_NAME_A & NameModifier
+            B = mBACKUP_PATH & mBACKUP_NAME_B & NameModifier
+            c = mBACKUP_PATH & mBACKUP_NAME_C & NameModifier
+            If Dir(a) = vbNullString Then
+                ThisWorkbook.SaveAs a
+                backupVersion = a
+            ElseIf Dir(B) = vbNullString Then
+                ThisWorkbook.SaveAs B
+                backupVersion = B
+            ElseIf Dir(c) = vbNullString Then
+                ThisWorkbook.SaveAs c
+                backupVersion = c
+            Else
+                If FileDateTime(a) < FileDateTime(B) Then
+                    If FileDateTime(a) < FileDateTime(c) Then
+                        ThisWorkbook.SaveAs a
+                        backupVersion = a
+                    ElseIf FileDateTime(B) < FileDateTime(c) Then
+                        ThisWorkbook.SaveAs B
+                        backupVersion = B
+                    Else
+                        ThisWorkbook.SaveAs c
+                        backupVersion = c
+                    End If
+                ElseIf FileDateTime(B) < FileDateTime(c) Then
+                    ThisWorkbook.SaveAs B
+                    backupVersion = B
+                Else
+                    ThisWorkbook.SaveAs c
+                    backupVersion = c
+                End If
+            End If
+            ThisWorkbook.SaveAs longName
+            Application.DisplayAlerts = True
+            If Not NoText Then MsgBox "Backup saved to: " & vbCr & vbCr & backupVersion
+        Case False
+            MsgBox "Sorry, not configured to backup this spreadsheet"
+    End Select
+End Sub
+
+
+Public Sub CopyRangeToSheetInSameLocation(sourceRange As Range, Optional destinationSheet As Worksheet = Nothing)
+    Dim destinationRange As Range
+    If destinationSheet Is Nothing Then Set destinationSheet = ActiveWorkbook.Worksheets.Add
+    Set destinationRange = destinationSheet.Range(sourceRange.Address)
+    sourceRange.Cells.Copy
+    With destinationRange.Cells
+        .PasteSpecial Paste:=xlPasteFormulasAndNumberFormats
+        .PasteSpecial Paste:=xlPasteFormats
+        .PasteSpecial Paste:=xlPasteAllUsingSourceTheme
+        .PasteSpecial Paste:=xlPasteColumnWidths
+    End With
+    Application.CutCopyMode = False
+End Sub
+
+Public Sub DeleteUsedRange(targetSheet As Worksheet)
+    With targetSheet
+        .Rows(.UsedRange.Row & ":" & .UsedRange.Rows.Count).Delete xlUp
+    End With
+End Sub
+
+
+
+Sub CopyBatchToAccrual()
+
+    Dim headersAccrual()
+    headersAccrual = Array("1", "2", "3", "4", "6", "7") '"Invoice Number", "Invoice Date", "  Amount  ", "Vendor", "RespCode", "GLCode")
+    Dim headersBatch()
+    headersBatch = Array(sTABLE_COL_BATCH_INVOICENUMBER, sTABLE_COL_BATCH_INVOICEDATE, sTABLE_COL_BATCH_INVOICEAMOUNT, _
+                                sTABLE_COL_BATCH_SUPPLIERNAME, sTABLE_COL_BATCH_ALIAS, sTABLE_COL_BATCH_ACCOUNTNUMBER)
+    
+    Dim i As Long
+    Dim tableHeaders(0 To 1, 1 To 6) As String
+    For i = 1 To UBound(tableHeaders, 2)
+        tableHeaders(0, i) = headersBatch(i - 1)
+        tableHeaders(1, i) = headersAccrual(i - 1)
+    Next
+    
+    Dim pathToAccrual As String
+    If GetFromFileDialogWindow(msoFileDialogFilePicker, pathToAccrual, "S:\ACCOUNTING 1\Accounts Payable\MonthEndAccruals\", "Select accrual file", "Select") Then
+        Dim wbAccrual As Workbook
+        For i = 1 To Application.Windows.Count
+            If Application.Windows(i).Caption = GetShortNameFromLongFileName(pathToAccrual) Then
+                Set wbAccrual = Application.Workbooks(Application.Windows(i).Caption)
+                Exit For
+            End If
+        Next
+        If wbAccrual Is Nothing Then Set wbAccrual = Application.Workbooks.Open(pathToAccrual)
+        
+        Dim wsAccrual As Worksheet
+        For i = 1 To wbAccrual.Worksheets.Count
+            If wbAccrual.Worksheets(i).CodeName = "AccrualSheet" Then Set wsAccrual = wbAccrual.Worksheets("Accrual")
+        Next i
+        If wsAccrual Is Nothing Then Exit Sub
+    Else
+        Exit Sub
+    End If
+    
+    Dim tableBatch As ListObject
+    Set tableBatch = APsheetBatch.ListObjects(1)
+    
+    Dim riAccrual As Long
+    'riAccrual = Split(wsAccrual.ListObjects(1).Range.Address, "$")(UBound(wsAccrual.ListObjects(1).Range.Address, "$")) ' .Range("C6").End(xlDown).Row + 1
+    
+    With tableBatch
+    
+        Dim rmaxBatch As Long
+        rmaxBatch = Split(.Range.Address, "$")(UBound(Split(.Range.Address, "$")))
+        
+        Dim riBatch As Long
+        For riBatch = 1 To rmaxBatch
+            If Month(.DataBodyRange(riBatch, .ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Index)) <> Month(Format(Now, "MM/DD/YYYY")) Then
+                Dim ci As Long
+                wsAccrual.ListObjects(1).ListRows.Add wsAccrual.ListObjects(1).ListRows.Count
+                riAccrual = wsAccrual.ListObjects(1).ListRows.Count
+                For ci = 1 To UBound(tableHeaders, 2)
+                    Dim r As Long
+                    r = wsAccrual.ListObjects(1).ListRows(riAccrual).Range.Row - 1
+                    Dim c As Long
+                    c = CInt(tableHeaders(1, ci))
+                        wsAccrual.Cells(r, c).Value = .ListColumns(tableHeaders(0, ci)).DataBodyRange(riBatch).Value
+                
+                Next ci
+                'riAccrual = riAccrual + 1
+            End If
+        Next riBatch
+    End With
+    
+    wsAccrual.Activate
+End Sub
+
+
+'this works like 'Unpivot' in PowerQuery
+Public Sub NormalizeData()
+    Dim rng As Range
+    Dim ws As Worksheet
+    Dim r As Long
+    Dim c As Long
+    Dim i As Long
+    On Error Resume Next
+    Set rng = Application.InputBox(Prompt:="Select a range to normalize data" _
+    , Title:="Select a range", Default:=ActiveCell, Type:=8)
+    On Error GoTo 0
+    If Not rng Is Nothing Then
+        If VarType(rng) = 8204 Then
+            Application.ScreenUpdating = False
+            Set ws = Sheets.Add
+            i = 0
+            For r = 1 To rng.Rows.Count - 1
+                For c = 1 To rng.Columns.Count - 1
+                    ws.Range("A1").Offset(i, 0) = rng.Offset(0, c).Value
+                    ws.Range("A1").Offset(i, 1) = rng.Offset(r, 0).Value
+                    ws.Range("A1").Offset(i, 2) = rng.Offset(r, c).Value
+                    i = i + 1
+                Next c
+            Next r
+            ws.Range("A:C").EntireColumn.AutoFit
+            Application.ScreenUpdating = True
+        End If
+    End If
+End Sub
+
+Public Sub AppFocus()
+    On Error Resume Next
+    AppActivate ThisWorkbook.Parent.Caption
+End Sub
+
+'                                                                                                                             '
+'Launch application if not already open                                                                                       '
+Public Sub BringApplicationToFront(longFilename As String)  '                                                                 '
+    Dim tmr As Single                                       '                                                                 '
+    Dim tmrTimeout As Single                                '                                                                 '
+    tmrTimeout = 10                                         'time out after this many seconds                                 '
+    tmr = Timer                                             '                                                                 '
+    If vPID = 0 Then                                        'Application not already open                                     '
+101:                                                        '                                                                 '
+        vPID = Shell(longFilename, vbNormalFocus)           '"""C:\Program Files (x86)\Nuance\Power PDF 20\bin\NuancePDF.exe"""
+        If Int(Timer - tmr) > tmrTimeout Then GoTo TimedOut '                                                                 '
+    Else                                                    'Application already open so reactivate                           '
+        On Error GoTo 101                                   '                                                                 '
+        AppActivate vPID                                    '                                                                 '
+    End If                                                  '                                                                 '
+    On Error GoTo 0                                         '                                                                 '
+    Exit Sub                                                '                                                                 '
+TimedOut:                                                   '                                                                 '
+    On Error GoTo 0                                         '                                                                 '
+    MsgBox "Timed out, application not brought to front"    '                                                                 '
+End Sub                                                     '                                                                 '
+'                                                                                                                             '
+'                                                                                                                             '
+
+
+'                                    '
+Public Sub GetFocus_gfrmVendorName() '
+'                                    '
+    If Not gfrmVendorName Is Nothing Then
+        With gfrmVendorName.cmboVendorNameList
+            If ActiveCell.Value = vbNullString Then
+                .Visible = False
+                .Visible = True
+                .SetFocus
+                .Text = ActiveCell.Offset(-1, 0).Value
+                .SelStart = Len(.Text)
+            Else
+                .Visible = False
+                .Visible = True
+                .SetFocus
+                .Text = ActiveCell.Value
+                .SelStart = Len(.Text)
+            End If
+        End With
+    End If
+End Sub
+
+Public Sub SendKeysToApplication(Optional longFilename As String = vbNullString, _
+                                 Optional KeysToSend As String = vbNullString, _
+                                 Optional KeyDelim As String = ",", _
+                                 Optional ConcatDelim As String = "&&", _
+                                 Optional SleepTime As Long = 500)
+    Dim i As Long
+    Dim ArrayOfKeys() As String
+    Dim ArrayOfKeysUpperBound As Integer
+    Dim MultiKey() As String
+    Dim SecondModifier As Long
+    Dim FirstModifier As Long
+    Dim KeyBase As Long
+    
+    ArrayOfKeys = Split(KeysToSend, KeyDelim)
+    For i = 0 To UBound(ArrayOfKeys)
+        MultiKey = Split(ArrayOfKeys(i), ConcatDelim)
+        
+       Select Case UBound(MultiKey)
+            Case 0
+                FirstModifier = 0
+                SecondModifier = 0
+                KeyBase = ConvertStringToScanCode(MultiKey(0))
+            Case 1
+                FirstModifier = ConvertStringToScanCode(MultiKey(0))
+                KeyBase = ConvertStringToScanCode(MultiKey(1))
+            Case 2
+                FirstModifier = ConvertStringToScanCode(MultiKey(0))
+                SecondModifier = ConvertStringToScanCode(MultiKey(1))
+                KeyBase = ConvertStringToScanCode(MultiKey(2))
+            Case Else
+                'this is an error, should not happen
+        End Select
+        
+        ArrayOfKeysUpperBound = 5 '2 * UBound(MultiKey) + 1
+        
+        ReDim TheKeys(0 To ArrayOfKeysUpperBound)
+        If SecondModifier <> 0 Then
+            With TheKeys(0) '0
+                .dwType = INPUT_KEYBOARD 'operation type
+                .wVk = SecondModifier 'press CTRL key
+            End With
+        End If
+        
+        If FirstModifier <> 0 Then
+            With TheKeys(1) '1
+                .dwType = INPUT_KEYBOARD 'operation type
+                .wVk = FirstModifier 'press CTRL key
+            End With
+        End If
+        
+        If KeyBase <> 0 Then
+            With TheKeys(2) '2
+                .dwType = INPUT_KEYBOARD ' operation
+                .wVk = KeyBase 'VkKeyScan(Asc("C")) 'press chr key
+            End With
+            
+            Sleep 20
+            
+            With TheKeys(3) '3
+                .dwType = INPUT_KEYBOARD 'operation type
+                .wVk = KeyBase 'VkKeyScan(Asc("C"))
+                .dwFlags = KEYEVENTF_KEYUP 'release chr key
+            End With
+        End If
+        If FirstModifier <> 0 Then
+            With TheKeys(4) '4
+                .dwType = INPUT_KEYBOARD ' operation type
+                .wVk = FirstModifier
+                .dwFlags = KEYEVENTF_KEYUP 'release CTRL Key
+            End With
+        End If
+        
+        If SecondModifier <> 0 Then
+            With TheKeys(5) '5
+                .dwType = INPUT_KEYBOARD ' operation type
+                .wVk = SecondModifier
+                .dwFlags = KEYEVENTF_KEYUP 'release CTRL Key
+            End With
+        End If
+        
+        If longFilename <> vbNullString Then
+            Call BringApplicationToFront(longFilename)
+            Sleep SleepTime
+        End If
+        Call SendInput(6, TheKeys(0), Len(TheKeys(0)))
+        Erase TheKeys
+    Next i
+End Sub
+
+Sub AddCheckBoxes()
+    Dim rng As Range
+    Dim shp As Shape
+    Dim CellsInRange As Range
+    Dim ws As Worksheet
+    Dim cb As Excel.CheckBox
+    Dim linkedColumn As Range
+    If TypeName(Selection) = "Range" Then
+        On Error Resume Next
+        Set linkedColumn = Application.InputBox("Linked column =", Type:=VbSet)
+        On Error GoTo 0
+        Application.CutCopyMode = False
+        Set ws = ActiveSheet
+        Set rng = ActiveWindow.Selection
+        For Each CellsInRange In rng.Cells
+            Set cb = ws.CheckBoxes.Add(CellsInRange.Left + 1, CellsInRange.Top + 1, 15, 15)
+            cb.Name = "checkbox_" & CellsInRange.Address
+            cb.Caption = CellsInRange.Value
+            If CellsInRange.Value = cb.Caption Then CellsInRange.Value = vbNullString
+            ws.Shapes(cb.Name).AlternativeText = CellsInRange.Address
+            cb.Width = Application.WorksheetFunction.Max(Len(cb.Caption) * 5, 15)
+            If Not linkedColumn Is Nothing Then cb.LinkedCell = ActiveSheet.Cells(CellsInRange.Row, linkedColumn.Column).Address
+        Next
+    Else
+        MsgBox "Select a range instead of a " & TypeName(Selection)
+    End If
+End Sub
+Sub RemoveCheckBoxes()
+    Dim rng As Range
+    Dim usrInput As Variant
+    Dim indx As Long
+    Dim CellsInRange As Range
+    Dim ws As Worksheet
+    Dim cb As CheckBox
+    Application.CutCopyMode = False
+    Set ws = ActiveSheet
+    If TypeName(Selection) = "Range" Then
+        Set rng = ActiveWindow.Selection
+        For Each CellsInRange In rng.Cells
+            indx = HasCheckbox(CellsInRange)
+            If indx > 0 Then
+                With ActiveSheet.CheckBoxes(indx)
+                    If Len(.LinkedCell) > 0 Then ActiveSheet.Range(.LinkedCell).Cells.ClearContents
+                    .Delete
+                End With
+            End If
+        Next
+    Else
+        MsgBox "Select a range instead of a " & TypeName(Selection)
+    End If
+End Sub
+Public Function HasCheckbox(rng As Range) As Long
+    Dim cb As CheckBox
+    For Each cb In ActiveSheet.CheckBoxes
+        If Not Application.Intersect(rng, cb.TopLeftCell) Is Nothing Then
+            HasCheckbox = cb.Index
+            Exit Function
+        End If
+    Next cb
+    HasCheckbox = 0
+End Function
+Sub SetAllCheckBoxesToFalse()
+    Dim cb As CheckBox
+    For Each cb In ActiveSheet.CheckBoxes
+        cb.Value = False
+    Next
+End Sub
+
+'Sub ShowOptionsForm()
+'    With gcAP.mainAPform.OptionsForm
+'        If .Visible Then
+'            .Hide
+'        Else
+'            .Show
+'        End If
+'    End With
+'End Sub
+
+Public Sub OpenFolder(Optional strDirectory As String)
+'requires AP_WINDOWS_API.ShowWindow
+'requires AP_WINDOWS_API.IsIconic
+    'Private Const SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+    Dim SW_RESTORE As Single: SW_RESTORE = 9
+    Dim pID As Variant
+    Dim sh As Variant
+    Dim w As Object
+    If strDirectory = vbNullString Then strDirectory = Environ("USERPROFILE") & Chr(92)
+    On Error GoTo ERRORSEEN:
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+            'Debug.Print w.Name
+            If w.Document.Folder.self.Path = strDirectory Then
+                'if already open, bring it front
+                If CBool(IsIconic(w.hwnd)) Then ' If it's minimized, show it
+                    w.Visible = False
+                    w.Visible = True
+                    ShowWindow w.hwnd, SW_RESTORE
+                Else
+                    w.Visible = False
+                    w.Visible = True
+                End If
+                Exit Sub
+            End If
+        End If
+    Next
+    'if you get here, the folder isn't open so open it
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+    Exit Sub
+ERRORSEEN:
+    'Debug.Print Err.Number
+End Sub
+
+Sub FormulaCount()
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim lCount As Long
+    Set wb = ActiveWorkbook
+    On Error GoTo HANDLER
+    For Each ws In wb.Sheets
+        lCount = lCount + ws.Cells.SpecialCells(xlCellTypeFormulas).Count
+NOFORMULAS:
+    Next ws
+    On Error GoTo 0
+    MsgBox "There are " & lCount & " formulas in " & wb.Name
+HANDLER:
+    If Err.Number = 1004 And Err.Description = "No cells were found." Then Resume NOFORMULAS
+    If Err.Number <> 0 Then MsgBox "An unhandled error occured.", vbCritical, "Error"
+End Sub
+
+Public Sub ResumeScreen()
+    Application.ScreenUpdating = True
+End Sub
+Public Sub StopScreen()
+    Application.ScreenUpdating = False
+End Sub
+Public Sub ResumeEvents()
+    Application.EnableEvents = True
+End Sub
+Public Sub StopEvents()
+    Application.EnableEvents = False
+End Sub
+Public Sub ResumeAlerts()
+    Application.DisplayAlerts = True
+End Sub
+Public Sub StopAlerts()
+    Application.DisplayAlerts = False
+End Sub
+
+Public Sub CustomNumberColumn()
+Dim ary()
+Dim rng As Range
+Dim i As Long
+Set rng = APsheetBatch.Range("Q2:Q200")
+ReDim ary(2 To 200)
+For i = LBound(ary) To UBound(ary)
+    ary(i) = "=IF(ROW()<>1,IF(INDIRECT(""A"" & ROW())<>"""",ROW()-1,""""),"""")"
+Next
+    With rng
+        .Select
+        .Formula = ary
+        .FormatConditions.Delete
+        .FormatConditions.Add Type:=xlExpression, Formula1:="=A2 <> """""
+        With .FormatConditions(1)
+            With .Interior
+                .Pattern = xlSolid
+                .PatternColorIndex = xlAutomatic
+                .ThemeColor = xlThemeColorDark1
+                .TintAndShade = -0.149998474074526
+                .PatternTintAndShade = 0
+            End With
+            With .Font
+                .Color = -39424
+                .TintAndShade = 0
+            End With
+            With .Borders(xlEdgeBottom)
+    '            .LineStyle = xlContinuous
+                .ThemeColor = 1
+                .TintAndShade = 0
+    '            .Weight = xlThin        '
+            End With
+        End With
+    End With
+End Sub
+
+Public Sub QuickSort(vArray As Variant, inLow As Long, inHi As Long)
+  Dim pivot   As Variant
+  Dim tmpSwap As Variant
+  Dim tmpLow  As Long
+  Dim tmpHi   As Long
+  tmpLow = inLow
+  tmpHi = inHi
+  pivot = vArray(Int((inLow + inHi) / 2))
+  While (tmpLow <= tmpHi)
+     While (vArray(tmpLow) < pivot And tmpLow < inHi)
+        tmpLow = tmpLow + 1
+     Wend
+     While (pivot < vArray(tmpHi) And tmpHi > inLow)
+        tmpHi = tmpHi - 1
+     Wend
+     If (tmpLow <= tmpHi) Then
+        tmpSwap = vArray(tmpLow)
+        vArray(tmpLow) = vArray(tmpHi)
+        vArray(tmpHi) = tmpSwap
+        tmpLow = tmpLow + 1
+        tmpHi = tmpHi - 1
+     End If
+  Wend
+  If (inLow < tmpHi) Then QuickSort vArray, inLow, tmpHi
+  If (tmpLow < inHi) Then QuickSort vArray, tmpLow, inHi
+End Sub
+
+
+'
+'Sub DoNotAllowUserBreak()
+'   Application.EnableCancelKey = xlErrorHandler
+'   On Error GoTo HANDLER
+'   do stuff
+'CLEANUP:
+'   Application.EnableCancelKey = xlInterrupt
+'   Exit Sub
+'HANDLER:
+'   If Err.Number = 18 Then
+'      MsgBox "user exit prompt continue y/n?"
+'   Else
+'      MsgBox "other error prompt"
+'   End If
+'   Resume CLEANUP
+'End Sub
+
+
+
+
+

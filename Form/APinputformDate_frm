@@ -1,0 +1,170 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APinputformDate 
+   Caption         =   "Date"
+   ClientHeight    =   375
+   ClientLeft      =   45
+   ClientTop       =   375
+   ClientWidth     =   1890
+   OleObjectBlob   =   "APinputformDate_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APinputformDate"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Public Event FieldComplete()
+Public Event Terminated()
+
+Private tgtCell As Range
+
+Public Property Set TargetCell(tgt As Range)
+    Set tgtCell = tgt
+End Property
+
+
+
+
+
+Private Sub UserForm_Activate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+'    Set hook = New Hook_Class
+'    hook.SetHook
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left + (0.5 * Application.Width) - (0.5 * Me.Width)
+    Me.Top = Application.Top + (0.5 * Application.height) - (0.5 * Me.height)
+End Sub
+
+Private Sub txtDate_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+    End If
+End Sub
+Private Sub txtDate_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Dim answr As Long
+    Dim strDate As String
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+        strDate = Me.txtDate.Value
+        With Me.txtDate
+            Select Case KeyCode
+                Case vbKeyDelete
+                    If Shift = SHIFT_MASK Then
+                    Else
+                        .Text = vbNullString
+                    End If
+                Case Is = vbKeyEscape
+                    Me.Hide
+                Case vbKeyLeft
+                    gDisableFormEvents = True
+                    Me.Hide
+                    tgtCell.Offset(0, -1).Select
+                    gDisableFormEvents = False
+                Case vbKeyUp, vbKeyDown
+                    If Shift Then .Value = tgtCell.Offset(-1, 0).Value
+                Case Is = vbKeyReturn, vbKeyTab, vbKeyRight
+                    gDisableFormEvents = True
+                    If Not IsDate(.Text) And .Text <> vbNullString Then
+                        answr = MsgBox(strDate & " is not a qualified date." & vbCr & vbCr & "   Future < 5 days" & vbCr & "          OR" & vbCr & "   Past < " & LIMIT_DATEDIFFERENCE & " days" & LIMIT_DATEDIFFERENCE & " days in the past." & vbCr & vbNewLine & vbCr & "  'Ignore' =  Accept" & vbCr & "  'Retry'  =  Change" & vbCr & "  'Abort'  =  Exit", vbAbortRetryIgnore + vbExclamation, "INVALID DATE")
+                        Select Case answr
+                            Case Is = vbIgnore
+                                If Len(strDate) = 6 Then strDate = Left(strDate, 2) & "/" & Mid(strDate, 3, 2) & "/" & Right(strDate, 2)
+                                Call ValidateDate(strDate, False)
+                                Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+                            Case Is = vbAbort
+                                .Value = vbNullString
+                                Me.Hide
+                            Case Is = vbRetry
+                                .Value = vbNullString
+                                ResetEntryFormFocus
+                        End Select
+                    Else
+                        Call ValidateDate(Me.txtDate.Text, True)
+                    End If
+                    gDisableFormEvents = False
+                Case Else
+                    If .Value Like "*.##" Then
+                        tgtCell.Offset(0, 2).Value = .Value
+                        .Value = vbNullString
+                    End If
+            End Select
+        End With
+    End If
+End Sub
+Private Sub txtDate_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+    End If
+End Sub
+
+Private Sub txtDate_Change()
+    Dim strDate As String
+    strDate = Me.txtDate.Value
+    Select Case Len(strDate)
+        Case Is = 6
+            Call ValidateDate(strDate, True)
+            strDate = Left(strDate, 2) & "/" & Mid(strDate, 3, 2) & "/" & Right(strDate, 2)
+            Call ValidateDate(strDate, True)
+        Case 7 To 10
+            Call ValidateDate(strDate, True)
+        Case Is > 10
+            strDate = vbNullString
+            Me.txtDate.Value = vbNullString
+    End Select
+End Sub
+
+Private Sub ValidateDate(ByVal strDate As String, enforceLIMIT_DATEDIFFERENCE As Boolean)
+    Dim answr As Long
+    If enforceLIMIT_DATEDIFFERENCE Then
+        If IsDate(strDate) Then
+            If DateDiff("d", DateValue(strDate), Date$) < LIMIT_DATEDIFFERENCE And DateDiff("d", DateValue(strDate), Date$) > -5 Then
+                Me.Hide
+                tgtCell.Value = strDate
+                Me.txtDate.Value = vbNullString
+                Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+            Else
+                If Len(strDate) = 8 Or Len(strDate) = 6 Then
+                answr = MsgBox(strDate & " is not a qualified date." & vbCr & vbCr & "   Future < 5 days" & vbCr & "          OR" & vbCr & "   Past < " & LIMIT_DATEDIFFERENCE & " days" & vbCr & vbNewLine & vbCr & "  'Ignore' =  Accept" & vbCr & "  'Retry'  =  Change" & vbCr & "  'Abort'  =  Exit", vbAbortRetryIgnore + vbExclamation, "INVALID DATE")
+                Select Case answr
+                    Case Is = vbIgnore
+                        Me.Hide
+                        If Len(strDate) = 6 Then strDate = Left(strDate, 2) & "/" & Mid(strDate, 3, 2) & "/" & Right(strDate, 2)
+                        If IsDate(strDate) Then
+                            tgtCell.Value = strDate
+                            Me.txtDate.Value = vbNullString
+                            Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+                        End If
+                    Case Is = vbAbort
+                        Me.txtDate.Value = vbNullString
+                        Me.Hide
+                    Case Is = vbRetry
+                        Me.txtDate.Value = vbNullString
+                        Call ResetEntryFormFocus
+                End Select
+                End If
+            End If
+        End If
+    Else
+        If IsDate(strDate) Then
+            Me.Hide
+            tgtCell.Value = strDate
+            Me.txtDate.Value = vbNullString
+            Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+        End If
+    End If
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode <> 1 Then Cancel = 1
+    Me.txtDate.Value = vbNullString
+    Me.Hide
+End Sub
+
+Private Sub UserForm_Terminate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+End Sub

@@ -1,0 +1,2224 @@
+Attribute VB_Name = "APaInvoiceBatchEntry"
+Option Explicit
+Option Private Module
+
+Private Enum mtDisplayedInvoiceFields
+    all = -1
+    Name = 0
+    Number = 1
+    Amount = 2
+    Status = 3
+End Enum
+
+
+Private Const mUNMATCHED_SUPPLIER_TEXT As String = "SUPPLIER NOT FOUND"
+Private mFirstSplitRow As Long
+Private mLastSplitRow As Long
+Private mWB As Workbook
+Private mWatchedVendor As String
+
+Sub ToggleMainForm()
+    Dim ans As Long
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    If gcIni.Configured = False Then
+       ans = MsgBox("The configuration file was not loaded.  Do you want to try reloading it?", vbYesNo, "Not Configured")
+       Select Case ans
+            Case vbYes
+                ResetApp
+            Case vbNo
+                'do nothing
+        End Select
+    Else
+        If gcAP.mainAPform.Visible = False Then
+            gcAP.mainAPform.Show
+        Else
+            gcAP.mainAPform.Hide
+        End If
+    End If
+End Sub
+
+
+Sub LoadFrontEnd()
+    Dim ans As Long
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    If gcIni.Configured = False Then
+       ans = MsgBox("The configuration file was not loaded.  Do you want to try reloading it?", vbYesNo, "Not Configured")
+       Select Case ans
+            Case vbYes
+                ResetApp
+            Case vbNo
+                'do nothing
+        End Select
+    Else
+        If gcAP.mainAPform.Visible = False Then
+            gcAP.mainAPform.Show
+            If gcAP.mainAPform.Visible = False Then
+                Select Case MsgBox("Something went wrong and the form is not visible, do you want to reset the app?", vbYesNo)
+                    Case vbYes
+                        ResetApp
+                    Case vbNo
+                        'do nothing
+                End Select
+            End If
+        Else
+            gcAP.mainAPform.Hide
+        End If
+    End If
+End Sub
+
+
+
+'========================================================
+' INITIALIZE BATCH EVIRONMENT                           '
+'========================================================
+Sub InitializeInvoiceBatchEnvironment()
+
+    Dim strVal As String
+    Dim ws As Worksheet
+    Dim currentWS As Worksheet
+    Dim InvalidConfig As Boolean
+    Dim i As Long
+    Dim j As Long
+    Dim k As Long
+
+    'the class saves the current state upon initialization and can be restored later
+    'but we do not assume excel is in any particular state so resore to default
+    Dim excelState As New APclsExcelStates
+    excelState.ResetToDefault
+    excelState.SaveCurrentState
+
+
+    Application.EnableEvents = False
+    StopScreen
+    Application.Calculation = xlCalculationManual
+    
+    
+    'APappInitialization.startAP
+    If gcAP Is Nothing Then
+        Set gcAP = New APApplication.APclsMainApplication
+        gcAP.LoadAP
+    End If
+
+    
+    Application.Calculation = xlCalculationManual
+
+    #If Released Then
+        'On Error GoTo HANDLER
+    #End If
+    
+
+
+    
+    'If ThisWorkbook.Name <> WORKBOOKNAME_AP Then MsgBox "Workbook names not the same, break now and adjust the constant."
+    Set gcAP.wbAPapp = ThisWorkbook '.Workbooks(WORKBOOKNAME_AP) 'contant is located at the top of the APmodConstants module
+    
+    'setting these so they can be restored later
+    Set mWB = ThisWorkbook
+    Set currentWS = mWB.ActiveSheet
+    
+    If Len(mWB.BuiltinDocumentProperties("Hyperlink base")) = 0 Then mWB.BuiltinDocumentProperties("Hyperlink base") = "C:\"
+    
+    If gcIni Is Nothing Then Set gcIni = New APclsIniFileHandler
+    If gcIni.Configured = False Then Exit Sub
+    
+    Application.StatusBar = "Initializing AP Batch Environment"
+    ResumeScreen
+
+    If gcAP.mainAPform Is Nothing Then Set gcAP.mainAPform = AP_1_Form_MainWindow
+
+    gcIni.SectionID = "DEV"
+    gcIni.keyID = "DEVKEY"
+    DEVKEY = gcIni.ReadKey
+
+    gcIni.SectionID = "Power PDF Environment"
+    gcIni.keyID = "NuancePowerPDF"
+    NuancePowerPDF = Chr(34) & gcIni.ReadKey & Chr(34)
+    gcIni.keyID = "Split PDF Import"
+    DefaultImportSplitPDFFolder = gcIni.ReadKey
+    
+                                                                        
+
+    gcIni.SectionID = "iServe Environment"
+    gcIni.keyID = "Environ"
+    CheckIniKey False
+    strVal = gcIni.ReadKey
+    If strVal <> vbNullString Then strVal = Environ(strVal)
+    
+    gcIni.keyID = "Root"
+    CheckIniKey True
+    gRootFolder = strVal & gcIni.ReadKey
+    
+    gcIni.keyID = "Active"
+    CheckIniKey True
+    ActiveFolder = gRootFolder & gcIni.ReadKey
+    
+    gcIni.keyID = "Trash"
+    CheckIniKey True
+    TrashFolder = gRootFolder & gcIni.ReadKey
+    
+    gcIni.keyID = "Upload"
+    CheckIniKey True
+    UploadFolder = gRootFolder & gcIni.ReadKey
+    
+    gcIni.keyID = "Backup"
+    CheckIniKey True
+    gBackupPath = gcIni.ReadKey
+
+    
+    gcIni.SectionID = "Email Contacts"
+    gcIni.keyID = "Count"
+    CheckIniKey True
+    strVal = gcIni.ReadKey
+    If IsNumeric(strVal) Then
+        For i = 1 To CInt(strVal)
+            ReDim Preserve EmailContacts(1 To i)
+            gcIni.keyID = i
+            EmailContacts(i) = gcIni.ReadKey
+        Next i
+    End If
+    
+    gcIni.keyID = "Default"
+    CheckIniKey True
+    strVal = gcIni.ReadKey
+    If IsNumeric(strVal) Then
+        DefaultEmailContact = EmailContacts(CInt(strVal))
+    End If
+    
+    If UploadFolder = vbNullString Then InvalidConfig = True
+    If Not InvalidConfig Then
+        If Dir(UploadFolder, vbDirectory) = vbNullString Then
+            strVal = MsgBox("Missing folder that holds renamed invoices for the iServe upload" _
+                    & vbCr & vbCr & _
+                    "Do you want to make the folder now?", vbYesNo, "Missing folder")
+            Select Case strVal
+                Case vbYes
+                    MkDir UploadFolder
+                Case vbNo
+                    MsgBox "Unable to continue without a folder to hold invoices."
+                    Exit Sub
+            End Select
+        End If
+    End If
+                
+    If TrashFolder = vbNullString Then InvalidConfig = True
+    If Not InvalidConfig Then
+        If Dir(TrashFolder, vbDirectory) = vbNullString Then
+            strVal = MsgBox("Missing folder that holds unwanted invoices excluded from the batch" _
+                    & vbCr & vbCr & _
+                    "Do you want to make the folder now?", vbYesNo, "Missing folder")
+            Select Case strVal
+                Case vbYes
+                    MkDir TrashFolder
+                Case vbNo
+                    MsgBox "Unable to continue without a folder to hold trash."
+                    Exit Sub
+            End Select
+        End If
+    End If
+                
+    'set default options (these shoudl be constants instead of being defined here)
+    gcIni.SectionID = "Batch Defaults"
+    gcIni.keyID = "Region"
+    CheckIniKey True
+    strVal = gcIni.ReadKey
+    If strVal <> vbNullString Then
+        If strVal = "CA" Then gcAP.mainAPform.CheckBox_CA = True
+        If strVal = "NONCA" Then gcAP.mainAPform.CheckBox_NONCA = True
+        If strVal = "ALL" Then
+            gcAP.mainAPform.CheckBox_CA = True
+            gcAP.mainAPform.CheckBox_NONCA = True
+            gcAP.mainAPform.CheckBox_Other = True
+        End If
+    Else
+        InvalidConfig = True
+    End If
+
+    If Not InvalidConfig Then
+    
+        gcIni.keyID = "Caps Lock"
+        CheckIniKey True
+        gcAP.mainAPform.CheckBox_CapsLock = gcIni.ReadKey
+        
+        gcIni.keyID = "Num Lock"
+        CheckIniKey True
+        gcAP.mainAPform.CheckBox_NumLock = gcIni.ReadKey
+
+        gcIni.keyID = "AutoRun"
+        CheckIniKey True
+        InvoiceEntryMode = gcIni.ReadKey
+      
+        ReDim PDF_Array(0 To 0)
+        IndexPDF = 1
+    
+        '   set tables
+        Set loInvoiceBatch = APsheetBatch.ListObjects(sTABLE_NAME_BATCH)
+        Set loSupplierDetails = APsheetSupplierConfig.ListObjects(sTABLE_NAME_SUPPLIER_DETAILS)
+        Set loApproverList = APsheetApprovers.ListObjects(sTABLE_NAME_APPROVERS)
+        Set loChartOfAccounts = APsheetChartOfAccounts.ListObjects(sTABLE_NAME_COA)
+        Set loInvoiceDescriptionList = APsheetApprovers.ListObjects(sTABLE_NAME_LINE_DESCRIPTIONS)
+        Set loPostingHistory = APsheetiServeHistory.ListObjects(sTABLE_NAME_ISERVE_HISTORY)
+        Set loBatchTemplate = APsheetBatchTemplate.ListObjects(sTABLE_NAME_EMPTY_BATCH_TEMPLATE)
+        Set loTableRanges = APsheetConfigurationTables.ListObjects(sTABLE_NAME_TABLE_RANGES)
+        Set loPDFVendors = APsheetPDFMapping.ListObjects(sTABLE_NAME_PDF_SUPPLIERS)
+        Set loExpensePeriod = APsheetConfigurationTables.ListObjects(sTABLE_NAME_EXPENSE_PERIODS)
+        Set loSupplierNames = APsheetConfigurationTables.ListObjects(sTABLE_NAME_SUPPLIER_NAMES)
+        Set loSplitAllocations = APsheetSplit.ListObjects(sTABLE_NAME_SPLIT_SUMMARY)
+        Set loSplitDetails = APsheetSplit.ListObjects(sTABLE_NAME_SPLIT_DETAILS)
+        
+        'populate expense periods
+        For i = 3 To 1 Step -1
+            For j = 12 To 1 Step -1
+                k = k + 1
+               loExpensePeriod.DataBodyRange(k) = Format(Application.WorksheetFunction.EoMonth(DateSerial(Year(Date) - 2 + i, j, 1), 0), "m/d/yyyy")
+            Next
+        Next
+        
+        'create buttons
+        For Each ws In mWB.Worksheets
+        
+'            If ws.Visible = xlSheetVisible Then
+'                AddButtonToSheet ws
+'            End If
+        
+'            Select Case dsSHEET_CODENAMES Like "*+" & ws.CodeName & "+*"
+'                Case True
+'                    'Add_AP_ButtonToSheet ws
+'            End Select
+        Next
+    
+        '   sort supplier details table
+        ResetTableFilters loSupplierDetails
+        
+        With loSupplierDetails.Sort
+            .SortFields.Clear
+            .SortFields.Add Key:=loSupplierDetails.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange, SortOn:= _
+                    xlSortOnValues, Order:=xlAscending, DataOption:=xlSortTextAsNumbers
+            .Header = xlYes
+            .MatchCase = False
+            .Orientation = xlTopToBottom
+            .SortMethod = xlPinYin
+            .Apply
+        End With
+                    
+                    
+        CreateListOfSupplierNames 'table holds vendor names as a combobox source list
+        RefreshTableRanges mWB 'table holds ranges used for conditional formats         '
+        ResetConditionalFormatsOnBatchSheet 'duh                                    '
+    Else
+        MsgBox "Inhvalid or corrupt configuration.  Cannot initialize."
+        Exit Sub
+    End If
+    
+
+
+    '   set global initialization flag
+    InvoiceBatchEnvironmentWasInitialized = True
+    
+    'selecting this cell now guarantees 'previousTarget' will be configured in BatchSheet_SelectionChange and ready to use
+    APsheetBatch.Activate
+    loInvoiceBatch.Range.Cells(loInvoiceBatch.Range.Rows.Count, 1).Select
+
+
+CLEANUP:
+    currentWS.Activate
+    Application.StatusBar = CBool(eTRUTHINESS.isfalse)
+    ResumeScreen
+    Application.Calculation = xlCalculationAutomatic
+    If Not InvoiceBatchEnvironmentWasInitialized Then Call RebuildBatchSheet
+    Exit Sub
+    
+HANDLER:
+    InvoiceBatchEnvironmentWasInitialized = False
+    If Not gcAP Is Nothing Then Set gcAP = Nothing
+    Resume CLEANUP
+
+End Sub
+
+Sub ShowObjectNotSetErrorMessage(Optional ByVal objectName As String)
+    Dim strVal As String
+    strVal = "Object removed from memory and unable to continue" & DBLLN & "Open the primary window and reset the application if the error persists."
+    If CBool(Len(objectName)) Then strVal = strVal & DBLLN & "Object name= " & objectName
+    MsgBox strVal, vbCritical, "Object Not Set"
+End Sub
+
+Sub ResetApp()
+'    Select Case MsgBox("This WILL STOP EVERY VBA program currently running (even unrelatedand VBA programs)." & vbCr & vbCr & _
+'            "Do you want to continue?", vbYesNo + vbExclamation, "END EVERY VBA PROGRAM ???")
+'        Case Is = vbYes
+            Application.OnTime Now + TimeValue("00:00:01"), "ReloadFrontEnd"
+            End 'terminate everything
+'        Case vbNo
+'            If gcIni.Configured = False Then MsgBox "The configuration file is not loaded."
+'    End Select
+End Sub
+
+Sub ReloadFrontEnd()
+    If Not InvoiceBatchEnvironmentWasInitialized Then Call InitializeInvoiceBatchEnvironment
+    If Not InvoiceBatchEnvironmentWasInitialized Then
+        MsgBox "Batch was not initialized!"
+        Exit Sub
+    End If
+    gcAP.mainAPform.ResetConfirmation
+End Sub
+
+
+'======================================================
+' RECOVER BATCH EVIRONMENT                            |
+'======================================================
+Sub RebuildBatchSheet()
+    Dim ws As Worksheet
+    Dim wsCopySource As Worksheet
+    Dim wsCopyDestination As Worksheet
+    Dim rngCopySource As Range
+    Dim CopyDestinationWasFound As Boolean
+    
+    Select Case MsgBox("This will attempt format the batch sheet into a repairable state," _
+            & " all data in the batch sheet will be lost!" & DBLLN & "Do you want to confinue?", vbYesNo, "Possible Data Loss")
+        Case vbYes
+            'do nothing, continue
+        Case vbNo
+            Exit Sub
+    End Select
+    
+    If InvoiceBatchEnvironmentWasInitialized Then MsgBox "configured"
+    If gcIni Is Nothing Then
+        MsgBox "Note: gcIni is not set"
+    ElseIf Not gcIni.Configured Then
+        MsgBox "Note: gcIni is set but not configured"
+    End If
+    
+    If Not mWB Is Nothing Then
+        If ActiveWorkbook.Name <> mWB.Name Then
+            MsgBox "Cannot continue, different workbooks are being used."
+            Exit Sub
+        End If
+    Else
+        Set mWB = ActiveWorkbook
+    End If
+        
+    For Each ws In mWB.Worksheets
+        If ws.CodeName = APsheetBatchTemplate.CodeName Then Set wsCopySource = ws
+        If ws.CodeName = APsheetBatch.CodeName Then Set wsCopyDestination = ws
+    Next
+    
+    If wsCopySource Is Nothing Then
+        MsgBox "Cannot continue, missing batch template codename."
+        Exit Sub
+    End If
+    If wsCopyDestination Is Nothing Then
+        MsgBox "Cannot continue, missing batch sheet codename."
+        Exit Sub
+    End If
+    
+    Set rngCopySource = wsCopySource.UsedRange
+    CopyRangeToSheetInSameLocation rngCopySource, wsCopyDestination
+    wsCopyDestination.ListObjects(1).Name = sTABLE_NAME_BATCH
+    
+    MsgBox "Process complete, try launching the main window again."
+    
+    Application.CutCopyMode = False
+    
+End Sub
+
+
+
+Private Sub CheckIniKey(Optional ByVal valueRequired As Boolean)
+    If Not CBool(Len(gcIni.ReadKey)) Then AddMissingIniKey valueRequired
+End Sub
+Private Sub AddMissingIniKey(Optional ByVal valueRequired As Boolean)
+    Do
+    Loop Until gcIni.ChangeKeyValue(gcIni.SectionID, gcIni.keyID, "Missing value for " & gcIni.SectionID & " | " & gcIni.keyID) = valueRequired
+End Sub
+
+'=======================================================
+' selection change on invoice batch sheet - main routine
+'=======================================================
+Sub BatchEntryChange(ByRef tgt As Range)
+
+    Dim topRowIndex As Long
+    Dim ans As Long
+    Dim r As Range
+    Dim i As Long
+    Dim ary As Variant
+    Dim strVal As String
+    Dim s As String
+    Dim flg As Boolean
+    
+    
+    Dim excelState As New APclsExcelStates
+    excelState.ResetToDefault
+    excelState.SaveCurrentState
+    
+
+        
+    On Error GoTo 0
+    
+    #If Released Then
+        '        On Error GoTo HANDLER
+    #End If
+ 
+    If Not flgPDFisOpen And (UBound(PDF_Array) >= IndexPDF And LBound(PDF_Array) <= IndexPDF) _
+    And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row) = vbNullString Then
+        Call OpenPDF_App(tgt)
+    End If
+
+    If ActiveCell.Row - SCROLLTOROW < 1 Then
+        ActiveWindow.ScrollRow = 1
+    Else
+        ActiveWindow.ScrollRow = ActiveCell.Row - SCROLLTOROW
+    End If
+
+    '====================================================================
+    ' invoice entry - smart behavior with auto fill or list selection   '
+    '====================================================================
+    
+    
+    
+    If tgt.Value = vbNullString _
+    And (tgt.Column = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index _
+        Or ( _
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row) <> vbNullString _
+            And tgt.Column <> loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index _
+            ) _
+        ) _
+    Then
+       
+
+       
+       Select Case tgt.Column
+            
+            'smart list for supplier name
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index
+                gflgCancel = False
+                recursionCounter = 0
+                Set gfrmVendorName = APinputformVendorName
+                Set gfrmVendorName.TargetCell = tgt
+                gfrmVendorName.Show
+                With gcAP.mainAPform.Label_InvoiceLookup
+                    If Not .Caption Like "*NOT FOUND*" And .Caption <> vbNullString Then
+                        tgt.Value = gcAP.mainAPform.Frame_SupplierInvoiceInformation.Caption
+                    End If
+                End With
+                GoTo CLEANEXIT
+            
+            'smart behavior for date entry
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Index
+            
+                'GetPDFPAgeCountWithDialog
+            
+                gflgCancel = False
+                recursionCounter = 0
+                Set gfrmInvoiceDate = APinputformDate
+                Set gfrmInvoiceDate.TargetCell = tgt
+                gfrmInvoiceDate.Show
+                GoTo CLEANEXIT
+            
+            'default the expense period to last day of month of invoice date
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Index
+                gflgCancel = False
+                recursionCounter = 0
+                If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(tgt.Row) <> vbNullString And _
+                        IsDate(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(tgt.Row)) Then
+                    Set gfrmExpensePeriod = APinputformExpensePeriod
+                    Set gfrmExpensePeriod.TargetCell = tgt
+                    gfrmExpensePeriod.Show
+                    GoTo CLEANEXIT
+            '=====================================================================================
+            'THIS IS WHERE I AUTORUN THE BATCH FOR IMPORT                                        |
+            '=====================================================================================
+                Else
+                    Call TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_FACILITYNAME, loApproverList, tgt.Row)
+                    Call TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_APPROVERNAME, loApproverList, tgt.Row)
+                    Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_APPROVERS_FACILITYNAME).Index)
+                    GoTo CLEANEXIT
+                End If
+            '=====================================================================================
+            '=====================================================================================
+
+            
+            'smart behavior for invoice amount
+            Case loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Index
+                gflgCancel = False
+                recursionCounter = 0
+                Set gfrmInvoiceAmount = APinputformAmount
+                Set gfrmInvoiceAmount.TargetCell = tgt
+                gfrmInvoiceAmount.Show
+                GoTo CLEANEXIT
+                    
+        End Select
+        
+'===============================================================================================================
+'===============================================================================================================
+        
+        
+        '======================================================
+        ' set filters in vendor details table for autofill/list
+        '======================================================
+        ResetTableFilters loSupplierDetails
+
+        'use the three way region toggle to set a filter and hide unwanted matches
+        Call SetRegionFilter
+        
+        strVal = sTABLE_COL_BATCH_SUPPLIERNAME & "," _
+                & sTABLE_COL_BATCH_ALIAS & "," _
+                & sTABLE_COL_BATCH_SUPPLIERADDRESS & "," _
+                & sTABLE_COL_BATCH_ACCOUNTNUMBER & "," _
+                & sTABLE_COL_BATCH_INVOICEDESCRIPTION
+        ary = Split(strVal, ",")
+        
+        'check if a line has an empty cell in column name 'ary(i)'
+        For i = LBound(ary) To UBound(ary)
+            strVal = loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row).Value
+            If strVal <> vbNullString Then
+                s = ary(i)
+                Call SetColumnFilter(s, strVal)
+            End If
+        Next i
+
+        '=======================================================================
+        ' add unique values to invoice batch or create a list for user to select
+        '=======================================================================
+        Set gfrmSelectInvoiceDetails = APinputformMultiList
+        gfrmSelectInvoiceDetails.ClearOptionList
+        For i = LBound(ary) To UBound(ary)
+            If gflgCancel = False Then
+                'check for GL or Alias Locks
+                If flgAliasLock And ary(i) = sTABLE_COL_BATCH_ALIAS Then
+                        loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row - 1)
+                        Call SetColumnFilter(sTABLE_COL_BATCH_ALIAS, loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row))
+                ElseIf flgGLLock And ary(i) = sTABLE_COL_BATCH_ACCOUNTNUMBER Then
+                        loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row - 1)
+                        Call SetColumnFilter(sTABLE_COL_BATCH_ACCOUNTNUMBER, loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row))
+                Else 'it not alias lock then continue
+                    flg = True
+                    s = loSupplierDetails.ListColumns(ary(i)).DataBodyRange.SpecialCells(xlCellTypeVisible).Cells(1, 1).Value
+                    For Each r In loSupplierDetails.ListColumns(ary(i)).DataBodyRange.SpecialCells(xlCellTypeVisible)
+                        If r.Value <> s Then
+                            flg = False
+                        End If
+                    Next r
+                    
+                    'if only one unique value then add it do the invoice batch
+                    If flg = True And loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = vbNullString Then
+                        loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = s
+                        'if the current column is 'invoice description' and it is on the custom list then show selection form to get scratchpad
+                        If ary(i) = sTABLE_COL_BATCH_INVOICEDESCRIPTION Then
+                            Set r = loInvoiceDescriptionList.ListColumns(1).DataBodyRange.Find(s, lookat:=xlWhole, MatchCase:=False)
+                            If Not r Is Nothing Then
+                                gfrmSelectInvoiceDetails.SetScratchPadText = s
+                                gfrmSelectInvoiceDetails.Show
+                                If Not gflgCancel Then
+                                    loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = gfrmSelectInvoiceDetails.UserSelection
+                                    gfrmSelectInvoiceDetails.ClearOptionList
+                                End If
+                            End If
+                            'GRAB THE REMITTANCE INFO FLAG
+                            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(tgt.Row) _
+                                    = loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_REMITTANCEREQUIRED).DataBodyRange.SpecialCells(xlCellTypeVisible).Cells(1, 1).Value
+                        End If
+                         
+                    'if not unique then create the list
+                    ElseIf flg = False And loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = vbNullString Then
+                        s = ary(i)
+                        gfrmSelectInvoiceDetails.LookupColumn = s
+                        If gfrmSelectInvoiceDetails.OptionCount > 1 Then
+                            gfrmSelectInvoiceDetails.listboxAvailableOptions.Selected(gfrmSelectInvoiceDetails.listboxAvailableOptions.TopIndex) = True
+                            gfrmSelectInvoiceDetails.Caption = s
+                            gfrmSelectInvoiceDetails.Show
+                            If Not gflgCancel Then
+                                loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = gfrmSelectInvoiceDetails.UserSelection
+                                If gfrmSelectInvoiceDetails.CheckBox_SplitLine Then loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) = gfrmSelectInvoiceDetails.CheckBox_SplitLine
+                                If gfrmSelectInvoiceDetails.CheckBox_RemittanceRequired Then loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(tgt.Row) = gfrmSelectInvoiceDetails.CheckBox_RemittanceRequired
+                                Call SetColumnFilter(s, gfrmSelectInvoiceDetails.UserSelection)
+                                gfrmSelectInvoiceDetails.ClearOptionList
+                            End If
+                            
+                        'i was wrong about this comment, do not know what i was thinking or why i was wrong ....
+                        'probably doesn't happen because single instances are handled earlier in the program
+                        Else
+                            loInvoiceBatch.ListColumns(ary(i)).Range(tgt.Row) = gfrmSelectInvoiceDetails.OnlyOption
+                            Call SetColumnFilter(s, gfrmSelectInvoiceDetails.OnlyOption)
+                            gfrmSelectInvoiceDetails.ClearOptionList
+                        End If
+                    End If
+                End If
+            End If
+            If gflgCancel Then Exit For
+        Next i
+        
+        
+'===============================================================================================================
+'===============================================================================================================
+        
+        
+        'display custom/reminder/warning messages prior to finalizing the invoice if the autopopulate is not on
+        Select Case gflgPopulateAll
+            Case True
+                'messages that need to be shown when automatically populating
+            Case False
+                
+                'SEND MSGBOX IF REMIT INFO NOT IS BLANK IN BATCH AND NOT BLANK IN SUPPLIER DETAILS
+                If Application.WorksheetFunction.CountA(loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_REMITTANCEREQUIRED).DataBodyRange.SpecialCells(xlCellTypeVisible)) > 0 _
+                        And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_REMITTANCEREQUIRED).Range(tgt.Row) = vbNullString Then
+                    MsgBox "IS THE REMITTANCE INFO SET CORRECTLY?"
+                End If
+        
+                'DISPLAY MESSAGEBOX TO REMIND ABOUT PO
+                If Application.WorksheetFunction.CountA(loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_PROCESSINGCODE).DataBodyRange.SpecialCells(xlCellTypeVisible)) > 0 Then
+                    flg = False
+                    For Each r In loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_PROCESSINGCODE).DataBodyRange.SpecialCells(xlCellTypeVisible)
+                        If CBool(Len(r)) Then
+                            If CBool(InStr(1, r.Value, sPROCESS_CODE_ZYCUSPO)) Then flg = True
+                        End If
+                    Next r
+                    If flg Then
+                        If Not loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Range(tgt.Row) Like "Z#######" Then
+                            Dim zycusPO As String
+                            zycusPO = Application.InputBox("Enter a PO number or leave blank if none.", "PO Vendor", vbNullString, Type:=2)
+                            Application.EnableEvents = False
+                            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_PONUMBER).Range(tgt.Row) = zycusPO
+                            Application.EnableEvents = True
+                            Debug.Assert Application.EnableEvents = True
+                        End If
+                    End If
+                End If
+                
+                
+                'display custom message if it is visible
+                If Application.WorksheetFunction.CountA(loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_CUSTOMMESSAGE).DataBodyRange.SpecialCells(xlCellTypeVisible)) > 0 Then
+                    strVal = vbNullString
+                    For Each r In loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_CUSTOMMESSAGE).DataBodyRange.SpecialCells(xlCellTypeVisible)
+                        If CBool(Len(r)) Then strVal = strVal & r.Value & Chr(10)
+                    Next r
+                    MsgBox strVal
+                End If
+        End Select
+
+'===============================================================================================================
+'===============================================================================================================
+        If Not gflgCancel Then PopulateApproverAndFacility tgt
+        
+        
+'        Dim flagInvalidAllocation As Boolean
+'        'use alias to lookup approver and facility name
+'        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(tgt.Row) <> vbNullString Then
+'            If Not gflgCancel Then
+'                If Not TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_FACILITYNAME, loApproverList, tgt.Row) Then flagInvalidAllocation = True
+'                If Not TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_APPROVERNAME, loApproverList, tgt.Row) Then flagInvalidAllocation = True
+'                'check if using advanced alias and use basic version if found
+'                With loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS)
+'                    strVal = .Range(tgt.Row).Value
+'                    If Len(strVal) > 6 And IsNumeric(left(strVal, 6)) Then
+'                        Select Case MsgBox("Replace the current alias: " & strVal & DBLLN & "With alias: " _
+'                                & left(strVal, 6), vbYesNo, "Use Standard Alias")
+'                            Case vbYes
+'                                strVal = left(strVal, 6)
+'                                .Range(tgt.Row) = strVal
+'                            Case vbNo
+'                                flagInvalidAllocation = True
+'                        End Select
+'                    End If
+'                    Set r = loApproverList.ListColumns(sTABLE_COL_APPROVERS_ALIAS).DataBodyRange.Find(strVal, lookat:=xlWhole, MatchCase:=False)
+'                    If r Is Nothing Then
+'                        MsgBox strVal & " is not a recognized format, please change manually"
+'                        flagInvalidAllocation = True
+'                    End If
+'                End With
+'            End If
+'        End If
+'
+'        With APsheetBatch
+'            If flagInvalidAllocation Then .Range(.Cells(tgt.Row, 1), .Cells(tgt.Row, loInvoiceBatch.ListColumns.Count)).Font.Strikethrough = True
+'        End With
+'===============================================================================================================
+'===============================================================================================================
+
+
+
+'        'change splitline from TRUE to invoice number
+'        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) = True _
+'                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) <> vbNullString Then
+'            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+'            If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row).Offset(-1, 0) <> loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) Then
+'                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row).Offset(1, 0) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+'                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row).Offset(1, 0) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+'            End If
+'        End If
+
+
+
+'===============================================================================================================
+'===============================================================================================================
+
+
+        '=======================================================================================
+        '   if all the critical fields are populated then the line is done                     '
+        '   so we ask if they want to close and save the pdf and begin working on the next pdf '
+        '=======================================================================================
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDESCRIPTION).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_APPROVERNAME).Range(tgt.Row) <> vbNullString _
+            And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(tgt.Row) <> vbNullString _
+        Then
+            If (IndexPDF >= LBound(PDF_Array) And IndexPDF <= UBound(PDF_Array)) Then
+                Dim invoiceShortName As String
+                Dim invoiceFullPath As String
+                invoiceShortName = GenerateFileName(tgt)
+                invoiceFullPath = UploadFolder & Chr(92) & invoiceShortName
+                If gflgPopulateAll Or (tgt.Row = mFirstSplitRow And mFirstSplitRow <> 0) Then
+                    ans = vbYes
+                ElseIf tgt.Row <= mLastSplitRow And mLastSplitRow <> 0 Then
+                    ans = vbNo
+                Else
+                    mLastSplitRow = 0
+                    mFirstSplitRow = 0
+                    ans = MsgBox("Click 'Yes' to finish working with this invoice and prepare the PDF for upload to iServe." _
+                            & vbCr & vbCr & _
+                            "Click 'No' to continue working with this invoice.", vbYesNo, "Rename as: " & invoiceShortName)
+                End If
+                Select Case ans
+                    Case vbYes
+                        'the user confirmed the transaction so update the 'site last used' field
+                        Set r = loSupplierDetails.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range _
+                                        .Find(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(tgt.Row), _
+                                        lookat:=xlWhole, MatchCase:=False)
+                        If Not r Is Nothing Then
+                            topRowIndex = r.Row
+                            Do
+                                r.Offset(0, loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SITELASTUSED).Index - r.Column) = Format(Now, "mm/dd/yy")
+                                Set r = loSupplierDetails.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range _
+                                        .FindNext(r)
+                            Loop Until topRowIndex >= r.Row
+                        End If
+
+                        Application.EnableEvents = False
+                        
+                        
+'                        'copy file name to split lines below
+'                        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) <> vbNullString _
+'                                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) _
+'                                = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) _
+'                                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) _
+'                                = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row).Offset(1, 0) _
+'                                Then
+'                            i = 1
+'
+'                            Do
+'                                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).Copy loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).Offset(i, 0)
+'                                i = i + 1
+'                            Loop While loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row).Offset(i, 0)
+'                        End If
+'
+'                        'copy filename to split lines above
+'                        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) <> vbNullString _
+'                                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) _
+'                                = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) _
+'                                And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row) _
+'                                = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row).Offset(-1, 0) _
+'                                Then
+'                            i = -1
+'                            Do
+'                                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).Copy loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).Offset(i, 0)
+'                                i = i - 1
+'                            Loop While loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row).Offset(i, 0)
+'                        End If
+                        
+                        
+                        'DO I REALLY NEED THIS
+                        vPID = 0 'vPID = TaskTracker
+                        
+
+
+
+                        With loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME)
+                            Dim linkAnchor As Range
+                            Set linkAnchor = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row)
+                            
+                            Dim linkAddress As String
+                            linkAddress = invoiceFullPath
+                            
+                            Dim linkDisplayText As String
+                            linkDisplayText = APsheetBatch.Cells(tgt.Row, 1)
+                            
+                            Dim linkScreenTip As String
+                            linkScreenTip = GetShortNameFromLongFileName(invoiceShortName)
+                            
+                            APsheetBatch.Hyperlinks.Add anchor:=linkAnchor, Address:=linkAddress, TextToDisplay:=linkDisplayText, ScreenTip:=linkScreenTip
+                        End With
+                        
+                        loBatchTemplate.ListColumns(sTABLE_COL_BATCH_FILENAME).DataBodyRange(1).Copy
+                        loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).PasteSpecial xlPasteFormats
+                        
+                        
+                        If tgt.Row = mFirstSplitRow And mFirstSplitRow <> 0 And mLastSplitRow > mFirstSplitRow Then
+                            Set r = APsheetBatch.Range(APsheetBatch.Cells(mFirstSplitRow + 1, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Index), _
+                                                 APsheetBatch.Cells(mLastSplitRow, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Index))
+                            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row).Copy Destination:=r
+                        End If
+                            
+
+                        
+                        excelState.RestoreFromSaved
+                        excelState.ResetToDefault
+                        On Error Resume Next
+                        
+                        Do
+                            Sleep SLEEP_MIN
+                            DoEvents
+                            If Not gPDFddDoc Is Nothing Then
+                                gPDFddDoc.Close
+                                Set gPDFddDoc = Nothing
+                            End If
+                            If Not gPDFdvDoc Is Nothing Then
+                                gPDFdvDoc.Close 1
+                                Set gPDFdvDoc = Nothing
+                            End If
+                            Sleep SLEEP_MIN
+                            DoEvents
+                            Name PDF_Array(IndexPDF) As invoiceFullPath
+                            DoEvents
+                        Loop Until Dir(invoiceFullPath) <> vbNullString
+                        On Error GoTo 0
+                        AppTitle = vbNullString
+                        AppHWND = 0
+                        vPID = 0
+                        flgPDFisOpen = False
+                        IndexPDF = IndexPDF + 1
+                        recursionCounter = 0
+                        AppFocus
+                        Call ResetEntryFormFocus
+                    Case vbNo
+                        'do nothing
+                End Select
+                
+                If IndexPDF > UBound(PDF_Array) Then
+                    MsgBox "No more PDF's to open"
+                    With gcAP.mainAPform
+                        .TogglePDFPanel -1
+                        ModifyFormButton .CommandButton_GrabPDF, styleOff, BUTTONLABEL_PDFQUEUE_DEFAULT
+                        gcAP.mainAPform.ResetPDFPanelText
+                    End With
+                    SafelyCloseGlobalPDF
+                    ReDim PDF_Array(0 To 0)
+                    IndexPDF = 1
+                    If flgPDFisOpen Then
+                        MsgBox "THE flgPDFisOpen IS TRUE, SETTING TO FALSE"
+                        flgPDFisOpen = False
+                    End If
+                Else
+                    Call OpenPDF_App(tgt)
+                End If
+            End If
+        End If
+       
+       If Not gflgCancel Then
+        If gfrmSelectInvoiceDetails.Tag <> "Hide" And tgt <> vbNullString Then
+            Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Index)
+            gflgCancel = False
+        End If
+        End If
+    
+    Else 'keeps looking for cells to autopopulate (add a button to make this optional)
+        If Not gflgCancel Then
+            If tgt.Row < loInvoiceBatch.Range.Rows.Count Then
+                Call SelectNextEmptyField(tgt.Column)
+            End If
+        End If
+        
+    End If
+
+'===============================================================================================================
+'===============================================================================================================
+
+CLEANEXIT:
+    gflgCancel = False
+    ResetFindWindow
+    ResetEntryFormFocus
+    Exit Sub
+
+HANDLER:
+    If Err.Number = 6 Then 'memory overflow from trying to count selected cells, usually happens when whole sheet is selected - do nothing
+        Resume CLEANEXIT
+    ElseIf Err.Number = 91 Then 'object not set: intersect not found - do nothing
+        Resume CLEANEXIT
+    Else
+        MsgBox "Encountered an error, possible from the filter"
+        Resume CLEANEXIT
+    End If
+End Sub
+
+
+
+'======================================================
+' set auto filter on vendor details table             '
+'======================================================
+Sub SetColumnFilter(columnName As String, strVal As String)
+    On Error Resume Next
+    Dim r As Range
+    If strVal <> vbNullString Then
+        loSupplierDetails.ListColumns(columnName).DataBodyRange.AutoFilter _
+                        field:=loSupplierDetails.ListColumns(columnName).Index, _
+                        Criteria1:=strVal, _
+                        Operator:=xlFilterValues
+    End If
+    Set r = loSupplierDetails.ListColumns(columnName).DataBodyRange.SpecialCells(xlCellTypeVisible).Cells(1, 1)
+    If r Is Nothing Then
+        loSupplierDetails.ListColumns(columnName).DataBodyRange.AutoFilter _
+            field:=loSupplierDetails.ListColumns(columnName).Index
+    End If
+    On Error GoTo 0
+End Sub
+
+
+'======================================================
+' set region filters to match the toggle filter button'
+'======================================================
+Sub SetRegionFilter()
+    Dim r As Range
+    Dim cnt As Integer
+    Dim ary() As String
+    Dim RegionFilter(1 To 3) As String
+    
+    'reset filters
+    ResetTableFilters loApproverList
+
+    If gcAP.mainAPform.CheckBox_CA Then
+        RegionFilter(1) = sREGION_CA
+    Else
+        RegionFilter(1) = vbNullString
+    End If
+    If gcAP.mainAPform.CheckBox_NONCA Then
+        RegionFilter(2) = sREGION_NONCA
+    Else
+        RegionFilter(2) = vbNullString
+    End If
+    If gcAP.mainAPform.CheckBox_Other Then
+        RegionFilter(3) = sREGION_OTHER
+    Else
+        RegionFilter(3) = vbNullString
+    End If
+    loApproverList.ListColumns(sTABLE_COL_APPROVERS_REGION).DataBodyRange.AutoFilter _
+                    field:=loApproverList.ListColumns(sTABLE_COL_APPROVERS_REGION).Index, _
+                    Criteria1:=RegionFilter, _
+                    Operator:=xlFilterValues
+        cnt = 1
+        ReDim ary(1 To 1)
+        For Each r In loApproverList.ListColumns(sTABLE_COL_APPROVERS_ALIAS).DataBodyRange.SpecialCells(xlCellTypeVisible)
+            ReDim Preserve ary(1 To cnt)
+            ary(cnt) = r.Value
+            cnt = cnt + 1
+        Next r
+        If UBound(ary) > 1 Then
+            loSupplierDetails.ListColumns(sTABLE_COL_APPROVERS_ALIAS).DataBodyRange.AutoFilter _
+                    field:=loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_ALIAS).Index, _
+                    Criteria1:=ary, _
+                    Operator:=xlFilterValues
+        Else
+            MsgBox "Error: unable to set region filter"
+            loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_ALIAS).DataBodyRange.AutoFilter _
+                            field:=loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_ALIAS).Index
+        End If
+    ResetTableFilters loApproverList
+
+End Sub
+
+
+'======================================================
+' advance the selected cell to make data entry easier '
+'======================================================
+Sub SelectNextEmptyField(i As Long)
+    APsheetBatch.Activate
+    If Not flgHoldCellFocus Then
+        If recursionCounter > LIMIT_RECURSION Then
+            recursionCounter = 0
+            'MsgBox "Stopped Memory Overflow from Recursion.  Ok to continue"
+        Else
+            recursionCounter = recursionCounter + 1
+                Do
+                    If loInvoiceBatch.ListColumns(i).Range(ActiveCell.Row) <> vbNullString Then i = i + 1
+                Loop Until loInvoiceBatch.ListColumns(i).Range(ActiveCell.Row) = vbNullString Or i >= loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Index
+                
+                If loInvoiceBatch.ListColumns(i).Range(ActiveCell.Row) = vbNullString Then
+                    loInvoiceBatch.ListColumns(i).Range(ActiveCell.Row).Select
+                Else
+                    'MsgBox "ABOUT TO MOVE DOWN A LINE"
+                    loInvoiceBatch.ListColumns(1).Range(ActiveCell.Row + 1).Select
+                    If ActiveCell.Row > loInvoiceBatch.Range.Rows.Count Then loInvoiceBatch.ListRows.Add
+                    If Not flgPDFisOpen And (UBound(PDF_Array) >= IndexPDF And LBound(PDF_Array) <= IndexPDF) _
+                    And loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(ActiveCell.Row) = vbNullString Then
+                        Call OpenPDF_App
+                    End If
+                    If ActiveCell.Value <> vbNullString Then Call SelectNextEmptyField(2)
+                End If
+        End If
+    End If
+    flgHoldCellFocus = False
+End Sub
+
+
+
+'============================================================
+' test cell value and fill with blank or prompt for overwrite
+'============================================================
+Function TrYToFindAndWriteToCell(FindColName As String, WriteColName As String, RefTable As ListObject, TargetRow As Integer) As Boolean
+    Dim returnFlag As Boolean
+    Dim r As Range
+    Dim rCurrent As Range
+    Dim rNew As Range
+    Dim OverWrite As Integer
+    Set r = RefTable.ListColumns(FindColName).DataBodyRange _
+            .Find(loInvoiceBatch.ListColumns(FindColName).Range(TargetRow), _
+            lookat:=xlWhole, MatchCase:=False)
+    Set rCurrent = loInvoiceBatch.ListColumns(WriteColName).Range(TargetRow)
+    If Not r Is Nothing Then
+        Set rNew = RefTable.ListColumns(WriteColName).Range(r.Row)
+        If rCurrent.Value = vbNullString Then
+            OverWrite = vbYes
+        ElseIf rCurrent.Value <> rNew.Value Then
+            OverWrite = MsgBox(WriteColName & " (Row " & TargetRow & "):" & vbCr & "    " & _
+                                rCurrent.Value & vbCr & vbCr & _
+                                "Replace with:" & vbCr & "    " & rNew.Value & vbCr & vbCr & vbCr & _
+                                "This cannot be undone!", vbYesNo + vbExclamation, _
+                                "Prompt Mode Enabled")
+        End If
+        Select Case OverWrite
+            Case Is = vbYes
+                rCurrent.Value = rNew.Value
+                returnFlag = True
+            Case Else
+                Set r = RefTable.ListColumns(WriteColName).DataBodyRange.Find(rCurrent.Value, lookat:=xlWhole, MatchCase:=False)
+                If Not r Is Nothing Then
+                    returnFlag = True
+                Else
+                    returnFlag = False
+                End If
+        End Select
+    Else
+        Select Case MsgBox(loInvoiceBatch.ListColumns(FindColName).Range(TargetRow) & " is not a valid value.  Do you still want to use it?", vbYesNo, "Invalid Value")
+            Case vbYes
+                rCurrent.Value = "UNKNOWN"
+                returnFlag = False
+            Case vbNo
+                returnFlag = False
+        End Select
+    End If
+    TrYToFindAndWriteToCell = returnFlag
+End Function
+
+Sub ResetFindWindow()
+'the find window is global and user may not be aware we changed it so we set it to be inclusive rather than exclusive
+    Dim r As Range
+    Dim r1 As Range
+    Set r1 = ActiveWorkbook.ActiveSheet.Cells(1, 1)
+    Set r = r1.Find(what:="", after:=r1, LookIn:=xlFormulas, lookat:=xlPart, searchorder:=xlByColumns, searchDirection:=xlNext)
+End Sub
+
+
+Sub UnloadEntryForms(Optional ColumnIndex As Long)
+'unloads all entry forms used for invoice entry '
+'does not unload the main menu                  '
+    If Not gfrmSelectInvoiceDetails Is Nothing Then
+        Unload gfrmSelectInvoiceDetails
+        Set gfrmSelectInvoiceDetails = Nothing
+    End If
+    If Not gfrmVendorName Is Nothing Then
+        Unload gfrmVendorName
+        Set gfrmVendorName = Nothing
+    End If
+    If Not gfrmInvoiceDate Is Nothing Then
+        Unload gfrmInvoiceDate
+        Set gfrmInvoiceDate = Nothing
+    End If
+    If Not gfrmInvoiceAmount Is Nothing Then
+        Unload gfrmInvoiceAmount
+        Set gfrmInvoiceAmount = Nothing
+    End If
+    If Not gfrmExpensePeriod Is Nothing Then
+        Unload gfrmExpensePeriod
+        Set gfrmExpensePeriod = Nothing
+    End If
+End Sub
+Sub HideEntryForms()
+    If Not gfrmVendorName Is Nothing Then gfrmVendorName.Hide
+    If Not gfrmInvoiceDate Is Nothing Then gfrmInvoiceDate.Hide
+    If Not gfrmInvoiceAmount Is Nothing Then gfrmInvoiceAmount.Hide
+End Sub
+Sub ShowEntryForms(Optional ColumnIndex As Long)
+    If Not gfrmVendorName Is Nothing Then gfrmVendorName.Show
+    If Not gfrmInvoiceDate Is Nothing Then gfrmInvoiceDate.Show
+    If Not gfrmInvoiceAmount Is Nothing Then gfrmInvoiceAmount.Show
+    If Not gfrmExpensePeriod Is Nothing Then gfrmExpensePeriod.Show
+    Call ResetEntryFormFocus
+End Sub
+Sub ResetEntryFormFocus()
+    AppFocus
+    If Not gfrmVendorName Is Nothing Then
+        If gfrmVendorName.Visible = True Then
+            gfrmVendorName.cmboVendorNameList.Visible = False
+            gfrmVendorName.cmboVendorNameList.Visible = True
+            gfrmVendorName.cmboVendorNameList.SetFocus
+        End If
+    End If
+    If Not gfrmInvoiceDate Is Nothing Then
+        If gfrmInvoiceDate.Visible = True Then
+            gfrmInvoiceDate.txtDate.Visible = False
+            gfrmInvoiceDate.txtDate.Visible = True
+            gfrmInvoiceDate.txtDate.SetFocus
+        End If
+    End If
+    If Not gfrmInvoiceAmount Is Nothing Then
+        If gfrmInvoiceAmount.Visible = True Then
+            gfrmInvoiceAmount.txtAmount.Visible = False
+            gfrmInvoiceAmount.txtAmount.Visible = True
+            gfrmInvoiceAmount.txtAmount.SetFocus
+        End If
+    End If
+    If Not gfrmExpensePeriod Is Nothing Then
+        If gfrmExpensePeriod.Visible = True Then
+            gfrmExpensePeriod.ListBox_ExpensePeriod.Visible = False
+            gfrmExpensePeriod.ListBox_ExpensePeriod.Visible = True
+            gfrmExpensePeriod.ListBox_ExpensePeriod.SetFocus
+        End If
+    End If
+'    If Not gfrmSelectInvoiceDetails Is Nothing Then
+'        If gfrmSelectInvoiceDetails.Visible = True Then
+'            gfrmSelectInvoiceDetails.listboxAvailableOptions.Visible = False
+'            gfrmSelectInvoiceDetails.listboxAvailableOptions.Visible = True
+'            gfrmSelectInvoiceDetails.listboxAvailableOptions.SetFocus
+'        End If
+'    End If
+End Sub
+
+
+Sub LetUserSelectFile()
+    Dim i As Long
+    Dim tgt As Range
+    Set tgt = ActiveCell
+    With Application.FileDialog(msoFileDialogOpen)
+        .AllowMultiSelect = True
+        .Title = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row) & _
+                "  -  " & _
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+        .Show
+        For i = 1 To .SelectedItems.Count
+            loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row + i - 1) = .SelectedItems(i)
+        Next i
+    End With
+End Sub
+
+
+Sub CreateListOfSupplierNames()
+    Dim ws As Worksheet
+    Set ws = APsheetConfigurationTables
+    With loSupplierNames
+        If .ListRows.Count <> loSupplierDetails.ListRows.Count Then
+            .Resize ws.Range(ws.Cells(1, .Range.Column), ws.Cells(loSupplierDetails.Range.Rows.Count, .Range.Column))
+        End If
+        .ListColumns(sTABLE_COL_SUPPLIERNAMES_SUPPLIERNAME).DataBodyRange.Value = loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERNAME).DataBodyRange.Value
+        .DataBodyRange.RemoveDuplicates 1, xlYes
+    End With
+End Sub
+
+Sub AddToDetails()
+    Dim tgt As Range
+    Set tgt = Intersect(ActiveCell, loInvoiceBatch.DataBodyRange)
+    If Not tgt Is Nothing Then
+        StopEvents
+        loSupplierDetails.ListRows.Add
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERNAME).DataBodyRange(loSupplierDetails.ListRows.Count) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row)
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_ALIAS).DataBodyRange(loSupplierDetails.ListRows.Count) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(tgt.Row)
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_FACILITYNAME).DataBodyRange(loSupplierDetails.ListRows.Count).Formula = sFORMULA_FACILITYLOOKUP
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_ACCOUNTNUMBER).DataBodyRange(loSupplierDetails.ListRows.Count) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(tgt.Row)
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_INVOICEDESCRIPTION).DataBodyRange(loSupplierDetails.ListRows.Count) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDESCRIPTION).Range(tgt.Row)
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERADDRESS).DataBodyRange(loSupplierDetails.ListRows.Count) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).Range(tgt.Row)
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_OFFSETEXPENSEPERIOD).DataBodyRange(loSupplierDetails.ListRows.Count) = 0
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATED).DataBodyRange(loSupplierDetails.ListRows.Count) = Format(Now, "mm-dd-yyyy")
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATED).DataBodyRange(loSupplierDetails.ListRows.Count) = Format(Now, "mm-dd-yyyy")
+        loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_LASTUPDATED).DataBodyRange(loSupplierDetails.ListRows.Count).Offset(0, 1) = "[ADDED VENDOR]"
+        ResumeEvents
+    End If
+
+    Call CreateListOfSupplierNames
+    APsheetSupplierConfig.Activate
+    ActiveWindow.ScrollRow = Abs(loSupplierDetails.ListRows.Count - 5)
+    ResumeScreen
+End Sub
+
+
+Function GenerateFileName(Optional tgt As Range) As String
+    Dim strVal As String
+    Dim tempStr As String
+    Dim i As Long
+    Dim s As String
+    strVal = Left(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row), 7)
+    strVal = strVal & Left(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row), 10)
+    For i = 1 To Len(strVal)
+        Select Case Asc(Mid(strVal, i, 1))
+            Case 48 To 57, 65 To 90, 97 To 122 '0-9, a-z, A-Z
+                s = s & Mid(strVal, i, 1)
+        End Select
+    Next
+    s = s & "-" & Format(Now, "yymmdd-hhnn")
+    strVal = UploadFolder & Chr(92)
+    i = 0
+    Do
+        GenerateFileName = s & tempStr & ".PDF"
+        strVal = UploadFolder & Chr(92) & GenerateFileName
+        If Dir(strVal) <> vbNullString Then
+            i = i + 1
+            tempStr = "_" & i
+        End If
+    Loop Until Dir(strVal) = vbNullString
+End Function
+
+
+Sub CheckHistoryForDuplicate(tgt As Range)
+
+    Dim r As Range
+    Dim firstMatchCellAddressString As String
+    Dim strVal As String
+    Dim openedDate As String
+
+    If Not InvoiceBatchEnvironmentWasInitialized Then Exit Sub
+    
+    mWatchedVendor = mUNMATCHED_SUPPLIER_TEXT
+        
+    ' manual edits to batch can cause an error an annoying (deleting rows for example) - this function resets the batch if the error occurs
+    If LostRangeReference(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)) Then Set loInvoiceBatch = APsheetBatch.ListObjects(sTABLE_NAME_BATCH)
+    
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) <> vbNullString Then
+
+    'reset filters
+        ResetTableFilters loPostingHistory
+    'loApproverList.AutoFilter.ShowAllData
+        Set r = loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange _
+                .Find(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row), lookat:=xlWhole, MatchCase:=False)
+        If r Is Nothing And IsNumeric(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)) = True Then
+            Set r = loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange _
+                .Find(Val(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)), lookat:=xlWhole, MatchCase:=False)
+            End If
+        If Not r Is Nothing Then
+            firstMatchCellAddressString = r.Address
+            gcAP.mainAPform.Frame_InvoiceDetails.Tag = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+            openedDate = Format(loPostingHistory.ListColumns("Opened Date").Range(r.Row), "mm/dd/yy")
+            If Len(openedDate) > 0 Then openedDate = Space(12) & "Opened" & Space(6) & openedDate
+            mWatchedVendor = loPostingHistory.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(r.Row)
+            strVal = Format(CCur(loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT).Range(r.Row)), "$#,##0.00") _
+                    & Space(3) _
+                    & loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESTATUS).Range(r.Row) _
+                    & Space(3) _
+                    & loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS).Range(r.Row) _
+                    & Space(3) _
+                    & Format(loPostingHistory.ListColumns("Closed Date").Range(r.Row), "mm/dd/yy")
+
+'Pending Validation
+
+
+            If loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS).Range(r.Row) = "Completed" _
+                    Or loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESTATUS).Range(r.Row) = "In Process" _
+                    Or loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESTATUS).Range(r.Row) = "Pending Approval" Then
+                gcAP.mainAPform.Label_InvoiceLookup.ForeColor = vbGreen
+            ElseIf loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS).Range(r.Row) = "Cancel" _
+                    Or loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS).Range(r.Row) = "Rejected" _
+                    Or loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESTATUS).Range(r.Row) = "Correction Needed" Then
+                gcAP.mainAPform.Label_InvoiceLookup.ForeColor = vbRed
+            ElseIf loPostingHistory.ListColumns(sTABLE_COL_ISERVEHISTORY_CASESTATUS).Range(r.Row) = "Pending Validation" Then
+                gcAP.mainAPform.Label_InvoiceLookup.ForeColor = vbYellow
+            Else
+                MsgBox "Invoice is not completed, in process, pending approval, canceled, rejected, or correction needed. What happened?", vbQuestion
+            End If
+            Set r = loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange _
+                .FindNext(r)
+            If r.Address <> firstMatchCellAddressString Then
+                strVal = strVal & vbCr & "More than one matching invoice"
+                gcAP.mainAPform.Label_InvoiceLookup.ForeColor = vbYellow
+            End If
+            gcAP.mainAPform.Show
+            ActivateBatchSheet
+        End If
+
+        If strVal = vbNullString Then
+            strVal = "INVOICE NOT FOUND IN HISTORY"
+            gcAP.mainAPform.Frame_InvoiceDetails.Tag = vbNullString
+            gcAP.mainAPform.Label_InvoiceLookup.ForeColor = vbWhite
+            gcAP.mainAPform.CommandButton_ViewMatchingInvoiceHistory.Visible = False
+            If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row) <> vbNullString Then
+                mWatchedVendor = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row)
+                gcAP.mainAPform.CommandButton_ViewSupplierInvoiceHistory.Visible = True
+'                gcAP.mainAPform.CommandButton_ViewSupplierMapping.Visible = True
+            Else
+                gcAP.mainAPform.CommandButton_ViewSupplierInvoiceHistory.Visible = False
+'                gcAP.mainAPform.CommandButton_ViewSupplierMapping.Visible = False
+            End If
+        Else
+            gcAP.mainAPform.CommandButton_ViewMatchingInvoiceHistory.Visible = True
+            gcAP.mainAPform.CommandButton_ViewSupplierInvoiceHistory.Visible = True
+'            gcAP.mainAPform.CommandButton_ViewSupplierMapping.Visible = True
+        End If
+    Else
+        'target cell is empty, no results can be matched
+        strVal = vbNullString
+        gcAP.mainAPform.Frame_InvoiceDetails.Tag = vbNullString
+        If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row) <> vbNullString Then
+            mWatchedVendor = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgt.Row)
+            gcAP.mainAPform.CommandButton_ViewSupplierInvoiceHistory.Visible = True
+'            gcAP.mainAPform.CommandButton_ViewSupplierMapping.Visible = True
+        Else
+            gcAP.mainAPform.CommandButton_ViewMatchingInvoiceHistory.Visible = False
+            gcAP.mainAPform.CommandButton_ViewSupplierInvoiceHistory.Visible = False
+'            gcAP.mainAPform.CommandButton_ViewSupplierMapping.Visible = False
+        End If
+    End If
+    
+    gcAP.mainAPform.Label_InvoiceLookup.Caption = strVal
+    gcAP.mainAPform.Frame_SupplierInvoiceInformation.Caption = mWatchedVendor
+    gcAP.mainAPform.Frame_InvoiceDetails.Caption = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row) & openedDate
+    gcAP.mainAPform.Frame_iServeHistory.Caption = "Row " & tgt.Row & " Invoice Details"
+    
+End Sub
+
+Sub ViewSupplierInvoiceHistory()
+    If mWatchedVendor <> mUNMATCHED_SUPPLIER_TEXT Then
+        ResetTableFilters loPostingHistory
+    
+        loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange.AutoFilter _
+                        field:=loPostingHistory.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index, _
+                        Criteria1:=mWatchedVendor, _
+                        Operator:=xlFilterValues
+        APsheetiServeHistory.Activate
+        ActiveWindow.ScrollRow = 1
+        APsheetiServeHistory.Cells(1, 1).Select
+    End If
+End Sub
+   
+Sub VendorDetailOverview(Optional VendorName As String)
+    Dim strVal As String
+    strVal = VendorName
+    If strVal = vbNullString Then strVal = mWatchedVendor
+    If mWatchedVendor <> mUNMATCHED_SUPPLIER_TEXT Or VendorName <> vbNullString Then
+        StopScreen
+        ResetTableFilters loSupplierDetails
+        loSupplierDetails.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).DataBodyRange.AutoFilter _
+                    field:=loSupplierDetails.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Index, _
+                    Criteria1:=strVal, _
+                    Operator:=xlFilterValues
+        APsheetSupplierConfig.Activate
+        ActiveWindow.ScrollRow = 1
+        APsheetSupplierConfig.Cells(1, 1).Select
+        ResumeScreen
+    End If
+End Sub
+
+
+Sub ClearContentsOfCurrentInvoiceLine()
+    Dim rng As Range
+    APsheetBatch.Activate
+    Set rng = Application.Intersect(ActiveCell, loInvoiceBatch.DataBodyRange)
+    If Not rng Is Nothing Then
+        With APsheetBatch
+            rng.Rows.EntireRow.ClearContents
+            .Cells(rng.Row, 1).Select
+        End With
+    End If
+End Sub
+
+
+
+Sub CopyExtendedFields(sourceRange As Range, rowOffset As Long)
+    Dim i As Long
+    Dim j As Long
+    Dim colArray() As String
+    colArray = Split(sTABLE_COL_BATCH_INVOICEDATE & "," & _
+                     sTABLE_COL_BATCH_EXPENSEPERIOD & "," & _
+                     sTABLE_COL_BATCH_SUPPLIERADDRESS & "," & _
+                     sTABLE_COL_BATCH_FILENAME & "," & _
+                     sTABLE_COL_BATCH_REMITTANCEREQUIRED & "," & _
+                     sTABLE_COL_BATCH_SPLITLINE, ",")
+                     
+        For i = LBound(colArray) To UBound(colArray)
+            With loBatchTemplate.ListColumns(colArray(i))
+                If Len(.Range(sourceRange.Row).Offset(rowOffset, 0)) = 0 Then
+                    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(sourceRange.Row) = _
+                                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(sourceRange.Row).Offset(rowOffset, 0) Then
+                        .Range(sourceRange.Row).Offset(rowOffset, 0) = .Range(sourceRange.Row)
+                    End If
+                End If
+            End With
+        Next i
+
+End Sub
+
+
+
+
+Private Function SplitFieldFromCaption(Optional ReturnFieldName As mtDisplayedInvoiceFields) As String
+    Dim ary() As String
+    ary = Split(gcAP.mainAPform.Label_InvoiceLookup.Caption, Chr(13))
+    Select Case ReturnFieldName
+        Case mtDisplayedInvoiceFields.all
+            SplitFieldFromCaption = Join(ary, "|")
+        Case mtDisplayedInvoiceFields.Amount, mtDisplayedInvoiceFields.Name, mtDisplayedInvoiceFields.Number, mtDisplayedInvoiceFields.Status
+            SplitFieldFromCaption = ary(ReturnFieldName)
+        Case Else
+            ' do not need to do anything because function will return nullstring
+    End Select
+End Function
+
+
+Sub RefreshTableRanges(ByRef wb As Workbook)
+    Dim rowCounter As Long
+    Dim loCounter As Long
+    Dim ws As Worksheet
+    Dim lo As ListObject
+    If loTableRanges.ListRows.Count > 0 Then loTableRanges.DataBodyRange.Delete
+    loTableRanges.ListRows.Add
+    For Each ws In wb.Sheets
+        For loCounter = 1 To ws.ListObjects.Count
+            With ws.ListObjects(loCounter)
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 0) = ws.Name
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 1) = .Name
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 2) = .Range.Cells(1).Row
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 3) = .Range.Cells(1).Offset(1, 0).Row
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 4) = .Range.Cells(.Range.Cells.Count).Row
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 5) = .Range.Column
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 6) = .Range.Columns.Count
+                loTableRanges.DataBodyRange.Cells(1).Offset(rowCounter, 7) = .Range.Address
+                rowCounter = rowCounter + 1
+            End With
+        Next
+    Next
+End Sub
+
+Sub ResetBatchFormatting()
+
+    Dim excelState As New APclsExcelStates
+    
+    
+    StopScreen
+    APsheetBatch.Activate
+    
+    Dim aryRowIndexes() As Long
+    ReDim aryRowIndexes(0 To 0)
+    Dim i As Long
+    For i = 2 To loInvoiceBatch.Range.Rows.Count
+        If loInvoiceBatch.Range(i, 1).Font.Strikethrough Then
+            ReDim Preserve aryRowIndexes(0 To UBound(aryRowIndexes) + 1)
+            aryRowIndexes(UBound(aryRowIndexes)) = i
+        End If
+    Next i
+                
+    Dim revertRange As Range
+    If TypeOf Selection Is Range Then Set revertRange = Selection
+    
+    loBatchTemplate.HeaderRowRange.Copy
+    loInvoiceBatch.HeaderRowRange.PasteSpecial xlPasteFormats
+    loBatchTemplate.DataBodyRange.Copy
+    loInvoiceBatch.DataBodyRange.PasteSpecial xlPasteFormats
+    If UBound(aryRowIndexes) > 0 Then
+        For i = 1 To UBound(aryRowIndexes)
+           With APsheetBatch.Range(Cells(aryRowIndexes(i), 1), Cells(aryRowIndexes(i), loInvoiceBatch.ListColumns.Count)).Font
+            .Strikethrough = True
+            .Color = FONTCOLOR_EXCLUDEFROMUPLOAD
+            .Bold = False
+            End With
+        Next i
+    End If
+    Application.CutCopyMode = False
+    If Not revertRange Is Nothing Then revertRange.Select
+    ResumeScreen
+End Sub
+
+
+
+Sub ResetConditionalFormatsOnBatchSheet(Optional ByRef targetRange As Range, Optional ByRef returnFormulaArrayAsVariant As Variant)
+'expanded to work on more than just the batchsheet
+    Dim strVal As String
+    Dim lastRow As Long
+    Dim formulaPending As String
+    Dim formulaRejected As String
+    Dim formulaPaid As String
+    Dim formulaClosed As String
+    Dim formulaCanceled As String
+    Dim formulaCorrection As String
+
+    Dim excelState As New APclsExcelStates
+    StopScreen
+    
+        lastRow = loPostingHistory.DataBodyRange.Row + loPostingHistory.DataBodyRange.Rows.Count - 1
+    
+    Dim referenceSheet As String
+    If targetRange Is Nothing Then
+        Set targetRange = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange
+        referenceSheet = "'" & APsheetiServeHistory.Name & "'!"
+    Else
+        referenceSheet = CreateStringToQualifyExternalFormulaReferences(ThisWorkbook.Name, APsheetiServeHistory.Name)
+    End If
+
+    ResetBatchFormatting
+
+
+
+    '"=OR(IFERROR(INDEX('" & APsheetiServeHistory.Name & "'!$D:$D,MATCH(VALUE($A2),'" & APsheetiServeHistory.Name & "'!$E:$E,0))=""Rejected"",FALSE)<>FALSE,IFERROR(INDEX('" & APsheetiServeHistory.Name & "'!$D:$D,MATCH($A2,'" & APsheetiServeHistory.Name & "'!$E:$E,0))=""Rejected"",FALSE)<>FALSE)"
+    formulaCanceled = "=OR(IFERROR(INDEX(" & referenceSheet & "$D$2" & ":$D$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2" & ":$E$" & lastRow _
+            & ",0))=""Cancel"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$D$2:$D$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))=""Cancel"",FALSE)<>FALSE)"
+
+    '"=OR(IFERROR(INDEX(" & referenceSheet & "$D:$D,MATCH(VALUE($A2)," & referenceSheet & "$E:$E,0))=""Rejected"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$D:$D,MATCH($A2," & referenceSheet & "$E:$E,0))=""Rejected"",FALSE)<>FALSE)"
+    formulaRejected = "=OR(IFERROR(INDEX(" & referenceSheet & "$D$2" & ":$D$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2" & ":$E$" & lastRow _
+            & ",0))=""Rejected"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$D$2:$D$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))=""Rejected"",FALSE)<>FALSE)"
+        
+    '"=OR(IFERROR(ISNUMBER(INDEX(" & referenceSheet & "$P:$P,MATCH(VALUE($A2)," & referenceSheet & "$E:$E,0))),FALSE)<>FALSE,IFERROR(ISNUMBER(INDEX(" & referenceSheet & "$P:$P,MATCH($A2," & referenceSheet & "$E:$E,0))),FALSE)<>FALSE)"
+    formulaPaid = "=OR(IFERROR(ISNUMBER(INDEX(" & referenceSheet & "$P$2:$P$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))),FALSE)<>FALSE,IFERROR(ISNUMBER(INDEX(" & referenceSheet & "$P$2:$P$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow & ",0))),FALSE)<>FALSE)"
+        
+    '"=OR(IFERROR(VLOOKUP(VALUE($A2)," & referenceSheet & "$E:$E,1,0)<>FALSE,FALSE),IFERROR(VLOOKUP($A2," & referenceSheet & "$E:$E,1,0),FALSE)<>FALSE)"
+    formulaClosed = "=OR(IFERROR(INDEX(" & referenceSheet & "$D$2" & ":$D$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2" & ":$E$" & lastRow _
+            & ",0))=""Completed"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$D$2:$D$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))=""Completed"",FALSE)<>FALSE)"
+    
+    '"=OR(IFERROR(FIND(""Pending"",INDEX(" & referenceSheet & "$C:$C,MATCH(VALUE($A2)," & referenceSheet & "$E:$E,0))),FALSE)<>FALSE,IFERROR(FIND(""Pending"",INDEX(" & referenceSheet & "$C:$C,MATCH($A2," & referenceSheet & "$E:$E,0))),FALSE)<>FALSE)"
+    formulaPending = "=OR(IFERROR(INDEX(" & referenceSheet & "$C$2" & ":$C$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2" & ":$E$" & lastRow _
+            & ",0))=""Pending Approval"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$C$2:$C$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))=""Pending Approval"",FALSE)<>FALSE)"
+            
+    '"=OR(IFERROR(FIND("Correction Needed",INDEX('Lookup iServe History (no edit)'!$C2:$C19712,MATCH(VALUE($A2),'Lookup iServe History (no edit)'!$E$2:$E$19712,0))),FALSE)<>FALSE,IFERROR(FIND("Correction Needed",INDEX('Lookup iServe History (no edit)'!$C2:$C19712,MATCH($A2,'Lookup iServe History (no edit)'!$E$2:$E$19712,0))),FALSE)<>FALSE)"
+    formulaCorrection = "=OR(IFERROR(INDEX(" & referenceSheet & "$C$2" & ":$C$" & lastRow & ",MATCH(VALUE($A2)," & referenceSheet & "$E$2" & ":$E$" & lastRow _
+            & ",0))=""Correction Needed"",FALSE)<>FALSE,IFERROR(INDEX(" & referenceSheet & "$C$2:$C$" & lastRow & ",MATCH($A2," & referenceSheet & "$E$2:$E$" & lastRow _
+            & ",0))=""Correction Needed"",FALSE)<>FALSE)"
+
+
+    returnFormulaArrayAsVariant = Array(formulaCanceled, formulaRejected, formulaPaid, formulaClosed, formulaPending)
+    
+    'cannot use conditional formats in external workbooks so grab the array to use indpedenently
+    If targetRange.Parent.Parent.Name <> ThisWorkbook.Name Then Exit Sub
+
+
+    APsheetBatch.Cells.FormatConditions.Delete
+
+    'duplicate invoice number in the batch
+    With targetRange.Cells
+        .FormatConditions.AddUniqueValues
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            .DupeUnique = xlDuplicate
+            With .Font
+                .Color = -16383844
+                .TintAndShade = 0
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .Color = 13551615
+                .TintAndShade = 0
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+    
+    'invoice number matches an invoice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaClosed
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .ThemeColor = xlThemeColorDark1
+                .TintAndShade = 0
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .ThemeColor = xlThemeColorAccent2
+                .TintAndShade = -0.249946592608417
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+
+    'invoice number matches a rejected invoice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaRejected
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .Color = -16776961
+                .TintAndShade = 0
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .Color = 65535
+                .TintAndShade = 0
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+  
+    
+        'invoice number matches a canceled invoice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaCanceled
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .Color = -16776961
+                .TintAndShade = 0
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .Color = 65535
+                .TintAndShade = 0
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+
+    'invoice number matches a correction needed invoice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaCorrection
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .Color = -16776961
+                .TintAndShade = 0
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .Color = 65535
+                .TintAndShade = 0
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+  
+    'invoice number matches a pending invoice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaPending
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .ThemeColor = xlThemeColorAccent3
+                .TintAndShade = -0.499984740745262
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .ThemeColor = xlThemeColorAccent6
+                .TintAndShade = 0.599963377788629
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+    
+    'invoice number matches a paid in voice number in history
+    With targetRange.Cells
+            .FormatConditions.Add Type:=xlExpression, Formula1:=formulaPaid
+        With .FormatConditions(.FormatConditions.Count)
+            .SetFirstPriority
+            With .Font
+                .ThemeColor = xlThemeColorAccent3
+                .TintAndShade = -0.499984740745262
+            End With
+            With .Interior
+                .PatternColorIndex = xlAutomatic
+                .ThemeColor = xlThemeColorAccent3
+                .TintAndShade = 0.399945066682943
+            End With
+            .StopIfTrue = False
+        End With
+    End With
+    
+End Sub
+
+
+'======================================================
+' reset batch to new state                            '
+'======================================================
+Sub ResetBatch()
+    'in the batchsheet we delete all cells in the used range, all buttons, all conditional formats
+    'then we copy a sheet from a seperate table, add a button, and add conditional formats
+    Dim btn As button
+    Dim srcWS As Worksheet
+    Dim destWS As Worksheet
+    Dim srcRange As Range
+    Dim destRange As Range
+    
+    If Not InvoiceBatchEnvironmentWasInitialized Then Call InitializeInvoiceBatchEnvironment
+    
+    Dim excelState As New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    
+    StopScreen
+
+    Application.EnableEvents = False
+    ResumeScreen
+    
+    Set srcWS = APsheetBatchTemplate
+    
+    ResetTableFilters loInvoiceBatch
+    
+    With Application.WorksheetFunction
+        If .CountA(srcWS.UsedRange) <> .CountA(srcWS.Rows(1)) Then MsgBox "Data may have unexpectedly been added to the Template"
+    End With
+    Set srcRange = srcWS.UsedRange
+    
+    Set destWS = APsheetBatch
+    DeleteUsedRange destWS
+
+    Set destRange = destWS.Range(srcWS.UsedRange.Address)
+    CopyRangeToSheetInSameLocation srcRange, destWS
+
+    With destWS
+        .ListObjects(1).Name = sTABLE_NAME_BATCH
+        Set loInvoiceBatch = .ListObjects(1)
+    End With
+    
+    loInvoiceBatch.HeaderRowRange.RowHeight = HEADERROWHEIGHT
+    loInvoiceBatch.ListRows(loInvoiceBatch.ListRows.Count).Range.RowHeight = DESIREDROWHEIGHT
+    
+    ResetConditionalFormatsOnBatchSheet
+    
+    APsheetBatch.Range("A:A").NumberFormat = "@"
+    APsheetBatch.Activate
+    loInvoiceBatch.Range.Cells(1).Select
+    ActiveWindow.ScrollRow = 1
+    
+    ResetBatchFormatting
+    
+    Application.CutCopyMode = False
+    
+    ActiveWindow.DisplayGridlines = False
+    Application.CutCopyMode = False
+
+    Application.EnableEvents = True
+    ResumeScreen
+
+
+End Sub
+
+
+'======================================================
+' delete current row                                  '
+'======================================================
+Sub DeleteRow()
+    Dim ans As Integer
+    Dim firstCellAddress As String
+    Dim tgt As Range
+    Dim r As Range
+    Dim i As Integer
+    Dim ary() As Range
+    If Not InvoiceBatchEnvironmentWasInitialized Then Call InitializeInvoiceBatchEnvironment
+    If gcIni.Configured = False Then Exit Sub
+    
+    'the active sheet isn't the invoice batch sheet
+    If ActiveSheet.CodeName <> APsheetBatch.CodeName Then
+        MsgBox "This tool is restricted to the batch sheet to prevent data loss."
+        Exit Sub
+    End If
+    Select Case TypeName(Selection)
+        Case "Range"
+            Set tgt = Intersect(Selection, loInvoiceBatch.DataBodyRange)
+        Case "Else"
+            Set tgt = Nothing
+    End Select
+    
+    'the selected cell is not in the table area or the following row
+    If tgt Is Nothing Then
+        MsgBox "The current row is not inside the table's data range."
+        Exit Sub
+    End If
+    ans = MsgBox("All data in the selected table rows will be lost." & vbCr & vbCr & _
+                "This cannot be undone!" & vbCr & vbCr & "Continue?", _
+                vbYesNo + vbCritical, _
+                "Warning")
+    Select Case ans
+        Case Is = vbYes
+                firstCellAddress = tgt.Cells(1).Address
+                ReDim ary(0 To 0)
+                i = 1
+                For Each r In tgt.Rows
+                    ReDim Preserve ary(0 To UBound(ary) + 1)
+                    Set ary(i) = r
+                    i = i + 1
+                Next
+                ResumeScreen
+                For i = UBound(ary) To 1 Step -1
+                    ary(i).EntireRow.Delete
+                Next
+                If loInvoiceBatch.ListRows.Count = 0 Then loInvoiceBatch.ListRows.Add
+                APsheetBatch.Range(firstCellAddress).Select
+                If ActiveCell.Row - SCROLLTOROW < 1 Then
+                    ActiveWindow.ScrollRow = 1
+                Else
+                    ActiveWindow.ScrollRow = ActiveCell.Row - SCROLLTOROW
+                End If
+                ResetConditionalFormatsOnBatchSheet
+                ResumeScreen
+                AppFocus
+        Case Is = vbNo
+            'do nothing
+    End Select
+End Sub
+
+Sub ManualInvoiceHistorySearch() 'can be called directly from worksheet button
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    
+    If Not gfrmInvoiceQuery Is Nothing Then
+        If gfrmInvoiceQuery.Visible = True Then
+            ModifyFormButton gcAP.mainAPform.CommandButton_FindInvoiceInHistory, styleLoad
+            gfrmInvoiceQuery.Hide
+        Else
+            ModifyFormButton gcAP.mainAPform.CommandButton_FindInvoiceInHistory, styleOn
+            'APsheetiServeHistory.Activate
+            gfrmInvoiceQuery.Show
+            gfrmInvoiceQuery.ComboBox_InvoiceNumber.Visible = False
+            gfrmInvoiceQuery.ComboBox_InvoiceNumber.Visible = True
+            gfrmInvoiceQuery.ComboBox_InvoiceNumber.SetFocus
+        End If
+    Else
+        ModifyFormButton gcAP.mainAPform.CommandButton_FindInvoiceInHistory, styleOn
+        'APsheetiServeHistory.Activate
+        Set gfrmInvoiceQuery = APformFindInvoiceInHistory
+        gfrmInvoiceQuery.Show
+        gfrmInvoiceQuery.ComboBox_InvoiceNumber.Visible = False
+        gfrmInvoiceQuery.ComboBox_InvoiceNumber.Visible = True
+        gfrmInvoiceQuery.ComboBox_InvoiceNumber.SetFocus
+    End If
+End Sub
+
+Sub TransferDetailsFromSplitToBatch()
+
+    If ActiveSheet.Name <> APsheetSplit.Name Then Exit Sub
+    If Round(APsheetSplit.Range("SplitBalance"), 2) = 0 Then
+        
+        Dim excelState As New APclsExcelStates
+        excelState.RestoreDefaultOnTerminate
+        Application.EnableEvents = False
+        Application.ScreenUpdating = False
+    
+        Dim tgt As Range
+        Set tgt = APsheetSplit.ReturnTarget
+
+        mFirstSplitRow = tgt.Row
+        With APsheetBatch
+            .Activate
+            Dim rngBatch As Range
+            Set rngBatch = .Range(.Cells(tgt.Row, 1), .Cells(tgt.Row, 4))
+        End With
+
+        Dim fName As String
+        fName = GenerateFileName(tgt)
+        Dim linkAddress As String
+        linkAddress = fName
+        Dim linkDisplayText As String
+        linkDisplayText = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(tgt.Row)
+        Dim linkScreenTip As String
+        linkScreenTip = GetShortNameFromLongFileName(linkAddress)
+
+        Dim splitCount As Long
+        splitCount = Application.WorksheetFunction.CountIf(loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_AMOUNT).DataBodyRange, ">0")
+        mLastSplitRow = tgt.Row + splitCount - 1
+
+        Dim i As Long: Dim j As Long
+        j = 0 'index of allocation lines transfered to batch
+        For i = 1 To loSplitAllocations.ListRows.Count
+            If CBool(loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_AMOUNT).DataBodyRange(i)) Then
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ACCOUNTNUMBER).Range(tgt.Row + j) = loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_ACCOUNT).DataBodyRange(i)
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEAMOUNT).Range(tgt.Row + j) = loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_AMOUNT).DataBodyRange(i)
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SPLITLINE).Range(tgt.Row + j) = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Range(rngBatch.Row + j)
+                
+                Dim linkAnchor As Range
+                Set linkAnchor = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row + j)
+                APsheetBatch.Hyperlinks.Add anchor:=linkAnchor, Address:=linkAddress, TextToDisplay:=linkDisplayText, ScreenTip:=linkScreenTip
+                
+                loBatchTemplate.ListColumns(sTABLE_COL_BATCH_FILENAME).DataBodyRange(1).Copy
+                loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).Range(tgt.Row + j).PasteSpecial xlPasteFormats
+                
+                PopulateApproverAndFacility tgt
+                If j > 0 Then CopyExtendedFields tgt, -j
+                
+                j = j + 1
+                'if there are more allocation lines to transfer then copy the invoice number, supplier name, invoice date, and expense period to the next line
+                If j < splitCount Then rngBatch.Offset(j, 0).Value = rngBatch.Value
+            End If
+        Next i
+        
+
+        
+
+        DisableRegistryShortcut
+        APsheetSplit.Visible = xlSheetHidden
+        UnloadEntryForms
+        excelState.ResetToDefault
+        loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(tgt.Row).Activate
+    End If
+End Sub
+
+
+Sub PopulateApproverAndFacility(ByRef tgt As Range)
+    Dim strVal As String
+    Dim r As Range
+
+   Dim flagInvalidAllocation As Boolean
+    'use alias to lookup approver and facility name
+    If loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS).Range(tgt.Row) <> vbNullString Then
+        If Not gflgCancel Then
+            If Not TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_FACILITYNAME, loApproverList, tgt.Row) Then flagInvalidAllocation = True
+            If Not TrYToFindAndWriteToCell(sTABLE_COL_BATCH_ALIAS, sTABLE_COL_APPROVERS_APPROVERNAME, loApproverList, tgt.Row) Then flagInvalidAllocation = True
+            'check if using advanced alias and use basic version if found
+            With loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_ALIAS)
+                strVal = .Range(tgt.Row).Value
+                If Len(strVal) > 6 And IsNumeric(Left(strVal, 6)) Then
+                    Select Case MsgBox("Replace the current alias: " & strVal & DBLLN & "With alias: " _
+                            & Left(strVal, 6), vbYesNo, "Use Standard Alias")
+                        Case vbYes
+                            strVal = Left(strVal, 6)
+                            .Range(tgt.Row) = strVal
+                        Case vbNo
+                            flagInvalidAllocation = True
+                    End Select
+                End If
+                Set r = loApproverList.ListColumns(sTABLE_COL_APPROVERS_ALIAS).DataBodyRange.Find(strVal, lookat:=xlWhole, MatchCase:=False)
+                If r Is Nothing Then
+                    MsgBox strVal & " is not a recognized format, please change manually"
+                    flagInvalidAllocation = True
+                End If
+            End With
+        End If
+    End If
+
+    With APsheetBatch
+        If flagInvalidAllocation Then .Range(.Cells(tgt.Row, 1), .Cells(tgt.Row, loInvoiceBatch.ListColumns.Count)).Font.Strikethrough = True
+    End With
+End Sub
+
+
+Sub ResetSplitAllocations()
+    Dim rangeToAdjust As Range
+    Dim rowIndex As Long
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+
+    APsheetSplit.Unprotect
+
+    APsheetSplit.Range("TotalAmountToSplit") = vbNullString
+
+    'remove all rows without default allocations from the splitallocations table
+    With loSplitAllocations
+        For rowIndex = .ListRows.Count To 1 Step -1
+            If CBool(Len(.ListColumns(sTABLE_COL_SPLIT_SUMMARY_DEFAULTACCOUNT).DataBodyRange(rowIndex))) Then
+                .ListColumns(sTABLE_COL_SPLIT_SUMMARY_ACCOUNT).DataBodyRange(rowIndex) = .ListColumns(sTABLE_COL_SPLIT_SUMMARY_DEFAULTACCOUNT).DataBodyRange(rowIndex)
+            Else
+                .ListRows(rowIndex).Delete
+            End If
+        Next rowIndex
+    End With
+
+    'we will clear the allocation details table then resize repopulate it to hold all default accounts but we do it in an odd way
+    With loSplitDetails
+        
+        'first we set the range to clear, this is the table range excluding the resized table range
+        Set rangeToAdjust = Union(Range("I2:" & Cells(.Range.Cells(.Range.Cells.Count).Row + 1, _
+                    APsheetSplit.UsedRange.Cells(APsheetSplit.UsedRange.Cells.Count).Column + 1).Address), _
+                    APsheetSplit.Range("H5:H" & .Range.Cells(.Range.Cells.Count).Row + 1))
+        
+        'then we resize the table to  a minimum size of 1 column and 2 rows (header + databody)
+        .Resize APsheetSplit.Range("H3:H4")
+        
+        'then we clear the cells in our range (which is now outside the table)
+        rangeToAdjust.Cells.Clear
+        .ListColumns(1).Range(2) = vbNullString 'except for this cell which is inside the table
+        
+        'then we resize the table to add the number of columns equal to the number of default accounts
+        .Resize APsheetSplit.Range(.Range.Cells(1).Address, .Range.Cells(1).Offset(1, loSplitAllocations.ListRows.Count - 1))
+        
+        'and finally we populate the headerrow and the GL lookup details above it
+        For rowIndex = 1 To loSplitAllocations.ListRows.Count
+            .HeaderRowRange(rowIndex) = loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_ACCOUNT).DataBodyRange(rowIndex)
+            If rowIndex > 1 Then
+                loSplitDetails.HeaderRowRange(rowIndex - 1).Copy
+                loSplitDetails.HeaderRowRange(rowIndex).PasteSpecial Paste:=xlPasteFormats
+                loSplitDetails.HeaderRowRange(rowIndex - 1).Offset(-1, 0).Copy
+                loSplitDetails.HeaderRowRange(rowIndex).Offset(-1, 0).PasteSpecial Paste:=xlPasteFormats
+            End If
+            .HeaderRowRange(rowIndex).Offset(-1, 0) = FindAndGetAccountDetails(.HeaderRowRange(rowIndex))
+            loSplitAllocations.ListColumns(sTABLE_COL_SPLIT_SUMMARY_AMOUNT).DataBodyRange(rowIndex) = 0
+        Next rowIndex
+    End With
+
+    APsheetSplit.Protect
+    Application.CutCopyMode = False
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+
+End Sub
+
+Sub AddNewAllocationLine()
+    Application.EnableEvents = False
+    APsheetSplit.Unprotect
+    With loSplitDetails
+        .ListRows.Add
+    End With
+    APsheetSplit.Protect
+    Application.EnableEvents = True
+End Sub
+
+Sub AddAccountToAllocate()
+    Application.EnableEvents = False
+    APsheetSplit.Unprotect
+    With loSplitAllocations
+        If CBool(.ListColumns(sTABLE_COL_SPLIT_SUMMARY_ACCOUNT).DataBodyRange(.ListRows.Count)) Then .ListRows.Add
+    End With
+    APsheetSplit.Protect
+    Application.EnableEvents = True
+End Sub
+
+Sub ReturnFromSplit()
+    APsheetSplit.Visible = xlSheetHidden
+    ActivateBatchSheet
+    Application.EnableEvents = True
+End Sub
+
+Sub GLQuery()
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    If gfrmGLQuery Is Nothing Then
+        Set gfrmGLQuery = New APformQueryCOA
+        gfrmGLQuery.Show
+        With gcAP.mainAPform.CommandButton_GLQuery
+            ModifyFormButton gcAP.mainAPform.CommandButton_GLQuery, styleOn
+        End With
+    Else
+        If gfrmGLQuery.Visible = True Then
+            gfrmGLQuery.Hide
+            With gcAP.mainAPform.CommandButton_GLQuery
+                ModifyFormButton gcAP.mainAPform.CommandButton_GLQuery, styleLoad
+            End With
+        Else
+            gfrmGLQuery.Show
+            With gcAP.mainAPform.CommandButton_GLQuery
+                ModifyFormButton gcAP.mainAPform.CommandButton_GLQuery, styleOn
+            End With
+        End If
+    End If
+End Sub
+
+Sub ActivateSplitSheet()
+    AppFocus
+    With APsheetSplit
+        .Visible = xlSheetVisible
+        .Activate
+    End With
+    Application.EnableEvents = True
+End Sub
+
+Sub ActivateBatchSheet()
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    AppFocus
+    APsheetBatch.Activate
+End Sub
+Sub ActivateHistorySheet()
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    AppFocus
+    APsheetiServeHistory.Activate
+    If loPostingHistory.ShowAutoFilter Then loPostingHistory.DataBodyRange.AutoFilter 'turn filters off to reset
+    loPostingHistory.DataBodyRange.AutoFilter 'turn filters on
+End Sub
+
+Sub ViewMatchingInvoiceHistory()
+    If CBool(Len(gcAP.mainAPform.Frame_InvoiceDetails.Tag)) Then
+        ResetTableFilters loPostingHistory
+        loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).DataBodyRange.AutoFilter _
+                        field:=loPostingHistory.ListColumns(sTABLE_COL_BATCH_INVOICENUMBER).Index, _
+                        Criteria1:=gcAP.mainAPform.Frame_InvoiceDetails.Tag, _
+                        Operator:=xlFilterValues
+        APsheetiServeHistory.Activate
+        APsheetiServeHistory.Cells(1, 1).Select
+        ActiveWindow.ScrollRow = 1
+    End If
+End Sub
+
+Sub GiveMainFormFocus()
+    If Not InvoiceBatchEnvironmentWasInitialized Then InitializeInvoiceBatchEnvironment
+    If Not gcAP.mainAPform Is Nothing Then
+        gcAP.mainAPform.Hide
+        gcAP.mainAPform.Show
+    gcAP.mainAPform.CommandButton_InvoiceEntryMode.SetFocus
+    End If
+End Sub
+
+Sub CopyInvoiceRowFromAbove()
+    Dim i As Long
+    For i = 0 To loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERADDRESS).DataBodyRange.Column - ActiveCell.Column
+        If ActiveCell.Offset(0, i) = vbNullString Then ActiveCell.Offset(0, i) = ActiveCell.Offset(-1, i)
+    Next i
+    APsheetBatch.Cells(ActiveCell.Row, loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_FILENAME).DataBodyRange.Column).Select
+End Sub
+
+Sub ArmedButtonTimedOut()
+    If Not InvoiceBatchEnvironmentWasInitialized Then LoadFrontEnd
+    gcAP.mainAPform.DisarmEveryArmableButton
+End Sub
+
+
+Sub RemoveAllButStrikeThrough()
+    Dim excelState As New APclsExcelStates
+    excelState.RestoreDefaultOnTerminate
+    StopScreen
+    APsheetBatch.Activate
+    Dim lr As ListRow
+    Dim i As Long
+    For i = loInvoiceBatch.ListRows.Count To 1 Step -1
+        Set lr = loInvoiceBatch.ListRows(i)
+        If Not lr.Range.Font.Strikethrough Then lr.Delete
+    Next
+    If loInvoiceBatch.ListRows.Count > 0 Then
+        loInvoiceBatch.ListColumns(1).DataBodyRange(loInvoiceBatch.ListRows.Count).Activate
+    Else
+        APsheetBatch.Range("A2").Activate
+    End If
+End Sub
+
+
+
+'Sub CheckCellForPDFFormat(tgt As Range)
+'
+'    If tgt.Column <> 1 Or PDFddDoc Is Nothing Then Exit Sub
+'
+'    Application.EnableEvents = False
+'    Dim pdfPageCount As Long
+'    pdfPageCount = GetPDFPAgeCountWithDialog(False)
+'    If pdfPageCount > 1 Then tgt.Value2 = pdfPageCount & " pages"
+'        tgt.Interior.Color = vbBlue
+'        tgt.Font.Color = vbWhite
+'        gflgCancel = True
+'        GoTo SAFEEXIT
+'    End If
+'
+'
+'    With APsheetBatch.Cells(ActiveCell.Row, 1)
+'        Dim excelstates As New APclsExcelStates
+'        excelstates.SaveCurrentState
+'        If .Interior.Color = vbBlue Then
+'            Application.EnableEvents = False
+'            If .Value Like "*# pages" Then
+'                .Clear
+'            Else
+'                .Interior.Color = xlNone
+'                .Font.Color = vbBlack
+'            End If
+'            excelstates.RestoreFromSaved
+'        End If
+'    End With
+'
+'
+'End Sub
+
+
+Sub FocusMainForm()
+    gcAP.mainAPform.Show
+End Sub

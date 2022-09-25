@@ -1,0 +1,188 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APinputformVendorName 
+   Caption         =   "Enter Vendor Name"
+   ClientHeight    =   675
+   ClientLeft      =   45
+   ClientTop       =   375
+   ClientWidth     =   7560
+   OleObjectBlob   =   "APinputformVendorName_frm.frx":0000
+   ShowModal       =   0   'False
+End
+Attribute VB_Name = "APinputformVendorName"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+Public Event FieldComplete()
+
+Public Event Terminated()
+
+Private tgtCell As Range
+
+Public Property Get GetTargetCell() As Range
+    Set GetTargetCell = tgtCell
+    'Focus_ControlOfUserForm Me
+End Property
+
+Public Property Set TargetCell(tgt As Range)
+    Set tgtCell = tgt
+    'Focus_ControlOfUserForm Me
+End Property
+
+
+
+'Private Sub cmboVendorNameList_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+'
+'    If Me.cmboVendorNameList.Text = vbNullString And (KeyCode <> vbKeyEscape) Then Exit Sub 'Or KeyCode <> vbKeyShift
+'    Select Case KeyCode
+'        Case vbKeyPageUp
+'            If flgPDFisOpen Then Call ChangeWindowStatePDF("control&&page up")
+'        Case vbKeyPageDown
+'            If flgPDFisOpen Then Call ChangeWindowStatePDF("control&&page down")
+''        Case Is = vbKeyShift
+''            Me.cmboVendorNameList.Text = ActiveCell.Offset(-1, 0).Value
+'    End Select
+'
+'End Sub
+
+Private Sub UserForm_Activate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+'    Set hook = New Hook_Class
+'    hook.SetHook
+    If tgtCell Is Nothing Then
+        MsgBox "Give this message to Adam: 'Error activitaing FRMVNDRNAME, TGTCELL not set'"
+        Set tgtCell = ActiveCell
+    End If
+    With Me.cmboVendorNameList
+        If tgtCell.Value = vbNullString Then
+            .Visible = False
+            .Visible = True
+            .SetFocus
+            .Text = tgtCell.Offset(-1, 0).Value
+            .SelStart = Len(.Text)
+        Else
+            .Visible = False
+            .Visible = True
+            .SetFocus
+            .Text = tgtCell.Value
+            .SelStart = Len(.Text)
+        End If
+    End With
+End Sub
+
+Private Sub UserForm_Deactivate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left + (0.5 * Application.Width) - (0.5 * Me.Width)
+    Me.Top = Application.Top + (0.5 * Application.height) - (0.5 * Me.height)
+End Sub
+
+Private Sub cmboVendorNameList_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+    End If
+End Sub
+
+Private Sub cmboVendorNameList_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+    End If
+End Sub
+Private Sub cmboVendorNameList_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+        With Me.cmboVendorNameList
+            Select Case KeyCode
+                Case vbKeyDelete
+                    If Shift = SHIFT_MASK Then
+                    Else
+                        .Text = vbNullString
+                        .Visible = False
+                        .Visible = True
+                        .SetFocus
+                        .SelStart = Len(.Text)
+                    End If
+                Case vbKeyEscape, vbKeyLeft
+                    Me.Hide
+                    .Text = vbNullString
+                Case vbKeyEnd
+                    If Shift = SHIFT_MASK Then
+                    Else
+                    End If
+                Case vbKeyDown
+                    If Shift = SHIFT_MASK Then
+                        gDisableFormEvents = True
+                        .Text = tgtCell.Offset(-1, 0).Value
+                        .Text = .List(.ListIndex - 1)
+                        gDisableFormEvents = False
+                    End If
+                Case vbKeyUp
+                    If Shift = SHIFT_MASK Then
+                        gDisableFormEvents = True
+                        .Text = tgtCell.Offset(-1, 0).Value
+                        .Text = .List(.ListIndex + 1)
+                        gDisableFormEvents = False
+                    End If
+                Case Is = vbKeyRight, vbKeyReturn, vbKeyTab
+                    Me.Hide
+                    tgtCell.Value = .Text
+                    .Text = vbNullString
+                    RaiseEvent FieldComplete
+                    Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Index)
+                Case vbKeyMenu
+                    Me.Hide
+                    
+                Case Else
+                    If Not Shift = SHIFT_MASK And .Text = tgtCell.Offset(-1, 0).Value Then
+                        .Text = vbNullString
+                        .Visible = False
+                        .Visible = True
+                        .SetFocus
+                        .SelStart = Len(.Text)
+                    End If
+            End Select
+        End With
+    End If
+End Sub
+
+'Private Sub UserForm_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+'
+'    If Me.cmboVendorNameList.Text = vbNullString And KeyCode <> vbKeyEscape Then Exit Sub
+'Dim KeyCode As Long
+'KeyCode = KeyAscii
+'    If Me.cmboVendorNameList.Text = vbNullString And KeyCode <> vbKeyEscape Then Exit Sub
+'    Select Case KeyCode
+'        Case Is = vbKeyPageUp
+'            If flgPDFisOpen Then Call ChangeWindowStatePDF("control&&page up")
+'                Me.cmboVendorNameList.SetFocus
+'        Case Is = vbKeyPageDown
+'            If flgPDFisOpen Then Call ChangeWindowStatePDF("control&&page down")
+'                Me.cmboVendorNameList.SetFocus
+'        Case Is = vbKeyDelete
+'            Me.cmboVendorNameList.Text = vbNullString
+'                Me.cmboVendorNameList.SetFocus
+'        Case Is = vbKeyEscape, vbKeyLeft
+'            Me.Hide
+'            Me.cmboVendorNameList.Text = vbNullString
+'        Case Is = vbKeyRight, vbKeyTab, vbKeyReturn
+'            Me.Hide
+'            tgtCell.Value = Me.cmboVendorNameList.Text
+'            Me.cmboVendorNameList.Text = vbNullString
+'            Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_INVOICEDATE).Index)
+'    End Select
+'
+'End Sub
+
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+
+    If CloseMode <> 1 Then Cancel = 1
+    Me.cmboVendorNameList.Text = vbNullString
+    Me.Hide
+End Sub
+

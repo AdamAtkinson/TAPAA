@@ -1,0 +1,159 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APformiServeUploadStatus 
+   Caption         =   "AP Automation - iServe Upload Status"
+   ClientHeight    =   9960
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   4560
+   OleObjectBlob   =   "APformiServeUploadStatus_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   2  'CenterScreen
+End
+Attribute VB_Name = "APformiServeUploadStatus"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Public Event BeforeInitialized()
+Public Event BeforeUserQuit(ByVal ShopwPrompt As Boolean, ByRef cancelClose As Boolean)
+Public Event BeforeTerminate()
+Public Event UploadButtonClicked()
+
+Private formEventsEnabled As Boolean
+Private Const mFULLSIZE As Long = 520
+
+Private mUserQuit As Boolean
+Private cnt As Long
+
+
+Private Sub CommandButton_StartUpload_Click()
+    RaiseEvent UploadButtonClicked
+End Sub
+
+Private Sub CommandButton_ToggleFormSize_Click()
+    If Me.height = mFULLSIZE Then
+        Me.height = mFULLSIZE - Me.Frame_CurrentInvoiceDetails_Panel.height
+    Else
+        Me.height = mFULLSIZE
+    End If
+    Me.Frame_CurrentInvoiceDetails_Panel.Visible = Not Me.Frame_CurrentInvoiceDetails_Panel.Visible
+    MoveFramePosition Me.Frame_CurrentOperation
+    MoveFramePosition Me.Frame_Indexes
+    MoveFramePosition Me.Frame_Timer
+    MoveFramePosition Me.Frame_Buttons_Panel
+End Sub
+Private Sub MoveFramePosition(FrameToMove As MSForms.Frame)
+    If Me.Frame_CurrentInvoiceDetails_Panel.Visible = True Then
+        FrameToMove.Top = FrameToMove.Top + Me.Frame_CurrentInvoiceDetails_Panel.height
+    Else
+        FrameToMove.Top = FrameToMove.Top - Me.Frame_CurrentInvoiceDetails_Panel.height
+    End If
+End Sub
+
+
+
+Private Sub UserForm_Initialize()
+    RaiseEvent BeforeInitialized
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left - 480    ' + (0.1 * Application.Width) - (0.1 * Me.Width)    '
+    Me.Top = Application.Top + 10       ' + (0.1 * Application.Height) - (0.1 * Me.Height)  '
+    Me.Caption = "iServe Upload Status"
+    Me.tgl_Pause.Caption = "Pause"
+    formEventsEnabled = True
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    Dim showPrompt As Boolean
+    If Not mUserQuit Then showPrompt = True
+    Dim cancelClose As Boolean
+    RaiseEvent BeforeUserQuit(showPrompt, cancelClose)
+    If cancelClose Then Cancel = 1
+End Sub
+
+Private Sub UserForm_Terminate()
+    RaiseEvent BeforeTerminate
+End Sub
+
+
+Private Sub btn_Quit_Click()
+    Select Case MsgBox("Quit iServe?", vbYesNo + vbMsgBoxSetForeground + vbExclamation)
+        Case vbYes
+            mUserQuit = True
+            Dim Cancel As Boolean
+            RaiseEvent BeforeUserQuit(False, Cancel)
+        Case vbNo
+    End Select
+End Sub
+
+Private Sub btn_Skip_Click()
+    Me.Tag = 1
+End Sub
+
+Public Property Get EnableFormEvents() As Boolean
+    EnableFormEvents = formEventsEnabled
+End Property
+Public Property Let EnableFormEvents(p_Events As Boolean)
+    formEventsEnabled = p_Events
+End Property
+
+Private Sub chkAutoSubmit_Change()
+    Dim s
+    If formEventsEnabled Then
+        If chkAutoSubmit Then
+            s = "enabled"
+        Else
+            s = "disable"
+        End If
+        Select Case MsgBox("Do you want to " & s & " autosubmit?", vbExclamation + vbYesNo, "Confirm Change")
+            Case vbYes
+                'do nothing
+            Case vbNo
+                chkAutoSubmit = Not chkAutoSubmit
+        End Select
+    End If
+End Sub
+
+
+
+Private Sub tgl_Pause_Change()
+    If Me.tgl_Pause Then
+        If Me.Frame_CurrentOperation.Caption = "Current Operation" Then Me.Frame_CurrentOperation.Caption = "Operation Paused by User"
+        Me.tgl_Pause.Caption = "Resume"
+        Me.Caption = "Paused..."
+    Else
+        Me.Frame_CurrentOperation.Caption = "Current Operation"
+        Me.tgl_Pause.Caption = "Pause"
+        Me.Caption = "Running..."
+    End If
+    'added the handler because user can cloe form while in the pause loop
+    On Error GoTo HANDLER
+    Do While Me.tgl_Pause And Me.Tag = 0
+        DoEvents
+    Loop
+    If Me.Tag = 1 Then Me.tgl_Pause = False
+HANDLER:
+
+    On Error GoTo 0
+    'do not know what will be called after this, error may be pusehd downstream
+End Sub
+
+
+
+'Private Sub SpinButton_SelectAddress_Change()
+'    If Me.SpinButton_SelectAddress.Value > -1 Then Me.SpinButton_SelectAddress.Value = -1
+'    If Me.SpinButton_SelectAddress.Value < -cnt Then Me.SpinButton_SelectAddress.Value = -cnt
+''    Call GetValueAfterSpinnerChange(Me.SpinButton_SelectAddress.Value) 'in iserve module because it uses a module scoped object variable
+'End Sub
+'
+'Private Sub CommandButton_SelectAddress_Click()
+''    Call WriteValueFromSpinnerIndex(Me.SpinButton_SelectAddress.Value) 'in iserve module because it uses a module scoped object variable
+'End Sub
+
+Public Property Let AddressCount(c As Long)
+    cnt = c
+End Property
+Public Property Get AddressCount() As Long
+    AddressCount = cnt
+End Property
+

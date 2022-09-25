@@ -1,0 +1,64 @@
+Attribute VB_Name = "APmodCopyBatchToAccrual"
+Option Explicit
+
+Sub CopyBatchToAccrualA()
+
+    Dim headersAccrual()
+    headersAccrual = Array("1", "2", "3", "4", "6", "7") '"Invoice Number", "Invoice Date", "  Amount  ", "Vendor", "RespCode", "GLCode")
+    Dim headersBatch()
+    headersBatch = Array(sTABLE_COL_BATCH_INVOICENUMBER, sTABLE_COL_BATCH_INVOICEDATE, sTABLE_COL_BATCH_INVOICEAMOUNT, _
+                                sTABLE_COL_BATCH_SUPPLIERNAME, sTABLE_COL_BATCH_ALIAS, sTABLE_COL_BATCH_ACCOUNTNUMBER)
+    
+    Dim i As Long
+    Dim tableHeaders(0 To 1, 1 To 6) As String
+    For i = 1 To UBound(tableHeaders, 2)
+        tableHeaders(0, i) = headersBatch(i - 1)
+        tableHeaders(1, i) = headersAccrual(i - 1)
+    Next
+    
+    Dim pathToAccrual As String
+    If GetFromFileDialogWindow(msoFileDialogFilePicker, pathToAccrual, "S:\ACCOUNTING 1\Accounts Payable\MonthEndAccruals\", "Select accrual file", "Select") Then
+        Dim wbAccrual As Workbook
+        For i = 1 To Application.Windows.Count
+            If Application.Windows(i).Caption = GetShortNameFromLongFileName(pathToAccrual) Then
+                Set wbAccrual = Application.Workbooks(Application.Windows(i).Caption)
+                Exit For
+            End If
+        Next
+        If wbAccrual Is Nothing Then Set wbAccrual = Application.Workbooks.Open(pathToAccrual)
+        
+        Dim wsAccrual As Worksheet
+        For i = 1 To wbAccrual.Worksheets.Count
+            If wbAccrual.Worksheets(i).CodeName = "AccrualSheet" Then Set wsAccrual = wbAccrual.Worksheets("Accrual")
+        Next i
+        If wsAccrual Is Nothing Then Exit Sub
+    Else
+        Exit Sub
+    End If
+    
+    Dim tableBatch As ListObject
+    Set tableBatch = APsheetBatch.ListObjects(1)
+    
+    Dim riAccrual As Long
+    riAccrual = wsAccrual.Range("C6").End(xlDown).Row + 1
+    
+    With tableBatch
+    
+        Dim rmaxBatch As Long
+        rmaxBatch = Split(.Range.Address, "$")(UBound(Split(.Range.Address, "$")))
+        
+        Dim riBatch As Long
+        For riBatch = 1 To rmaxBatch
+            If Month(.DataBodyRange(riBatch, .ListColumns(sTABLE_COL_BATCH_EXPENSEPERIOD).Index)) <> Month(Now) Then
+                Dim ci As Long
+                For ci = 1 To UBound(tableHeaders, 2)
+                        wsAccrual.Range(wsAccrual.Cells(riAccrual, CInt(tableHeaders(1, ci))).Address).Value = .ListColumns(tableHeaders(0, ci)).DataBodyRange(riBatch).Value
+                
+                Next ci
+                riAccrual = riAccrual + 1
+            End If
+        Next riBatch
+    End With
+    
+    wsAccrual.Activate
+End Sub

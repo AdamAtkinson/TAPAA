@@ -1,0 +1,109 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsPDFDDDoc"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+Private mDDDoc As PDFPlus.DDDoc                 'controls the PDF documents                                         '
+
+Private Sub Class_Initialize()
+    Set mDDDoc = New PDFPlus.DDDoc
+End Sub
+
+Private Sub Class_Terminate()
+    If Not mDDDoc Is Nothing Then
+        mDDDoc.Close
+        Set mDDDoc = Nothing
+    End If
+End Sub
+
+Public Sub CloseDD()
+    If Not mDDDoc Is Nothing Then
+        mDDDoc.Close
+        Set mDDDoc = Nothing
+    End If
+End Sub
+Public Property Let OpenDD(p As String)
+    mDDDoc.Open p
+    dbP mDDDoc.GetFileName
+End Property
+Public Property Set ddd(p_DDDoc As PDFPlus.DDDoc)
+    Set mDDDoc = p_DDDoc
+End Property
+Public Property Get ddd() As PDFPlus.DDDoc
+    Set ddd = mDDDoc
+End Property
+'If gPDFapp Is Nothing Then Set gPDFapp = New PDFPlus.App
+'    Set gPDFdvDoc = New PDFPlus.DVDoc
+'
+'    If gPDFdvDoc.Open(PDF_Array(IndexPDF)) = False Then
+'        MsgBox "could not open PDF"
+'    End If
+'    Set gPDFddDoc = gPDFdvDoc.GetDDDoc
+'    Set gPDFdvPageView = gPDFdvDoc.GetDVPageView
+'
+'     gPDFdvPageView.Goto 0
+'        appHandle = FindWindow(vbNullString, gPDFddDoc.GetFileName & sAPP_TITLE_SUFFIX_NUANCE)
+'
+'        '                                                           '
+'        'Open New PDF Window                                        '
+'        SetWindowPos appHandle, 0, -1900, 20, 1000, 1000, &H20 '    '
+'        'SetWindowPos(hWnd, zOrder, xPos, yPos, Width, Height, Flags)
+'        '                       see reference notes for more API info
+'
+'
+'        ApplyDefaultWindowStatePDF
+'
+'        DoEvents
+'
+'        gPDFdvDoc.BringToFront
+'        pdfPageCount = gPDFddDoc.GetNumPages
+'
+'        AppActivate wb.Windows(1).Caption
+'        If pdfPageCount <> 1 Then MsgBox "File contained " & pdfPageCount & " pages", vbExclamation, "WARNING !!"
+'    End If
+
+Function GetAllTextInPDF(fullPath As String) As String()
+
+
+
+    Dim nWord As Integer
+    Dim iWord As Integer
+    Dim nPage As Integer
+    Dim iPage As Integer
+    Dim strWord As String
+    Dim pageText() As String
+
+    SetPDFPlusApplication
+    
+    Set mDVDoc = PDFPlus.DVDoc
+    mApp.Show
+
+    If mDVDoc.Open(fullPath) = True Then
+        mDVDoc.BringToFront
+        Set mDDDoc = mDVDoc.GetDDDoc
+        Set mJSO = mDDDoc.GetJSObject
+        nPage = mDDDoc.GetNumPages
+        ReDim pageText(nPage)
+        For iPage = 0 To nPage - 1
+            nWord = mJSO.getPageNumWords(iPage)
+            For iWord = 0 To nWord - 1
+                strWord = mJSO.getPageNthWord(iPage, iWord, False) ' if the last parameter is set to True, it avoids certain characters like dash os blank spaces etc
+                pageText(iPage) = pageText(iPage) & strWord
+            Next
+            Debug.Print pageText(iPage)
+        Next
+    End If
+    Set mDVDoc = Nothing
+    mApp.Exit
+    Set mApp = Nothing
+    ReadPDFText = pageText
+End Function
+
+
+

@@ -1,0 +1,43 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} ProgressIndicator_Form 
+   Caption         =   "Progress Indicator"
+   ClientHeight    =   1290
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   4350
+   OleObjectBlob   =   "ProgressIndicator_Form_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "ProgressIndicator_Form"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+
+
+
+
+Option Explicit
+
+
+Sub UpdateProgressIndicator(ByVal lngCompletedSteps As Long, ByVal lngStepsInProcedure As Long)
+    Dim intPercentComplete As Integer
+    intPercentComplete = Int(lngCompletedSteps / lngStepsInProcedure * 100)
+    Me.Text.Caption = CInt(intPercentComplete) & "% Completed"
+    Me.Bar.Width = CInt(intPercentComplete * 2)
+    Me.Show
+End Sub
+
+Sub CloseIndicator(Optional ByVal lngCompletedSteps As Long, Optional ByVal lngStepsInProcedure As Long)
+    Unload Me
+End Sub
+
+Sub StartIndicator(ByVal lngCompletedSteps As Long, ByVal lngStepsInProcedure As Long)
+    Me.Show
+End Sub
+
+Private Sub UserForm_Terminate()
+    'do something about the user closing the progress bar
+End Sub

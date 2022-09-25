@@ -1,0 +1,351 @@
+Attribute VB_Name = "Module1"
+'Option Explicit
+'Option Private Module
+
+
+
+
+
+'Option Explicit
+'Private Declare Function GetForegroundWindow Lib "user32" () As Long
+'Public Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As Long, ByVal wMsg As Long, ByVal wParam As Long, lParam As Any) As Long
+'
+'Private Const WM_CLOSE = &H10
+'Private lNotepadhWnd As Long
+'
+'Sub mmmm()
+'Dim a As Variant
+'a = FnFindWindowLike("*Extract*")
+''a = FnSetForegroundWindow("*Extract*")
+'Debug.Print a
+'End Sub
+'
+'
+''Sub RunYourProgram()
+''  Dim RetVal As Long
+''  On Error Resume Next
+''  RetVal = ShellExecute(0, "open", "<full path to program>", "<arguments>", _
+''                        "<run in folder>", SW_SHOWMAXIMIZED)
+''End Sub
+''
+'
+'Sub TEST123()
+'Dim ary() As String
+'Dim i As Long
+'Dim vPID As Variant
+'
+'    ReDim ary(1 To 1)
+'    ary(1) = "C:\Users\E-AAtkinson\iServe\2.pdf"
+'
+''vpid = shell("""C:\Program Files (x86)\Nuance\Power PDF 20\bin\NuancePDF.exe"" ""C:\Users\E-AAtkinson\iServe\2.pdf""", vbNormalFocus)
+'
+'    vPID = Shell("" & NuancePowerPDF & " " & ary(1) & "", vbNormalFocus)
+'    AppActivate (Right(ary(1), Len(ary(1)) - InStrRev(ary(1), "\")))
+'    DoEvents
+'    lNotepadhWnd = GetForegroundWindow
+'Call SendMessage(lNotepadhWnd, WM_CLOSE, 0, 0)
+'    Debug.Print "nuance vpid", vPID, "hwnd", lNotepadhWnd
+'
+''    vpid = Shell("notepad", vbNormalFocus)
+''    DoEvents
+''    lNotepadhWnd = GetForegroundWindow
+''
+''    Debug.Print "notepad vpid", vpid, "hwnd", lNotepadhWnd
+'
+'
+'    MsgBox "open"
+'
+'    Call SendMessage(lNotepadhWnd, WM_CLOSE, 0, 0)
+''    Call Shell("TaskKill /F /PID" & CStr(vpid), vbHide)
+'
+''    MsgBox "closed"
+'
+'End Sub
+'
+'Sub AllFiles()
+'    Dim folderPath As String
+'    Dim filename As String
+'    Dim wb As Workbook
+'
+'    folderPath = "C:\SAP Imports\Sales Orders\" 'change to suit
+'
+'    If Right(folderPath, 1) <> "\" Then folderPath = folderPath + "\"
+'
+'    filename = Dir(folderPath & "*.xls")
+'    Do While filename <> ""
+'      Application.ScreenUpdating = False
+'        Set wb = Workbooks.Open(folderPath & filename)
+'
+'        'Call a subroutine here to operate on the just-opened workbook
+''        Call Mymacro
+'
+'
+'        filename = Dir
+'    Loop
+'  Application.ScreenUpdating = True
+'End Sub
+'
+'
+'Sub teatadf()
+'Dim fName As String
+'   fName = Environ("LOCALAPPDATA") & Chr(92) & "VBA" & Chr(92)
+''    If Dir(fName) = vbNullString Then Call SetupNewEnvironment
+'    fName = fName & "iServeBatch.gcIni"
+'    Dim i As Integer
+'
+'    Dim strvar As String
+'    Dim ary As Variant
+'    Dim IFile As Integer
+'
+'    'read the gcIni file into a string
+'    IFile = FreeFile
+'    Open fName For Input As #IFile
+'    ary = Split(Input$(LOF(IFile), #IFile), vbNewLine)
+'    For i = LBound(ary) To UBound(ary)
+'    If InStr(ary(i), "=") > 0 Then ary(i) = Left(ary(i), InStr(ary(i), "=") - 1)
+'    Next
+''    Line Input #IFile, strvar
+'    Close #IFile
+'
+'End Sub
+'
+'
+'
+'
+'
+'
+'
+'
+'
+'
+'
+'
+''private withevents Z_void_frmThreeButtonPrompt
+''Private frm As Variant
+'
+'
+''Declare Function FindWindowX Lib "user32" Alias "FindWindowExA" (ByVal hWnd1 As Long, _
+''ByVal hWnd2 As Long, ByVal lpsz1 As Long, ByVal lpsz2 As Long) As Long
+''
+''Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As String, ByVal lpWindowName As String) As Long
+''
+''Private Declare Function PostMessage Lib "user32" Alias "PostMessageA" (ByVal hwnd As Long, _
+''ByVal wMsg As Long, ByVal wParam As Long, ByVal lParam As Long) As Long
+''
+''Public Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Integer, ByVal lParam As Integer) As Long
+''
+''Private Const WM_KEYDOWN = &H100
+'''Private Const WM_KEYUP = &H101
+''
+''Sub Three()
+''Dim hWind As Long
+''Dim cWind As Long
+''hWind = Shell(NuancePowerPDF, vbNormalFocus)
+''
+''cWind = FindWindowX(hWind, 0, 0, 0)
+''Debug.Print PostMessage(cWind, WM_KEYDOWN, vbKeyControl, 0)
+''Debug.Print PostMessage(cWind, WM_KEYDOWN, vbKeyL, 0)
+''Debug.Print PostMessage(cWind, WM_KEYDOWN, vbKeyPageDown, 0)
+''
+''End Sub
+'
+'
+'
+''
+''Sub TestingStuff()
+''Static cls As clsPresentForm
+''Set cls = New clsPresentForm
+''    cls.Initialize "Title", "Body", "Left", "Center", "Right", True
+'''    If cls.IsCancelled Then
+''''Set frm = New Z_void_frmThreeButtonPrompt
+''''    frm.Initialize "Title", "Body", "Left", "Center", "Right", False
+''''    If frm.IsCancelled Then
+'''        Debug.Print "Is Cancelled"
+'''    Else
+'''        Debug.Print "Is Not Cancelled"
+'''    End If
+''Debug.Print "I'm running after the form is displayed"
+''Set frm = cls.Self
+''Debug.Print frm.Self.Name
+'''Set cls = New clsPresentForm
+''''frm.LeftButtonText = "Hi"
+''''frm.PauseExecution = True
+'''Call cls.Initialize("Title", "Body", "Left", "Center", "Right", False)
+''''frm.Show
+''End Sub
+''
+''
+''Const NPMsg As String = "Notepad ID = "
+''
+''Private Const GW_CHILD = 5
+''Private Const WM_SETTEXT = &HC
+''Private Const WM_GETTEXT = &HD
+''Private Const WM_GETTEXTLENGTH = &HE
+''Private Const WM_CLOSE = &H10
+''Private Const EM_REPLACESEL = &HC2
+''Private Const EM_SETSEL = &HB1
+''Private Const EM_SETMODIFY = &HB9
+''Private Const HWND_TOPMOST = -1
+''Private Const HWND_NOTOPMOST = -2
+''Private Const SWP_NOSIZE = &H1
+''Private Const SWP_NOMOVE = &H2
+''
+''Private Declare Function FindWindowEx Lib "user32" Alias "FindWindowExA" _
+''(ByVal hWnd1 As Long, ByVal hWnd2 As Long, ByVal lpsz1 As String, _
+''ByVal lpsz2 As String) As Long
+''
+''Private Declare Function GetWindowThreadProcessId Lib "user32" _
+''(ByVal hwnd As Long, lpdwProcessId As Long) As Long
+''
+''Private Declare Function SetWindowText Lib "user32" Alias "SetWindowTextA" _
+''(ByVal hwnd As Long, ByVal lpString As String) As Long
+''
+''Private Declare Function GetWindow Lib "user32" _
+''(ByVal hwnd As Long, ByVal wCmd As Long) As Long
+''
+''Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" _
+''(ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, _
+''ByVal lParam As Long) As Long
+''
+''Private Declare Function SendMessageStr Lib "user32" Alias "SendMessageA" _
+''(ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, _
+''ByVal lParam As Any) As Long
+''
+''Private Declare Function MoveWindow Lib "user32" _
+''(ByVal hwnd As Long, ByVal x As Long, ByVal y As Long, ByVal nWidth As Long, _
+''ByVal nHeight As Long, ByVal bRepaint As Long) As Long
+''
+''Private Declare Function SetWindowPos Lib "user32" _
+''(ByVal hwnd As Long, ByVal hWndInsertAfter As Long, ByVal x As Long, _
+''ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal wFlags As Long) As Long
+''
+''''To update the cell contents from Notepad.
+''Public Function GetNote(Ra As Range, hwnd As Long) As Boolean
+''GetNote = False
+''If hwnd = 0 Then Exit Function
+''Ra.FormulaLocal = ReadNotepad(hwnd)
+''GetNote = True
+''End Function
+''
+'''Passing the cell contents in Notepad.
+'''HWnd new start time is omitted, it returns the hWnd.
+''Public Function PutNote(Ra As Range, Optional hwnd As Long = 0) As Long
+''Dim strText As String
+''If hwnd = 0 Then hwnd = OpenNotepad()
+''PutNote = hwnd
+''If hwnd = 0 Then Exit Function
+''strText = Ra.FormulaLocal
+''strText = Replace(strText, vbLf, vbCrLf)
+''WriteNotepad hwnd, strText
+''End Function
+''
+'''HWnd unsaved to clear the flag specified in Notepad.
+''Public Function SetSavedNotepad(hwnd As Long) As Long
+''Dim i As Long
+''i = GetWindow(hwnd, GW_CHILD)
+''SendMessage i, EM_SETMODIFY, 0, 0
+''SetSavedNotepad = i
+''End Function
+''
+'''HWnd Close Notepad specified.
+''Public Sub CloseNotepad(hwnd As Long)
+''SetSavedNotepad hwnd
+''SendMessage hwnd, WM_CLOSE, 0, 0
+''End Sub
+''
+'''Start a new notepad, hWnd returned.
+''Public Function OpenNotepad(Optional iWindowState As Long = vbNormalFocus) As Long
+''Dim hwnd As Long
+''Dim ProcID As Long, ThreadID As Long
+''Dim i As Long, j As Long, k As Long
+''On Error GoTo Err1
+''i = Shell("notepad.exe", iWindowState)
+''If i = 0 Then GoTo Err1
+''hwnd = 0
+''Do
+'''hWnd = FindWindowEx(0, hWnd, "Notepad", "?? - ???")
+''hwnd = FindWindowEx(0, hwnd, "Notepad", vbNullString)
+''If hwnd = 0 Then GoTo Err1
+''ThreadID = GetWindowThreadProcessId(hwnd, ProcID)
+''Loop Until i = ProcID
+''i = SetWindowText(hwnd, NPMsg & ProcID)
+'''MoveWindow hWnd, 0, 50, 300, 200, 1
+'''Z-order if you change the SetWindowPos
+''SetWindowPos hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE Or SWP_NOSIZE
+''OpenNotepad = hwnd
+''Exit Function
+''Err1:
+''MsgBox "Error", , NPMsg
+''OpenNotepad = 0
+''End Function
+''
+'''HWnd content specified in Notepad, replace the specified character.
+''Public Function WriteNotepad(hwnd As Long, strTextAll As String) As Boolean
+''Dim i As Long
+''i = GetWindow(hwnd, GW_CHILD)
+''WriteNotepad = (0 <> SendMessageStr(i, WM_SETTEXT, 0, strTextAll))
+''End Function
+''
+'''HWnd specified in Notepad, add the specified character. ????? With a new line.
+'''IPos = 0: the current cursor position
+'''-1: Top
+'''1: last
+''Public Function WriteLineNotepad(hwnd As Long, strText As String, Optional iPos As Long = 0) As Boolean
+''WriteLineNotepad = WriteTextNotepad(hwnd, strText & vbNewLine, iPos)
+''End Function
+''
+'''HWnd specified in Notepad, add the specified character. No newline.
+'''IPos = 0: the current cursor position
+'''-1: Top
+'''1: last
+''Public Function WriteTextNotepad(hwnd As Long, strText As String, _
+''Optional iPos As Long = 0) As Boolean
+''Dim i As Long
+''i = GetWindow(hwnd, GW_CHILD)
+''Select Case iPos
+''Case -1
+''SendMessage i, EM_SETSEL, 0, 0
+''Case 1
+''SendMessage i, EM_SETSEL, 0, -1 'select all
+''SendMessage i, EM_SETSEL, -1, 0 'Deselect (move the cursor to the end of the selected area)
+''End Select
+''WriteTextNotepad = (0 <> SendMessageStr(i, EM_REPLACESEL, 0, strText))
+''End Function
+''
+'''HWnd specified the contents of the Notepad, you get a letter.
+''Public Function ReadNotepad(hwnd As Long) As String
+''Dim i As Long
+''Dim j As Long
+''Dim x As String
+''i = GetWindow(hwnd, GW_CHILD)
+''j = 1 + SendMessage(i, WM_GETTEXTLENGTH, 0, 0)
+''x = String(j, Chr(0))
+''SendMessageStr i, WM_GETTEXT, j, x
+''ReadNotepad = x
+''End Function
+''
+''[/VBA]
+''
+''
+''Public Sub Example1()
+''PutNote ActiveCell
+''End Sub
+''
+''Public Sub Example2()
+''Dim Cell As Range
+''Dim hwnd As Long
+''hwnd = OpenNotepad()
+''If hwnd <> 0 Then
+''For Each Cell In ActiveSheet.UsedRange
+''WriteLineNotepad hwnd, Cell.Address(False, False) & ":" & Cell.Value
+''Next
+''End If
+''End Sub
+'
+'
+'Sub aaa()
+'Dim a As APclsExcelStates
+'Set a = New APclsExcelStates
+'a.Reset
+'
+'End Sub

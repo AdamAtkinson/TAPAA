@@ -1,0 +1,74 @@
+Attribute VB_Name = "AP__PROJECT__DOCUMENTATION"
+
+'==========================================================================================='
+'                                                                                           '
+'   THIS MODULE CONTAINS HIGH LEVEL PROJECT DOCUMENTATION TO ASSIST FUTURE DEVELOPERS       '
+'                                                                                           '
+'==========================================================================================='
+
+'-------------------------------------------------------------------------------------------'
+'   RECOMMENDED VBA IDE OPTIONS                                                             '
+'-------------------------------------------------------------------------------------------'
+'       Font    -   Monospaced                                                              '
+'       Color   -   Contrasting back color for comments                                     '
+'-------------------------------------------------------------------------------------------'
+'   Whitespace formatting is used extensively throughout this project to divide as well as  '
+'   join related text.  Block comments surounded by ASCI borders screams 1985 but the       '
+'   purpose of the borders becomes readily appearent when a monospace font is used and      '
+'   the comments have a backcolor that contrasts with the normal background.                '
+'-------------------------------------------------------------------------------------------'
+
+'-------------------------------------------------------------------------------------------'
+'   MACRO SECURITY                                                                          '
+'-------------------------------------------------------------------------------------------'
+' all users recieved instructions to run selfcert.exe and only sign projects they trust     '
+' users were advised to:                                                                    '
+'     - disable all macros except digitally signed macros                                   '
+'     - access to the VBA model is not granted unless needed for a temporary purpose        '
+'-------------------------------------------------------------------------------------------'
+
+
+'-------------------------------------------------------------------------------------------'
+'   BREAKPOINTS                                                                             '
+'-------------------------------------------------------------------------------------------'
+' break inside class                                                                        '
+'-------------------------------------------------------------------------------------------'
+
+'-------------------------------------------------------------------------------------------'
+'   GRID SETTINGS                                                                           '
+'-------------------------------------------------------------------------------------------'
+' 6 x 6 allign to grid                                                                      '
+'-------------------------------------------------------------------------------------------'
+
+'-------------------------------------------------------------------------------------------'
+'   CONDITIONAL COMPILE ARGUMENTS                                                           '
+'-------------------------------------------------------------------------------------------'
+'   VARIABLES: Released, Devmode, Debugging                                                 '
+'   VALUES: 0, -1                                                                           '
+'-------------------------------------------------------------------------------------------'
+' Released: legacy condition used to set preferences and environmental variables where      '
+'           user values are known to be different than mine.  This was largely deprecated   '
+'           with the addition of an INI file but is still retained in code that has not     '
+'           been updated.                                                                   '
+' Devmode:  used adhoc to test and debug, used to circumvent code that would otherwise run  '
+' Debugging:used adhoc to set variables and conditions for testing and debugging            '
+'-------------------------------------------------------------------------------------------'
+
+
+
+
+'    https://stackoverflow.com/questions/6361706/opening-pdf-on-specific-page-number-in-vba
+'    https://www.extendoffice.com/documents/excel/4349-excel-hyperlink-to-pdf-page.html
+'    https://docs.microsoft.com/en-us/office/vba/api/excel.application.caller
+'      .OnAction = "'" & ThisWorkbook.Name & "'!'Importer_Items_Temp_par_Menu_Déroulant " & Chr(34) & Nom_Fichier & Chr(34) & " , " & Chr(34) & Old_Val & Chr(34) & " , " & Chr(34) & ThisWorkbook.Sheets("Import_Objets").Cells(Item_Num, q * 2).Value & Chr(34) & "'"
+'    https://www.mrexcel.com/board/threads/calling-a-fuction-and-passing-arguments-with-onaction.53220/page-1
+'    http://www.tushar-mehta.com/excel/vba/xl%20objects%20and%20procedures%20with%20arguments.htm
+'    https://www.erlandsendata.no/english/index.php?d=envbacbbuttonarguments
+'    https://stackoverflow.com/questions/1410115/passing-arguments-to-method-registered-with-onaction-eventvba-excel
+'    https://www.exceltip.com/menus-toolbars-status-bar-in-vba/pass-arguments-to-macros-from-buttons-and-menus-using-vba-in-microsoft-excel.html
+'    Selection.OnAction = "'apapplication.APmodExtractInvoiceDetails.testcallback ""C:\Users\e-aatkinson\iServe\Active Queue\_MAIL PROCESSING\Scanned from a Xerox Multifunction Printer.pdf#PAGE=1""'"
+'    Selection.OnAction = "'AP.xlsm'!apapplication.APmodExtractInvoiceDetails.testcallback"
+'    Selection.OnAction = "" '"'AP.xlsm'!apapplication.APmodExtractInvoiceDetails.testcallback" ""C:\Users\e-aatkinson\iServe\Active Queue\_MAIL PROCESSING\Scanned from a Xerox Multifunction Printer.pdf#PAGE=1""'""
+'
+
+

@@ -1,0 +1,142 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} APinputformExpensePeriod 
+   Caption         =   "Expense Period"
+   ClientHeight    =   510
+   ClientLeft      =   45
+   ClientTop       =   390
+   ClientWidth     =   1950
+   OleObjectBlob   =   "APinputformExpensePeriod_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "APinputformExpensePeriod"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Public Event FieldComplete()
+Public Event Terminated()
+
+Private tgtCell As Range
+
+Public Property Set TargetCell(tgt As Range)
+    Set tgtCell = tgt
+End Property
+
+
+Private Sub UserForm_Activate()
+    Dim DateIsWithinRange As Boolean
+    Dim offsetPeriod As Long
+    Dim foundDifferentOffset As Boolean
+    Dim filterCriteriaString As String
+    Dim filterFieldValue As Long
+    Dim i As Long
+    Dim c As Range
+    
+    'we will set a filter in the vendor details table to find the appropriate expense period offset
+    filterCriteriaString = loInvoiceBatch.ListColumns(sTABLE_COL_BATCH_SUPPLIERNAME).Range(tgtCell.Row)
+    filterFieldValue = loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERNAME).Index
+    
+    'the listbox date is the last day of the month and decrements as the index increments ie: listbox(i) > listbox(i+1)
+    'so we loop through the expense period until listbox(i) >= invoice date > listbox(i+1) ie: 11/30/1999 >= 11/15/1999 > 10/31/1999
+    For i = 0 To Me.ListBox_ExpensePeriod.ListCount - 2
+        If Me.ListBox_ExpensePeriod.List(i + 1) < tgtCell.Offset(0, -1) And tgtCell.Offset(0, -1) <= Me.ListBox_ExpensePeriod.List(i) Then
+            'filter for the vendor so we can get the offset date
+            ResetTableFilters loSupplierDetails
+            loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_SUPPLIERNAME).DataBodyRange.AutoFilter _
+                        field:=filterFieldValue, _
+                        Criteria1:=filterCriteriaString, _
+                        Operator:=xlFilterValues
+            'if the vendor name is not on the table then there will not be any visible cells in the data body range
+            'an error results when SpecialCells(xlCellTypeVisible).Count = 0 so we work around it
+            If Not loSupplierDetails.HeaderRowRange.EntireRow.Hidden Then
+                If loSupplierDetails.ListColumns(filterFieldValue).Range.SpecialCells(xlCellTypeVisible).Count > 1 Then
+                'If APsheetSupplierConfig.Range("A1:A" & loSupplierDetails.ListRows.Count + loSupplierDetails.Range.row).SpecialCells(xlCellTypeVisible).Count - loSupplierDetails.Range.row > 0 Then
+                    'the offeset dates may not be equal and we do not have the information to know which one is accurate so to keep it simple
+                    'set the offset to the first visible cell and then loop through the others, set a flag and alert the user if any are different
+                    offsetPeriod = loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_OFFSETEXPENSEPERIOD).DataBodyRange.SpecialCells(xlCellTypeVisible).Cells(1)
+                    For Each c In loSupplierDetails.ListColumns(sTABLE_COL_SUPPLIERDETAILS_OFFSETEXPENSEPERIOD).DataBodyRange.SpecialCells(xlCellTypeVisible)
+                        If c.Value <> offsetPeriod Then foundDifferentOffset = True
+                    Next c
+                End If
+            End If
+            'the warning is a soft warning to alert the user, we do not change anything
+            If foundDifferentOffset Then MsgBox "Conflicting expense period mapping detected in the vendor details table", vbExclamation, "Warning"
+            Me.ListBox_ExpensePeriod.Selected(i - offsetPeriod) = True
+            Me.ListBox_ExpensePeriod.ListIndex = i - offsetPeriod
+            DateIsWithinRange = True
+            Exit For
+        End If
+    Next
+
+    If Not DateIsWithinRange Then
+        MsgBox "The invoice date cannot be mapped to an expense period.", vbInformation, "Manually Enter The Expense Period"
+    End If
+
+    If gflgPopulateAll Then
+        If DateIsWithinRange Then
+            tgtCell.Value = Me.ListBox_ExpensePeriod.Value
+        Else
+            Dim manualPeriod As String
+            manualPeriod = Application.InputBox("Enter expense period as mm/yy or break here for manual entry - make sure the cell remains active", "Dev Mode", Type:=2)
+            If manualPeriod Like "##/##" Then tgtCell.Value = Application.WorksheetFunction.EoMonth(DateSerial(CInt(Right(manualPeriod, 2)), CInt(Left(manualPeriod, 2)), 0), 0)
+        End If
+        Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+    End If
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.StartUpPosition = 0
+    Me.Left = Application.Left + (0.5 * Application.Width) - (0.5 * Me.Width)
+    Me.Top = Application.Top + (0.5 * Application.height) - (0.5 * Me.height)
+End Sub
+
+
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode <> 1 Then Cancel = 1
+    Me.Hide
+End Sub
+
+Private Sub ListBox_ExpensePeriod_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyPress KeyAscii
+    End If
+End Sub
+Private Sub ListBox_ExpensePeriod_KeyUp(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyUp KeyCode, Shift
+    End If
+End Sub
+Private Sub ListBox_ExpensePeriod_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If Not gDisableFormEvents Then
+        APmodCommonKeys.CommonFormEvents_KeyDown KeyCode, Shift
+        Select Case KeyCode
+            Case vbKeyUp, vbKeyDown
+                If Shift Then
+                    tgtCell.Value = tgtCell.Offset(-1, 0).Value
+                    Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+                End If
+            Case vbKeyLeft
+                gDisableFormEvents = True
+                Me.Hide
+                tgtCell.Offset(0, -1).Select
+                gDisableFormEvents = False
+            Case vbKeyEscape
+                Me.Hide
+            Case Is = vbKeyReturn, vbKeyTab, vbKeyRight
+                Me.Hide
+                tgtCell.Value = Me.ListBox_ExpensePeriod.Value
+                Call SelectNextEmptyField(loInvoiceBatch.ListColumns(sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD).Index)
+        End Select
+    End If
+End Sub
+
+
+
+
+Private Sub UserForm_Terminate()
+'    If Not hook Is Nothing Then Set hook = Nothing
+    RaiseEvent Terminated
+End Sub

@@ -1,0 +1,129 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsMainApplication"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+Public WithEvents wbAPapp As Workbook ' the AP batch workbook
+Attribute wbAPapp.VB_VarHelpID = -1
+Public WithEvents iServeAddressQuery As APclsIserveJobEventHandler
+Attribute iServeAddressQuery.VB_VarHelpID = -1
+Public WithEvents iServeInvoiceUpload As APclsIserveJobEventHandler
+Attribute iServeInvoiceUpload.VB_VarHelpID = -1
+Public WithEvents mainAPform As AP_1_Form_MainWindow
+Attribute mainAPform.VB_VarHelpID = -1
+Public WithEvents kbHotKeys As APclsCommonKeys
+Attribute kbHotKeys.VB_VarHelpID = -1
+'Private startButtton As APclsSheetStartButton
+
+Public invoiceBatch As APclsBatch
+
+Private Const mRGB_R = 255
+Private Const mRGB_G = 65280
+Private Const mRGB_B = 16711680
+
+Private mMode As eISERVECLASSMODE
+
+Public Property Get iServeMode() As eISERVECLASSMODE
+iServeMode = mMode
+End Property
+Private Sub Class_Initialize()
+    Set wbAPapp = ThisWorkbook
+    Set invoiceBatch = New APclsBatch
+'    Set startButtton = New APclsSheetStartButton
+End Sub
+Public Sub LoadAP()
+    If mainAPform Is Nothing Then
+        Set mainAPform = New AP_1_Form_MainWindow
+    End If
+    If kbHotKeys Is Nothing Then Set kbHotKeys = New APclsCommonKeys
+End Sub
+Public Sub LoadIserve()
+    If Me.iServeInvoiceUpload Is Nothing Then Set Me.iServeInvoiceUpload = New APclsIserveJobEventHandler
+End Sub
+
+Private Sub iServeAddressQuery_IserveClosed(iServeMode As eISERVECLASSMODE)
+    If iServeMode = AddressMode Then
+        If Not Me.iServeAddressQuery Is Nothing Then Set Me.iServeAddressQuery = Nothing
+        ModifyFormButton Me.mainAPform.CommandButton_iServeAddress, styleOff
+    Else
+        MsgBox "iservemode <> address "
+    End If
+End Sub
+
+Private Sub iServeInvoiceUpload_AfterWindowsClose()
+    If Not Me.mainAPform Is Nothing Then
+        If Me.iServeInvoiceUpload.job.CurrentMode = AddressMode Then ModifyFormButton Me.mainAPform.CommandButton_iServeAddress, styleOff
+        If Me.iServeInvoiceUpload.job.CurrentMode = InvoiceMode Then ModifyFormButton Me.mainAPform.CommandButton_iServeInvoiceUpload, styleOff
+    End If
+    Set gcAP.iServeInvoiceUpload = Nothing
+End Sub
+
+Private Sub iServeInvoiceUpload_IserveClosed(iServeMode As eISERVECLASSMODE)
+    If iServeMode = InvoiceMode Then
+        If Not Me.iServeInvoiceUpload Is Nothing Then Set Me.iServeInvoiceUpload = Nothing
+        ModifyFormButton Me.mainAPform.CommandButton_iServeInvoiceUpload, styleOff
+    Else
+        MsgBox "iservemode <> invoice "
+    End If
+End Sub
+
+Private Sub mainAPform_Activated()
+' startButtton.ChangeLabelColor = RGB_R
+End Sub
+
+Private Sub mainAPform_AddressQueryButtonClicked(Cancel As Boolean)
+
+    dbP "address button"
+    If Me.iServeAddressQuery Is Nothing Then Set Me.iServeAddressQuery = New APclsIserveJobEventHandler
+    With Me.iServeAddressQuery
+        If Not .IsLoaded Then
+            .Load AddressMode
+            .InitializeAddressForm
+            If Me.iServeAddressQuery.job.LoginSuccess Then
+                ModifyFormButton Me.mainAPform.CommandButton_iServeAddress, styleOn
+                mMode = AddressMode
+            End If
+        Else
+            If Not .job.IsJobRunning And .job.CurrentMode = eISERVECLASSMODE.AddressMode Then
+                .InitializeAddressForm
+                If Me.iServeAddressQuery.job.LoginSuccess Then
+                    ModifyFormButton Me.mainAPform.CommandButton_iServeAddress, styleOn
+                    mMode = AddressMode
+                End If
+            Else
+                mMode = NotSet
+                Cancel = True
+            End If
+        End If
+    End With
+End Sub
+
+Private Sub mainAPform_LaunchIserve()
+    If Me.iServeInvoiceUpload Is Nothing Then Set Me.iServeInvoiceUpload = New APclsIserveJobEventHandler
+End Sub
+
+Private Sub mainAPform_UploadButtonClicked()
+dbP "upload button"
+If Me.iServeInvoiceUpload Is Nothing Then Set Me.iServeInvoiceUpload = New APclsIserveJobEventHandler
+
+    With Me.iServeInvoiceUpload
+        If Not .IsLoaded Then
+            .Load InvoiceMode
+            .InitializeUploadForm
+            mMode = InvoiceMode
+        Else
+            If Not .job.IsJobRunning And .job.CurrentMode = eISERVECLASSMODE.InvoiceMode Then
+                .InitializeUploadForm
+                mMode = InvoiceMode
+            Else
+                mMode = NotSet
+            End If
+        End If
+    End With
+End Sub
+

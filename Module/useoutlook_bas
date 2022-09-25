@@ -1,0 +1,476 @@
+Attribute VB_Name = "useoutlook"
+'Option Explicit
+'Private Const mACTIVE_USER As String = "Adam"                                                    '      '
+''--------------------------------------------------------------------------------------------------------
+'Private Const mUSER_1 As String = "Adam"                                                         '      '
+'Private Const mUSER_1_Path As String = "C:\Users\e-aatkinson\iServe\Mail Processing\"            '      '
+''--------------------------------------------------------------------------------------------------------
+'Private Const mUSER_2 As String = "Dom"                                                          '      '
+'Private Const mUSER_2_Path As String = "S:\ACCOUNTING 1\Accounts Payable\VBA\"                   '      '
+''--------------------------------------------------------------------------------------------------------
+'
+'Private frmDownloader As AttachmentDownloader_Form
+'Private frmSkipped As SkippedDetails_Form
+'
+'Private Const PDF_EXT As String = ".PDF"
+'Private Const PNG_EXT As String = ".PNG"
+'Private Const XLS_EXT As String = ".XLS*"
+'Private Const JPG_EXT As String = ".JPG"
+'Private Const JPEG_EXT As String = ".JPEG"
+'Private Const GIF_EXT As String = ".GIF"
+'Private Const DOC_EXT As String = ".DOC*"
+'
+'Private Const mDELIM As String = "\"
+'Private Const mDBLLN As String = vbCr & vbCr
+'
+'Private savePath As String
+'
+''Public Type typeSkippedAttachmentDetails
+''    emailSubject As String
+''    emailSender As String
+''    emailDate As String
+''    attachmentCount As String
+''    skippedCount As String
+''    savedCount As String
+''    attachmentFileName As String
+''    otMessage As MailItem
+''    otAttachment As Attachment
+''End Type
+''
+''Public gSkippedDetails() As typeSkippedAttachmentDetails
+'
+'Private Declare Function ShowWindow Lib "user32" (ByVal hWnd As Long, ByVal nCmdShow As Long) As Long
+'Private Declare Function IsIconic Lib "user32.dll" (ByVal hWnd As Long) As Long
+'Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+'
+'Sub ShowDownloadForm()
+'    Set frmDownloader = New AttachmentDownloader_Form
+'    frmDownloader.Show
+'End Sub
+'Sub ClearDownloader()
+'    Set frmDownloader = Nothing
+'End Sub
+'Sub ShowSkippedForm()
+'    Set frmSkipped = New SkippedDetails_Form
+'    frmSkipped.Show
+'End Sub
+'
+'Sub SaveAttachmentsFromSelection()
+'    Dim oOutlookApplication As Outlook.Application
+'    Dim oInbox As Outlook.MAPIFolder
+'    Dim oMoveToFolder As Outlook.MAPIFolder
+'    Dim oNameSpace As Outlook.Namespace
+'    Dim oRecipient As Outlook.Recipient
+'    Dim oActiveExplorer As Outlook.Explorer
+'    Dim oSelection As Outlook.Selection
+'    Dim oSelectedItem As Object
+'    Dim oMailItem As Outlook.MailItem
+'    Dim oAttachments As Outlook.Attachments
+'    Dim oAttachment As Outlook.Attachment
+'    Dim strSkippedAttachments() As String
+'    Dim i As Long
+'    Dim t As Long: t = Timer
+'    Dim docExt As String
+'    Dim strIndex As String
+'    Dim prefixNewName As String
+'    Dim nameDivider As String
+'    Dim newName As String
+'    Dim selectedItemsCount As Long
+'    Dim totalAttachmentCount As Long
+'    Dim selectedItemCounter As Long
+'    Dim savedAttachmentsCount As Long
+'    Dim totalSavedAttachmentsCount As Long
+'    Dim proceedWithCurrent As Boolean
+'    Dim raiseSkippedFlag As Boolean
+'    Dim skippedAttachmentsCount As Long
+'    Dim totalSkippedAttachmentsCount As Long
+'    Dim skippedItemCount As Long
+'
+'    ReDim gSkippedDetails(0 To 0)
+'    gSkippedDetails(0).attachmentCount = "Total"
+'    gSkippedDetails(0).skippedCount = "Skip"
+'    gSkippedDetails(0).savedCount = "Save"
+'    gSkippedDetails(0).attachmentFileName = "File Name"
+'    gSkippedDetails(0).emailDate = "Recieved"
+'    gSkippedDetails(0).emailSender = "From"
+'    gSkippedDetails(0).emailSubject = "Subject"
+'
+'
+'    '-------------------------------------------'
+'    'TODO USE THE gcIni CLASS TO HANDLE THIS      '
+'    '-------------------------------------------'
+'        Select Case mACTIVE_USER '              '
+'        Case mUSER_1 '                          '
+'            savePath = mUSER_1_Path '           '
+'        Case mUSER_2 '                          '
+'            savePath = mUSER_2_Path '           '
+'    End Select '                                '
+'    '--------------------------------------------
+'
+'    Set oOutlookApplication = CreateObject("Outlook.Application")
+'    Set oNameSpace = oOutlookApplication.GetNamespace("MAPI")
+'    Set oRecipient = oNameSpace.CreateRecipient("Adam Atkinson")
+'    oRecipient.Resolve
+'    Select Case oRecipient.Resolved
+'        Case Is = True
+'            Set oInbox = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+'            If frmDownloader.CheckBox_iServeQueue Then
+'                Set oMoveToFolder = pGetMyMAPIFolder("Adam.Atkinson@neurorestorative.com\Inbox\iServe\iServe Queue")
+'            Else
+'                MsgBox "No other destination currently possible.", vbCritical, "Cannot Continue"
+'                GoTo CLEANUPANDEXIT
+'            End If
+'        Case Is = False
+'            MsgBox "Error: Unable To Resolve Atkinson Inbox"
+'            GoTo CLEANUPANDEXIT
+'        Case Else
+'            MsgBox "Error: Undefined Error Resolving AP Inbox"
+'            GoTo CLEANUPANDEXIT
+'    End Select
+'
+'
+'    'look for savePath and prompt user to create if not found; exit if not found and created
+'    If Not CBool(Len(Dir(savePath, vbDirectory))) Then
+'        Select Case MsgBox("'" & savePath & "' does not exist!" & mDBLLN & "Do you want to create it now?", vbYesNo)
+'            Case Is = vbYes
+'                MkDir savePath
+'            Case Is = vbNo
+'                MsgBox "Cannot continue until folder exists.  Program terminated"
+'                GoTo CLEANUPANDEXIT
+'        End Select
+'    End If
+'
+'    'loop through every email in the active selection, looping through and saving the attachments for each one
+'    Set oActiveExplorer = oOutlookApplication.ActiveExplorer
+'    Set oSelection = oActiveExplorer.Selection
+'    selectedItemsCount = oSelection.Count
+'    frmDownloader.StartAttachmentIndicator selectedItemCounter, selectedItemsCount
+'    For Each oSelectedItem In oSelection
+'        selectedItemCounter = selectedItemCounter + 1
+'        If TypeOf oSelectedItem Is Outlook.MailItem Then
+'            Set oMailItem = oSelectedItem
+'            Set oAttachments = oMailItem.Attachments
+'            If oAttachments.Count > 0 Then
+'                skippedAttachmentsCount = 0
+'                savedAttachmentsCount = 0
+'                totalAttachmentCount = totalAttachmentCount + oAttachments.Count
+'                For Each oAttachment In oAttachments
+'                    proceedWithCurrent = False
+'                    docExt = UCase(Right(oAttachment.FileName, Len(oAttachment.FileName) - InStrRev(oAttachment.FileName, ".") + 1))
+'                    Select Case True
+'                        Case frmDownloader.CheckBox_DOC And docExt Like DOC_EXT
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_GIF And docExt Like GIF_EXT
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_JPG And (docExt Like JPG_EXT Or docExt Like JPEG_EXT)
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_PDF And docExt Like PDF_EXT
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_PNG And docExt Like PNG_EXT
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_XLS And docExt Like XLS_EXT
+'                            proceedWithCurrent = True
+'                        Case frmDownloader.CheckBox_OTHER _
+'                                And Not (docExt Like XLS_EXT Or docExt Like PNG_EXT Or docExt Like PDF_EXT Or docExt Like JPG_EXT _
+'                                Or docExt Like JPEG_EXT Or docExt Like GIF_EXT Or docExt Like DOC_EXT)
+'                            proceedWithCurrent = True
+'                    End Select
+'                    If proceedWithCurrent Then
+'                        prefixNewName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+'                        newName = pReplaceSpecialCharacters(oMailItem.Subject, "_", True) & "(" & Replace(oAttachment.FileName, docExt, vbNullString) & ")" & docExt
+'                        Do
+'                            DoEvents
+'                            If CBool(Len(Dir(savePath & prefixNewName & strIndex & nameDivider & newName))) Then
+'                                strIndex = CStr(Val(strIndex) + 1)
+'                                nameDivider = "()"
+'                            End If
+'                        Loop Until Not CBool(Len(Dir(savePath & Left(prefixNewName, 1) & strIndex & Right(prefixNewName, 1) & nameDivider & newName)))
+'                        oAttachment.SaveAsFile savePath & prefixNewName & strIndex & nameDivider & newName
+'                        totalSavedAttachmentsCount = totalSavedAttachmentsCount + 1
+'                        savedAttachmentsCount = savedAttachmentsCount + 1
+'                    Else
+'                        raiseSkippedFlag = True
+'                        totalSkippedAttachmentsCount = totalSkippedAttachmentsCount + 1
+'                        skippedAttachmentsCount = skippedAttachmentsCount + 1
+'
+'                        ReDim Preserve gSkippedDetails(0 To UBound(gSkippedDetails) + 1)
+'                        With oMailItem
+'                            gSkippedDetails(UBound(gSkippedDetails)).attachmentCount = .Attachments.Count
+'                            gSkippedDetails(UBound(gSkippedDetails)).skippedCount = skippedAttachmentsCount
+'                            gSkippedDetails(UBound(gSkippedDetails)).savedCount = savedAttachmentsCount
+'                            gSkippedDetails(UBound(gSkippedDetails)).attachmentFileName = oAttachment.FileName
+'                            gSkippedDetails(UBound(gSkippedDetails)).emailDate = .ReceivedTime
+'                            gSkippedDetails(UBound(gSkippedDetails)).emailSender = .SenderName
+'                            gSkippedDetails(UBound(gSkippedDetails)).emailSubject = .Subject
+'                            Set gSkippedDetails(UBound(gSkippedDetails)).otMessage = oMailItem
+'                            Set gSkippedDetails(UBound(gSkippedDetails)).otAttachment = oAttachment
+'                        End With
+'                    End If
+'                DoEvents
+'                Next oAttachment
+'                If raiseSkippedFlag Then
+'                    oMailItem.UnRead = True
+'                    oMailItem.FlagStatus = olFlagMarked
+'                Else
+'                    oMailItem.UnRead = False
+'                    oMailItem.FlagStatus = olFlagComplete
+'                End If
+'                If oMailItem.Parent = oInbox Then
+'                    oMailItem.Move oMoveToFolder
+'                Else
+'                    skippedItemCount = skippedItemCount + 1
+'                End If
+'                raiseSkippedFlag = False
+'            Else
+'                skippedItemCount = skippedItemCount + 1
+'            End If
+'        End If
+'
+'        frmDownloader.UpdateAttachmentIndicator selectedItemCounter, selectedItemsCount, skippedItemCount, _
+'                                                totalSavedAttachmentsCount, totalSkippedAttachmentsCount, totalAttachmentCount
+'    Next
+'
+'
+'    'process is complete, time to show statistics and open the folder
+'    If totalSavedAttachmentsCount > 0 Then Call OpenFolder1(savePath)
+'    frmDownloader.CommandButton_HideBar.Visible = True
+'
+'
+'CLEANUPANDEXIT:
+'
+'    Set oActiveExplorer = Nothing
+'    Set oSelection = Nothing
+'    Set oSelectedItem = Nothing
+'    Set oAttachments = Nothing
+'
+'End Sub
+'
+'
+'Sub SaveAllSkippedAttachments()
+'    Dim newSavePath As String
+'    Dim newFolderName As String
+'    Dim folderCreated As String
+'    Dim strIndex As String
+'    Dim prefixNewName As String
+'    Dim nameDivider As String
+'    Dim i As Long
+'
+'    Do
+'        newFolderName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & " Skipped Attachments"
+'        newSavePath = savePath & newFolderName & mDELIM
+'        If Not CBool(Len(Dir(newSavePath, vbDirectory))) Then
+'            MkDir newSavePath
+'            folderCreated = True
+'        End If
+'    Loop Until folderCreated
+'    For i = 1 To UBound(gSkippedDetails)
+'
+'        prefixNewName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+'        Do
+'            DoEvents
+'            If CBool(Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.FileName))) Then
+'                strIndex = CStr(Val(strIndex) + 1)
+'                nameDivider = "_"
+'            End If
+'        Loop Until Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.FileName)) = 0
+'        gSkippedDetails(i).otAttachment.SaveAsFile newSavePath & prefixNewName & strIndex & nameDivider & gSkippedDetails(i).otAttachment.FileName
+'    Next i
+'    OpenFolder1 newSavePath
+'End Sub
+'
+'
+'
+'Private Sub OpenFolder1(ByVal strDirectory As String)
+'    Dim w As Variant
+'    Dim pID As Variant
+'    Dim sh As Variant
+'    Dim retainDelim As Boolean
+'
+'    Dim SW_RESTORE As Single: SW_RESTORE = 9
+'
+'    If Right(strDirectory, 1) = mDELIM Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+'
+'    On Error GoTo 102:
+'    Set sh = CreateObject("shell.application")
+'    For Each w In sh.Windows
+'        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+'            If w.Document.Folder.self.Path = strDirectory Then
+'                If CBool(IsIconic(w.hWnd)) Then
+'                    w.Visible = False
+'                    w.Visible = True
+'                    ShowWindow w.hWnd, SW_RESTORE
+'                Else
+'                    w.Visible = False
+'                    w.Visible = True
+'                End If
+'                Exit Sub
+'            End If
+'        End If
+'    Next
+'
+'    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+'102:
+'    If Err.Number <> 0 Then MsgBox "error opening window", vbCritical, Err.Number
+'End Sub
+'
+'
+''this is very generic and works well, defintely worth keeping
+'Public Function pGetMyMAPIFolder(strFolderPath As String) As Outlook.MAPIFolder
+'    ' strFolderPath needs to be something like
+'    '   "Public Folders\All Public Folders\Company\Sales" or
+'    '   "Personal Folders\Inbox\My Folder"
+'
+'    Dim objApp As Outlook.Application
+'    Dim objNS As Outlook.Namespace
+'    Dim colFolders As Outlook.Folders
+'    Dim objFolder As Outlook.MAPIFolder
+'    Dim arrFolders() As String
+'    Dim i As Long
+'    On Error Resume Next
+'
+'    strFolderPath = Replace(strFolderPath, "/", "\")
+'    arrFolders() = Split(strFolderPath, "\")
+'    Set objApp = Application
+'    Set objNS = objApp.GetNamespace("MAPI")
+'    Set objFolder = objNS.Folders.Item(arrFolders(0))
+'    If Not objFolder Is Nothing Then
+'        For i = 1 To UBound(arrFolders)
+'            Set colFolders = objFolder.Folders
+'            Set objFolder = Nothing
+'            Set objFolder = colFolders.Item(arrFolders(i))
+'            If objFolder Is Nothing Then
+'                Exit For
+'            End If
+'        Next
+'    End If
+'
+'    Set pGetMyMAPIFolder = objFolder
+'    Set colFolders = Nothing
+'    Set objNS = Nothing
+'    Set objApp = Nothing
+'End Function
+'
+'
+'
+''this is simple version of the below, very generic and works well, might be worth keeping both
+'Public Sub pSimpleOpenFolder(ByVal strDirectory As String)
+''how to call
+''strPath = "C:\Windows"
+''Call pOpenFolder(strPath)
+'    Dim w As Variant
+'    Dim pID As Variant
+'    Dim sh As Variant
+'    If Right(strDirectory, 1) = Chr(92) Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+'    On Error GoTo EXITSUB
+'    Set sh = CreateObject("shell.application")
+'    For Each w In sh.Windows
+'        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+'            If w.Document.Folder.self.Path = strDirectory Then
+'                'if already open, bring it front
+'                w.Visible = False
+'                w.Visible = True
+'                Exit Sub
+'            End If
+'        End If
+'    Next
+'    'if you get here, the folder isn't open so open it
+'    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+'EXITSUB:
+'End Sub
+'
+'
+''this is an enhanved version of the above, it is very generic and works well, defintely worth keeping
+'Public Sub pOpenFolder(Optional strDirectory As String)
+''requires AP_WINDOWS_API.ShowWindow
+''requires AP_WINDOWS_API.IsIconic
+'    'Private Const SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+'    Dim SW_RESTORE As Single: SW_RESTORE = 9
+'    Dim pID As Variant
+'    Dim sh As Variant
+'    Dim w As Object
+'    If Right(strDirectory, 1) = Chr(92) Then strDirectory = Left(strDirectory, Len(strDirectory) - 1)
+'    If strDirectory = vbNullString Then strDirectory = Environ("USERPROFILE") & Chr(92)
+'    On Error GoTo ERRORSEEN:
+'    Set sh = CreateObject("shell.application")
+'    For Each w In sh.Windows
+'        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+''            Debug.Print w.Name
+'            If w.Document.Folder.self.Path = strDirectory Then
+'                'if already open, bring it front
+'                If CBool(IsIconic(w.hWnd)) Then ' If it's minimized, show it
+'                    w.Visible = False
+'                    w.Visible = True
+'                    ShowWindow w.hWnd, SW_RESTORE
+'                Else
+'                    w.Visible = False
+'                    w.Visible = True
+'                End If
+'                Exit Sub
+'            End If
+'        End If
+'    Next
+'    'if you get here, the folder isn't open so open it
+'    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+'    Exit Sub
+'ERRORSEEN:
+''    Debug.Print Err.Number
+'End Sub
+'
+'
+''this is mostly generic and works well, defintely worth keeping
+'Public Function pReplaceSpecialCharacters(ByVal Txt As String, _
+'                                        Optional replaceWith As String, _
+'                                        Optional allowSpace As Boolean _
+'                                        ) As String
+'    Dim regexPattern As String
+'    If allowSpace Then
+'        regexPattern = "[^A-Z\s0-9()]+"
+'    Else
+'        regexPattern = "[^A-Z0-9]+"
+'    End If
+'    With CreateObject("VBScript.RegExp")
+'        .Pattern = regexPattern
+'        .Global = True
+'        .ignoreCase = True
+'        pReplaceSpecialCharacters = Trim(.Replace(Txt, replaceWith))
+'    End With
+'End Function
+'
+'
+''this is very generic and works well, defintely worth keeping
+'Public Sub pDeleteFile(ByVal FileToDelete As String)
+'' Requires function     AP_GLOBAL_METHODS.pFileExists
+'   If pFileExists(FileToDelete) Then 'See above
+'      ' First remove readonly attribute, if set
+'      SetAttr FileToDelete, vbNormal
+'      ' Then delete the file
+'      Kill FileToDelete
+'    End If
+'End Sub
+'
+'
+''this is very generic and works well, defintely worth keeping
+'Public Function pFileExists(ByVal FileToTest As String) As Boolean
+'   pFileExists = (Dir(FileToTest) <> "")
+'End Function
+'
+'
+''this is very generic and works well, defintely worth keeping
+'Public Function pGetPageCountFromPDF(longNameOfPDF As String) As String
+'    Dim stringFromPDF As String
+'    Dim fileNumberForPDF As Long
+'    Dim vbsRegEx As Object
+'    Set vbsRegEx = CreateObject("VBscript.RegExp")
+'    vbsRegEx.Global = True
+'    vbsRegEx.Pattern = "/Type\s*/Page[^s]"
+'    fileNumberForPDF = FreeFile
+'    Open (Replace(longNameOfPDF, """", vbNullString)) For Binary As #fileNumberForPDF
+'        stringFromPDF = Space(LOF(fileNumberForPDF))
+'        Get #fileNumberForPDF, , stringFromPDF
+'    Close #fileNumberForPDF
+'    pGetPageCountFromPDF = vbsRegEx.Execute(stringFromPDF).Count
+'End Function
+'
+'
+'
+'

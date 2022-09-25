@@ -1,0 +1,63 @@
+Attribute VB_Name = "AP__PROJECT__TODO__LIST"
+
+'==========================================================================================='
+'                                                                                           '
+'   TO DO LIST                                                                              '
+'                                                                                           '
+'==========================================================================================='
+
+
+'----------------------------
+'   FIX KNOWN BUGS          |
+'----------------------------
+
+'THE MULTILIST WINDOW OUTPUT = "SERVICE" WITH INPUT "[MM/DD] SERVICE" IF "04/16 SERVICE" IS ALSO LISTED
+
+'OCCASIONALLY HAVE TO ACTIVATE THE VENDOR NAME COMBO BOX WHEN ENTERING A VENDOR NAME IN THE BATCH
+    ' - PRESSING DELETE IS A QUICK FIX WHEN IT HAPPENS
+    
+
+'SOMEHOW LOSING FOCUS ON ALL ENTRY FORMS AFTER DEPARTURE FROM MAIN LINE INVOICE ENTRY
+
+
+
+'==========================================================================================='
+'                                                                                           '
+'   TO DO LIST                                                                              '
+'                                                                                           '
+'==========================================================================================='
+'   FEATURES      |
+'------------------
+
+'MATCH EMAILED REJECTION NOTICE TO INVOICE AND IMPORT INTO BATCH AUTOMATICALLY
+
+
+
+
+'
+'The way to do it is like this:
+'Have your add-in on the central server.
+'Excel on the local PC has an add-in installed that opens (but not installs)
+'The add-in on the server. So it will open it just as a normal .xls file.
+'This means many people can use it at the same time and you only have to deal
+'with the add-in on the server.
+'So, the only add-in installed on the local PC is the loader add-in, not the
+'real add-in.
+'The real add-in will make a menu in Excel in the Workbook Open event and
+'your real add-in will be accessible.
+'
+'
+'In your loader add-in you have code like this in the Workbook Open event:
+'
+'Private Sub Workbook_Open()
+'
+'Workbooks.Open "S:\MainAddin.xla"
+'
+'End Sub
+'
+'Obviously you will have to alter the path to the main add-in and you will
+'have to work out the finer details.
+'The important thing is that the add-in MainAddin.xla is not installed in
+'Excel, so it is not ticked under Tools,
+'Add-ins. The loader add-in is installed though, so it is ticked under Tools,
+'Add-ins.

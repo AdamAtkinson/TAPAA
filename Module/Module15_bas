@@ -1,0 +1,58 @@
+Attribute VB_Name = "Module15"
+'Option Explicit
+Declare Function GetSystemMetrics32 Lib "User32" _
+    Alias "GetSystemMetrics" (ByVal nIndex As Long) As Long
+
+Sub ScreenRes()
+Dim w As Long, h As Long
+    w = GetSystemMetrics32(0) ' width in points
+    h = GetSystemMetrics32(1) ' height in points
+dbP w, h
+End Sub
+'Sub Macro1()
+''
+'Dim cls As APclsSheetStartButton
+'Set cls = New APclsSheetStartButton
+'Set cls.AssignedSheet = ActiveSheet
+'cls.ChangeLabelColor = vbRed
+'cls.AddAPStartLabelToWorksheet
+'dbp "d"
+'
+''
+'End Sub
+Sub MacroMe()
+Dim c As APclsOutlookApplication
+Set c = New APclsOutlookApplication
+c.SearchForSearchTermInSearchFolder "4616552-00"
+
+
+End Sub
+Sub Macro3()
+'
+' Macro3 Macro
+'
+
+'
+End Sub
+Sub Macro445()
+Attribute Macro445.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Macro445 Macro
+'
+
+'
+    ActiveWindow.SmallScroll Down:=-9
+    ActiveSheet.Labels.Add(242.25, 90.75, 86.25, 51.75).Select
+End Sub
+Sub Macro521()
+Attribute Macro521.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Macro521 Macro
+'
+
+'
+    With Selection
+        .Placement = xlFreeFloating
+        .PrintObject = False
+    End With
+End Sub

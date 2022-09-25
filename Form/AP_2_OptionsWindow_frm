@@ -1,0 +1,164 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} AP_2_OptionsWindow 
+   Caption         =   "OPTIONS - AP Automation Assistant"
+   ClientHeight    =   3810
+   ClientLeft      =   45
+   ClientTop       =   330
+   ClientWidth     =   6900
+   OleObjectBlob   =   "AP_2_OptionsWindow_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "AP_2_OptionsWindow"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Private Sub Control1_Enter()
+
+End Sub
+
+Private Sub GPlusDocServer1_FileOpened(ByVal errorID As Long)
+
+End Sub
+
+'Option Explicit
+'Public Event FormActivated()
+'Public Event FormDeActivated()
+'Public Event CloseButtonClicked()
+'
+'
+'Private Const mAUTOSAVEPROCTIME As String = "00:10:00"
+'Private Const mAUTOSAVEPROCWINDOW As String = "00:00:05"
+'
+'Private mAutoSaveEnabled As Boolean
+'Private mNextSaveTime As Date
+'
+'                                                                            '
+''                                                                           |
+''  USERFORM EVENTS                                                          |
+''                                                                           |
+'                                                                            '
+'
+'Private Sub CommandButton_AutoSave_Click()
+''    DBP "AUTOSAVE BUTTON CLICKED"
+'    mAutoSaveEnabled = Not mAutoSaveEnabled
+'    UpdateAutoSaveProc
+'    UpdateAutoSaveButtons
+'End Sub
+'
+'Private Sub CommandButton_CloseOptions_Click()
+'    RaiseEvent CloseButtonClicked
+'    Me.Hide
+'End Sub
+'
+'Private Sub CommandButton_CreateBackup_Click()
+'    #If Devmode Then
+'        Dim savePath As String
+'        savePath = gBackupPath & "\" & Format(Now, "yymmdd_hhnn") & "-manual ( " & Replace(ThisWorkbook.Name, ".xlsm", vbNullString) & " ).xlsm"
+'        StopEvents
+'        ThisWorkbook.SaveCopyAs savePath
+'        If CBool(Len(Dir(savePath))) Then
+'            MsgBox savePath, , "Backup Success"
+'        Else
+'            MsgBox "The backup save job did not complete", , "ERROR CREATING BACKUP"
+'        End If
+'        ResumeEvents
+'    #End If
+'End Sub
+'                                                                            '
+''                                                                           |
+''  PUBLIC AUTOSAVE PROPERTIES AND METHODS                                   |
+''                                                                           |
+'                                                                            '
+'
+'Public Property Get IsAutoSaveEnabled() As Boolean
+''    DBP "FETCHED ISAUTOSAVEENABLED PROPERTY"
+'    IsAutoSaveEnabled = mAutoSaveEnabled
+'End Property
+'
+'Public Property Get NextSaveTime() As Date
+''    DBP "FETCHED NEXT SAVE PROPERTY"
+'    NextSaveTime = mNextSaveTime
+'End Property
+'
+'Public Sub EndAutoSaveProc()
+''    DBP "ENDING AUTOSAVE", mNextSaveTime
+'    mAutoSaveEnabled = False
+''    If mNextSaveTime > Now Then
+'''        DBP "NEXT PROC IS FUTURE, UPDATING"
+''        UpdateAutoSaveProc
+''    Else
+'''        DBP "NEXT PROC IS NOT FUTURE, NOT UPDATING"
+''    End If
+'    UpdateAutoSaveButtons
+'End Sub
+'
+'Public Sub AutoSaveProc()
+''    DBP "AUTOSAVE FORM PROC"
+''    DBP "SAVING"
+'    ThisWorkbook.Save
+''    DBP "UPDATING NEXT PROC"
+'    UpdateAutoSaveProc
+'End Sub
+'                                                                            '
+''                                                                           |
+''  PRIVATE AUTOSAVE PROPERTIES AND METHODS                                  |
+''                                                                           |
+'                                                                            '
+'Private Sub UpdateAutoSaveProc()
+''    DBP "UPDATING PROC TIME"
+'    Select Case mAutoSaveEnabled
+'        Case True
+'            If mNextSaveTime <= Now Then
+'                mNextSaveTime = Now + TimeValue(mAUTOSAVEPROCTIME)
+'
+'                Dim latestTime As Date
+'                latestTime = mNextSaveTime + TimeValue(mAUTOSAVEPROCWINDOW)
+'                Application.OnTime mNextSaveTime, "APmodOnTimeCallers.OptionsAutoSaveProc", latestTime
+''                DBP "NEW PROC TIME SET", mNextSaveTime
+''                DBP "LATEST PROC TIME SET", latestTime
+'            Else
+''                DBP "AUTOSAVE IS ENABLED BUT PROC TIME WAS IN THE PAST"
+'            End If
+'        Case False
+'            If mNextSaveTime > Now Then
+'                'THIS WAS BEING CALLED SO I STOPPED IT
+''                Application.OnTime mNextSaveTime, "APmodOnTimeCallers.OptionsAutoSaveProc", False
+''                DBP "CANCELLED FUTURE PROC TIME"
+'            Else
+''                DBP "PROC TIME WAS IN PAST, NOTHING TO CANCEL"
+'            End If
+'    End Select
+'End Sub
+'
+'Private Sub UpdateAutoSaveButtons()
+''    DBP "CHANGING BUTTONS"
+'    If mAutoSaveEnabled Then
+''        DBP "BUTTON ON"
+'        ModifyFormButton Me.CommandButton_AutoSave, styleOn
+'    Else
+''        DBP "BUTTON OFF"
+'        ModifyFormButton Me.CommandButton_AutoSave, styleOff
+'    End If
+'End Sub
+'
+'Private Sub CommandButton1_Click()
+'    RemoveAllButStrikeThrough
+'End Sub
+'
+'Private Sub UserForm_Activate()
+'    RaiseEvent FormActivated
+'    AppFocus
+'End Sub
+'
+'Private Sub UserForm_Deactivate()
+'    RaiseEvent FormDeActivated
+'End Sub
+'
+'Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+'    If CloseMode = 0 Then Cancel = 1
+'End Sub
+Private Sub UserForm_Click()
+
+End Sub

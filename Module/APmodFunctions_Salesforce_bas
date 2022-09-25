@@ -1,0 +1,62 @@
+Attribute VB_Name = "APmodFunctions_Salesforce"
+Option Explicit
+
+
+
+
+
+Public Function GetSalesForceCredentials(Optional ByRef returnURL As String, _
+                                         Optional ByRef returnUserID As String, _
+                                         Optional ByRef returnUserPW As String, _
+                                         Optional ByVal DevTestModifier As String _
+                                         ) As Boolean
+    If gcIni Is Nothing Then Set gcIni = New APclsIniFileHandler
+    If gcIni.Configured Then
+        gcIni.SectionID = "iServe Environment"
+        gcIni.keyID = "URL" & DevTestModifier
+        returnURL = gcIni.ReadKey
+        gcIni.SectionID = "Registered User"
+        gcIni.keyID = "eMail" & DevTestModifier
+        returnUserID = gcIni.ReadKey
+        gcIni.keyID = "Access Code" & DevTestModifier
+        returnUserPW = gcIni.ReadKey
+        If CBool(Len(returnURL)) _
+                And CBool(Len(returnUserID)) _
+                And CBool(Len(returnUserPW)) _
+                Then GetSalesForceCredentials = True
+    End If
+End Function
+
+Public Function LoginSalesforce(ByRef driver As Selenium.ChromeDriver, Optional DevTestModifier As String) As Long 'return is the Chrome hWnd
+    On Error GoTo FAILED:
+    Dim hwnd As Long
+    Dim Login(1 To 4) As String
+    Dim ele As Selenium.WebElement
+    Dim Assert As New Selenium.Assert
+    If GetSalesForceCredentials(Login(1), Login(2), Login(3), DevTestModifier) Then
+        driver.AddArgument "--disable-notifications"
+        driver.Get Login(1)
+        Set ele = driver.FindElementById("username")
+        ele.SendKeys Login(2)
+        Login(4) = ele.Value
+        Assert.Equals Login(2), Login(4)
+        Set ele = driver.FindElementById("password")
+        ele.SendKeys Login(3)
+        Login(4) = ele.Value
+        Assert.Equals Login(3), Login(4)
+        Set ele = driver.FindElementById("Login")
+        ele.Click
+        hwnd = Application.WorksheetFunction.Match(GetForegroundWindow(), FnFindAllWindowsLike("*Login*Salesforce*"))
+        LoginSalesforce = hwnd
+    End If
+FAILED:
+End Function
+
+Public Function CloseSalesforce(ByRef driver As Selenium.ChromeDriver) As Boolean
+    On Error GoTo FAILED
+    driver.Quit
+    CloseSalesforce = True
+FAILED:
+End Function
+
+

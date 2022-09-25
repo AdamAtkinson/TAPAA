@@ -1,0 +1,326 @@
+Attribute VB_Name = "APglobalConstants"
+Option Explicit
+Option Private Module
+
+    '======================================================
+    '   DEFINE NAME FOR GLOBAL WORKBOOK VARIABLE
+    'Public Const WORKBOOKNAME_AP As String = "AP.xlsm" 'CANNOT BE TRUSTED
+
+
+    '======================================================
+    '   DEFINE PUBLIC TABLE NAMES FOR OBJECTS
+    Public Const sTABLE_NAME_BATCH As String = "tbl_InvoiceBatch"
+    Public Const sTABLE_NAME_SUPPLIER_DETAILS As String = "tbl_SupplierDetails"
+    Public Const sTABLE_NAME_APPROVERS As String = "tbl_Facility"
+    Public Const sTABLE_NAME_COA As String = "tbl_ChartOfAccounts"
+    Public Const sTABLE_NAME_LINE_DESCRIPTIONS As String = "tbl_InvoiceDescription"
+    Public Const sTABLE_NAME_ISERVE_HISTORY As String = "tbl_iServeHistory"
+    Public Const sTABLE_NAME_EMPTY_BATCH_TEMPLATE As String = "tbl_BatchTemplate"
+    Public Const sTABLE_NAME_TABLE_RANGES As String = "tbl_TableRanges"
+    Public Const sTABLE_NAME_PDF_SUPPLIERS As String = "tbl_PDFVendorMapping"
+    Public Const sTABLE_NAME_EXPENSE_PERIODS As String = "tbl_ExpensePeriod"
+    Public Const sTABLE_NAME_SUPPLIER_NAMES As String = "tbl_SupplierNames"
+    Public Const sTABLE_NAME_SPLIT_DETAILS As String = "tbl_SplitLines"
+    Public Const sTABLE_NAME_SPLIT_SUMMARY As String = "tbl_SplitAllocations"
+
+
+    '======================================================
+    '   LIST OF PRIMARY SHEET CODENAMES (AP BUTTON IS ADDED AND ALL OTHER BUTTONS ARE REMOVED)
+    Public Const dsSHEET_CODENAMES As String = "+APsheetApprovers+APsheetChartOfAccounts+APsheetConfigurationTables+APsheetBatchTemplate+" _
+            & "+APsheetiServeHistory+APsheetBatch+APsheetPDFMapping+APsheetSupplierConfig+" 'don't care about the 2x +
+
+    '======================================================
+    '   DEFINE TABLE HEADER NAMES
+    Public Const sTABLE_COL_BATCH_PONUMBER As String = "PO Number"
+    Public Const sTABLE_COL_BATCH_SUPPLIERNAME As String = "Supplier Name"
+    Public Const sTABLE_COL_BATCH_INVOICENUMBER As String = "Invoice Number"
+    Public Const sTABLE_COL_BATCH_INVOICEDATE As String = "Invoice Date"
+    Public Const sTABLE_COL_BATCH_EXPENSEPERIOD As String = "Expense Period"
+    Public Const sTABLE_COL_BATCH_INVOICEAMOUNT As String = "Line Amount"
+    Public Const sTABLE_COL_BATCH_ALIAS As String = "Alias Number"
+    Public Const sTABLE_COL_BATCH_FACILITYNAME As String = "Facility Name"
+    Public Const sTABLE_COL_BATCH_ACCOUNTNUMBER As String = "Account Number"
+    Public Const sTABLE_COL_BATCH_INVOICEDESCRIPTION As String = "Invoice Line Description"
+    Public Const sTABLE_COL_BATCH_APPROVERNAME As String = "Approver Name"
+    Public Const sTABLE_COL_BATCH_SUPPLIERADDRESS As String = "Supplier Site"
+    Public Const sTABLE_COL_BATCH_SPLITLINE As String = "Split Line"
+    Public Const sTABLE_COL_BATCH_REMITTANCEREQUIRED As String = "Remit Info"
+    Public Const sTABLE_COL_BATCH_FILENAME As String = "Invoice File Name"
+    Public Const sTABLE_COL_BATCH_GROUPSEQUENCENUMBER As String = "Group"
+    Public Const sTABLE_COL_BATCH_BATCHSEQUENCENUMBER As String = "Batch"
+    Public Const sTABLE_COL_BATCH_LINESEQUENCENUMBER As String = "Line"
+    
+    Public Const sTABLE_COL_SUPPLIERDETAILS_LASTUPDATED As String = "Last Updated"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_CUSTOMMESSAGE As String = "Custom Message"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_LASTUPDATE As String = "Last Updated"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_OFFSETEXPENSEPERIOD = "Expense Period"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_UPDATELOG As String = "Update Log"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_ALIAS As String = "Alias Number"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_FACILITYNAME As String = "Facility Name"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_ACCOUNTNUMBER As String = "Account Number"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_INVOICEDESCRIPTION As String = "Invoice Line Description"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_SUPPLIERADDRESS As String = "Supplier Site"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_SUPPLIERNAME As String = "Supplier Name"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_PROCESSINGCODE As String = "PC Code"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_REMITTANCEREQUIRED As String = "Remit Info"
+    Public Const sTABLE_COL_SUPPLIERDETAILS_SITELASTUSED As String = "Site Last Used"
+    
+    Public Const sTABLE_COL_APPROVERS_ALIAS As String = "Alias Number"
+    Public Const sTABLE_COL_APPROVERS_FACILITYNAME As String = "Facility Name"
+    Public Const sTABLE_COL_APPROVERS_APPROVERNAME As String = "Approver Name"
+    Public Const sTABLE_COL_APPROVERS_REGION As String = "Region"
+    
+    Public Const sTABLE_COL_COA_ACCOUNTNUMBERANDDESCRIPTION As String = "GL Number and Description"
+    Public Const sTABLE_COL_COA_ACCOUNTNUMBER As String = "Account Number"
+    Public Const sTABLE_COL_COA_ACCOUNTDESCRIPTION As String = "GL Description"
+    
+'    Public Const CUSTOMINVDESC_COL_INVOICEDESCRIPTION As String = "Invoice Line Description"
+    
+    Public Const sTABLE_COL_ISERVEHISTORY_ACCOUNTNUMBER As String = "GL Number"
+    Public Const sTABLE_COL_ISERVEHISTORY_ALIAS As String = "Alias"
+    Public Const sTABLE_COL_ISERVEHISTORY_INVOICEAMOUNT As String = "Amount"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASENUMBER As String = "Case Number"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASETYPE As String = "Case Record Type"
+    Public Const sTABLE_COL_ISERVEHISTORY_CHECKDATE As String = "Check Date"
+    Public Const sTABLE_COL_ISERVEHISTORY_CHECKNUMBER As String = "Check Number"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASECLOSEDDATE As String = "Closed Date"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASEOPENEDDATE As String = "Opened Date"
+    Public Const sTABLE_COL_ISERVEHISTORY_INVOICEDATE As String = "Invoice Date"
+    Public Const sTABLE_COL_ISERVEHISTORY_INVOICEDESCRIPTION As String = "Invoice Description"
+    Public Const sTABLE_COL_ISERVEHISTORY_INVOICENUMBER As String = "Invoice Number"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASEMODIFIEDBY As String = "Last Modified By: Full Name"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASEMODIFIEDDATE As String = "Last Modified Date"
+    Public Const sTABLE_COL_ISERVEHISTORY_SOURCEFILENAME As String = "Source.Name"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASESTATUS As String = "Status"
+    Public Const sTABLE_COL_ISERVEHISTORY_CASESUBSTATUS As String = "Sub Status"
+    Public Const sTABLE_COL_ISERVEHISTORY_SUPPLIERNAME As String = "Supplier Name"
+    
+    Public Const sTABLE_COL_PDFVENDORS_SUPPLIERNAME As String = "Supplier Name"
+    Public Const sTABLE_COL_PDFVENDORS_SEARCHKEY As String = "Search Key"
+    Public Const sTABLE_COL_PDFVENDORS_PROCEDURENAME As String = "Procedure Name"
+    
+    Public Const sTABLE_COL_EXPENSEPERIODS_EXPENSEPERIOD As String = "Expense Period"
+    
+    Public Const sTABLE_COL_SUPPLIERNAMES_SUPPLIERNAME As String = "Supplier Name"
+    
+    Public Const sTABLE_COL_SPLIT_SUMMARY_DEFAULTACCOUNT As String = "Default"
+    Public Const sTABLE_COL_SPLIT_SUMMARY_ACCOUNTDESCRIPTION As String = "Account Description"
+    Public Const sTABLE_COL_SPLIT_SUMMARY_ACCOUNT As String = "Allocate To"
+    Public Const sTABLE_COL_SPLIT_SUMMARY_AMOUNT As String = "Total"
+        
+    '======================================================
+    '   DEFINE CONSTANTS FOR REGION FILTER (LIMITS RESULTS SHOWN ON BATCH ENTRY)
+    Public Const sREGION_CA As String = "CA" 'RegionFilter(1)
+    Public Const sREGION_NONCA As String = "NONCA" 'RegionFilter(2)
+    Public Const sREGION_OTHER As String = "Other" 'RegionFilter(3)
+
+    '======================================================
+    '   DEFINE OTHER PUBLIC CONSTANTS
+    Public Const sONKEY_TEN_SECOND_TIMER As String = "00:00:10" '10 SECONDS
+    Public Const sONKEY_FIVE_SECOND_TIMER As String = "00:00:05" '05 SECONDS
+    Public Const sHOTKEY_PROCEDURE_TO_ENABLE As String = "APmodMethods.EnableKeyboardShortcuts"
+    Public Const HEADERROWHEIGHT As Integer = 30
+    Public Const DESIREDROWHEIGHT As Integer = 40
+    Public Const sEDIT_INVOICE_DESCRIPTION As String = "Edit Invoice Description"
+    Public Const kCAPITAL As Long = 20
+    Public Const kNUMLOCK As Long = 144
+    Public Const LIMIT_RECURSION As Long = 20
+    ' DOM Public Const strNUANCEPDF As String = """C:\Program Files (x86)\Nuance\Power PDF 21\bin\NuancePDF.exe"""
+'    Public Const NuancePowerPDF As String = """C:\Program Files (x86)\Nuance\Power PDF\bin\NuancePDF.exe"""
+    Public Const sAPP_TITLE_SUFFIX_CHROME As String = " - Google Chrome"
+    Public Const sAPP_TITLE_SUFFIX_NUANCE As String = " - Nuance Power PDF Advanced"
+    Public Const sFORMULA_FACILITYLOOKUP = "=INDEX(tbl_Facility[Facility Name],MATCH([@Alias Number],tbl_Facility[Alias Number],0))"
+    Public Const SW_SHOWNORMAL = 1
+    Public Const SW_SHOWMAXIMIZED = 3
+    Public Const WM_CLOSE = &H10
+    Public Const SW_RESTORE = 9
+    Public Const SW_SHOW = 5
+    Public Const SHIFT_MASK = 1
+    Public Const DBLLN As String = vbNewLine & vbNewLine
+    Public Const LIMIT_DATEDIFFERENCE As Long = 300 '# of days in the past considered valid
+    Public Const SLEEP_MAX As Integer = 500
+    Public Const SLEEP_MED As Integer = 200
+    Public Const SLEEP_MIN As Integer = 50
+    Public Const FILENAME_EXTENSION_PDF As String = ".pdf"
+    Public Const FILENAME_EXTENSION_XLSM As String = ".xlsm"
+    Public Const FILENAME_EXTENSION_XLSX As String = ".xlsx"
+'    Public Const ActiveFolder As String = "C:\Users\e-aatkinson\iServe\Active Queue"
+'    Public Const DefaultImportSplitPDFFolder As String = "C:\Users\e-aatkinson\Desktop\Split PDF Destination"
+    Public Const SCROLLTOROW = 10
+    Public Const sPROCESS_CODE_ZYCUSPO = "Z"
+    Public Const sPROCESS_CODE_SPLIT_ACCOUNT = "S"
+    Public Const FONTCOLOR_BATCHDATABODYRANGE = vbBlack
+    Public Const FONTCOLOR_EXCLUDEFROMUPLOAD = -16777024 'dark red
+    
+
+    '======================================================
+    '   DEFINE BUTTON LABEL CONSTANTS
+    Public Const BUTTONLABEL_PDFQUEUE_DEFAULT = "QUEUE"
+    Public Const BUTTONLABEL_PDFQUEUE_ENABLED = "CLOSE"
+    Public Const BUTTONLABEL_PDFQUEUE_LOADING = "loading"
+
+    '======================================================
+    '   ISERVE FIELD NAMES
+    'at top of page
+'    Public Const sCLICK_HOME As String = "01rU00000005K9w_Tab" 'DEFUNCT
+'    Public Const sLOCATOR_BUTTON_REPORT As String = "report_Tab"
+'    driver.findElement(By.linkText("Mountain West - AP Transaction History")).click()
+'<input value="Run Report" class="btn" name="run" title="Run Report" type="submit">
+'<input value="Export Details" class="btn" name="csvsetup" title="Export Details" type="submit">
+'<select id="xf" name="xf"><option value="localecsv">Comma Delimited .csv</option>
+'    <option value="xls" selected="selected">Excel Format .xls</option>
+'</select>
+'<td class="pbButtonb" id="bottomButtonRow"><input value="Export" class="btn" name="export" title="Export" type="submit"> <input value=" Done " class="btn" name="cancel" title="Done" type="submit"></td>
+    'at top of page on right
+    Public Const sLOCATOR_BUTTON_SAVEASDRAFT As String = "j_id0:mainFrm:lstOfInv:buttons:j_id362" '349"
+    Public Const sLOCATOR_BUTTON_SUBMIT_BATCH As String = "j_id0:mainFrm:lstOfInv:buttons:j_id364" '351"
+    'at bottom of page
+    Public Const sLOCATOR_BUTTON_ADDGROUP As String = "j_id0:mainFrm:lstOfInv:j_id354:j_id368" '355"
+    'found at different parts of page
+    Public Const sWEBPAGE_TITLE_UPLOAD As String = "uploader | Salesforce"
+    Public Const sWEBPAGE_TITLE_HOME As String = "iServe Home (Classic) | Salesforce"
+    Public Const sWEBPAGE_TITLE_INVOICE As String = "Invoice | Salesforce"
+    Public Const sLOCATOR_FIELD_SELECT2_SEARCH As String = "select2-search__field"
+    Public Const sLOCATOR_FIELD_SELECT2_RESULT As String = "select2-result-item__title"
+    Public Const sLOCATOR_FIELD_SELECT2_SELECTION As String = "select2-selection"
+    'not visible on page
+    Public Const sLOCATOR_JUMPTO_PAGEBOTTOM As String = "bPageFooter"
+    'on upload page
+    Public Const sLOCATOR_FIELD_ENTER_FILENAME As String = "uploader:j_id26:component:attForm:j_id1974:j_id1979:0:files:j_id1980:test" '+12
+    Public Const sLOCATOR_FIELD_ENTER_FILEDESCRIPTION As String = "uploader:j_id26:component:attForm:j_id1974:j_id1979:0:files:j_id1986:j_id1988" '+12
+    Public Const sLOCATOR_BUTTON_UPLOAD As String = "uploader:j_id26:component:attForm:j_id1974:j_id2002" '+12
+    Public Const sLOCATOR_BUTTON_DONE As String = "uploader:j_id26:component:attForm:j_id1974:j_id2005" '+12
+    Public Const sLOCATOR_TABLEFIELD_VALIDATE_ATTACHMENT As String = "uploader:j_id26:component:form:j_id2006:attachmentsTable:0:j_id2017"
+    'on vendor maintenance - supplier name
+    'Public Const strEDIT_SUPPLIERNAME As String = "j_id0:frm:j_id35:j_id36:vName" 'ONLY IN TEST ATM
+    Public Const sLOCATOR_FRAME_TAG As String = "iframe"
+    Public Const sLOCATOR_FRAME_PARENT_TAG As String = "force-aloha-page"
+    Public Const lLOCATOR_FRAME_INDEX_INVOICEENTRY As Long = 1
+    Public Const lLOCATOR_FRAME_INDEX_ATTACHMENT As Long = 2
+    Public Const sLOCATOR_FRAME_PARTIAL_NAME As String = "[name*=vfFrameId]"
+    Public Const sLOCATOR_CSS_NAME As String = "name"
+    Public Const sWEBPAGE_URL_HOMEPAGE As String = "https://iserve.lightning.force.com/lightning/n/ESD_Home"
+    Public Const sWEBPAGE_URL_INVOICEENTRY As String = "https://iserve.lightning.force.com/one/one.app#/alohaRedirect/apex/WF_Invoice?"
+    Public Const sFAKE_PATH_PREFIX = "C:\fakepath\"
+    Public Const sLOCATOR_DIV_ID_BRAND As String = "brandBand_1"
+    '-------------------------------------------------------------------
+    'note this block contains comma seperated segments and each requires one or more index variables
+    '-------------------------------------------------------------------
+    'Public Const strSELECT_PAYINVOICE As String = "apTypes,Manage Vendors,Invoices"
+    Public Const sLOCATOR_CHECKBOX_ZYCUSPO As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:infoHeader:j_id86:j_id89"
+    Public Const sLOCATOR_FIELD_ENTER_ZYCUSPO As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id177"
+    Public Const sLOCATOR_CHECKBOX_REMITTANCEREQUIRED As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:paymentHeader:j_id209:j_id212"
+    Public Const sLOCATOR_FIELD_ENTER_SUPPLIERNAME As String = "j_id0:mainFrm:lstOfInv:j_id61:,:eachInv:infoHeader:j_id66:j_id69"
+    Public Const sLOCATOR_FIELD_ENTER_APPROVERNAME As String = "j_id0:mainFrm:lstOfInv:j_id61:,:eachInv:infoHeader:j_id80:j_id83"
+    Public Const sLOCATOR_BUTTON_ADD_INVOICELINE As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:AddLIButtonHeader"
+    Public Const sLOCATOR_FIELD_ENTER_INVOICEAMOUNT As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id125" '112"
+    Public Const sLOCATOR_FIELD_ENTER_INVOICEDATE As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id103" 'j_id190
+    Public Const sLOCATOR_FIELD_ENTER_INVOICENUMBER As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id119" 'j_id106"
+    Public Const sLOCATOR_FIELD_ENTER_INVOICEDESCRIPTION As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id143" 'j_id130"
+    Public Const sLOCATOR_DROPDOWN_SELECT_EXPENSEPERIOD As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id149" 'j_id136"
+    Public Const sLOCATOR_FIELD_ENTER_ALIAS As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id154" '140"
+    Public Const sLOCATOR_FIELD_ENTER_ACCOUNT As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:LIHeader:lineItemList:,:j_id158" '145"
+    Public Const sLOCATOR_BUTTON_ADD_ATTACHMENTS As String = "j_id0:mainFrm:lstOfInv:j_id60:,:eachInv:j_id334" '321"
+    '-------------------------------------------------------------------
+
+
+'===========================
+'NOTES FOR LATER
+'===========================
+'search box on top of home page
+'element <input autocomplete="off" id="phSearchInput" maxlength="100" name="strVal" placeholder="Search..." size="20" title="Search..." type="text" value="" role="combobox" aria-autocomplete="list" aria-haspopup="true" aria-expanded="false">
+'xpath //*[@id="phSearchInput"]
+'selector #phSearchInput
+'js path  document.querySelector('#phSearchInput')
+
+'search box button on top of home page
+'element <input value="Search" id="phSearchButton" type="button">
+'xpath //*[@id="phSearchButton"]
+'selector #phSearchButton
+'js path document.querySelector('#phSearchButton')
+
+'#Case_body > table > tbody > tr.dataRow.even.last.first > th > a
+'===========================
+'===========================
+
+
+
+'    '======================================================
+'    '   ENUMERATORS FOR TABLE HEADER COLUMN NAMES
+'    Public Enum BatchColumnNames
+'        SupplierName = "Supplier Name"
+'        InvoiceNumber = "Invoice Number"
+'        InvoiceDate = "Invoice Date"
+'        ExpensePeriod = "Expense Period"
+'        InvoiceAmount = "Amount"
+'        Alias = "Alias"
+'        FacilityName = "Facility Name"
+'        AccountNumber = "GL Number"
+'        InvoiceDescription = "Invoice Description"
+'        ApproverName = "Approver Name"
+'        SupplierAddress = "Supplier Address"
+'        SplitLine = "Split Line"
+'        RemittanceRequired = "Remittance Required"
+'        InvoiceFileName = "File Name"
+'        GroupIndexNumber = "Group"
+'        BatchIndexNumber = "Batch"
+'        LineIndexNumber = "Line"
+'    End Enum
+'
+'    Public Enum SupplierDetailsColumnNames
+'        Alias = "Alias"
+'        FacilityName = "Facility Name"
+'        AccountNumber = "GL Number"
+'        InvoiceDescription = "Invoice Description"
+'        SupplierAddress = "Supplier Address"
+'        SupplierName = "Supplier Name"
+'        SplitLine = "Split Line"
+'        RemittanceRequired = "Remittance Required"
+'    End Enum
+'
+'    Public Enum FacilityColumnNames
+'        Alias = "Alias"
+'        FacilityName = "Facility Name"
+'        ApproverName = "Approver Name"
+'        Region = "Region"
+'    End Enum
+'
+'    Public Enum ChartOfAccountsColumnNames
+'        AccountNumberAndDescription = "GL Number and Description"
+'        AccountNumber = "GL Number"
+'        AccountDescription = "GL Description"
+'    End Enum
+'
+'    Public Enum iServeHistoryColumnNames
+'        AccountNumber = "GL Number"
+'        Alias = "Alias"
+'        InvoiceAmount = "Amount"
+'        CaseNumber = "Case Number"
+'        CaseType = "Case Record Type"
+'        CheckDate = "Check Date"
+'        CheckNumber = "Check Number"
+'        CaseCloseDate = "Date/Time Closed"
+'        CaseOpenDate = "Date/Time Opened"
+'        InvoiceDate = "Invoice Date"
+'        InvoiceDescription = "Invoice Description"
+'        InvoiceNumber = "Invoice Number"
+'        CaseModifiedBy = "Last Modified By: Full Name"
+'        CaseModifiedDate = "Last Modified Date"
+'        SourceFileName = "Source.Name"
+'        CaseStatus = "Status"
+'        CaseSubStatus = "Sub Status"
+'        SupplierName = "Supplier Name"
+'    End Enum
+'
+'    '======================================================
+'    '   DATA STRUCTURE TO HOLD TABLE HEADER COLUMN NAME ENUMERATORS
+'    Public Type TableHeaderColumnNames
+'        BATCH As BatchColumnNames
+'        SUPPLIER As SupplierDetailsColumnNames
+'        FACILITY As FacilityColumnNames
+'        COA As ChartOfAccountsColumnNames
+'        HISTORY As iServeHistoryColumnNames
+'    End Type
+'    Public eCOLS As TableHeaderColumnNames
+
+  

@@ -1,0 +1,190 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "APclsBatch"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+Private Const mFIRSTROWNUMBER As Long = 2
+
+Private WithEvents mBatchEvent As APclsBatchEvents
+Attribute mBatchEvent.VB_VarHelpID = -1
+
+Private maryBatchLines() As APclsBatchLine
+Private mLineIndex As Long
+
+'==================================================================================
+'==================================================================================
+
+Private Sub Class_Initialize()
+    mLineIndex = mFIRSTROWNUMBER
+    Set mBatchEvent = New APclsBatchEvents
+    ReDim maryBatchLines(mFIRSTROWNUMBER To mFIRSTROWNUMBER)
+    Set maryBatchLines(mFIRSTROWNUMBER) = New APclsBatchLine
+End Sub
+
+'==================================================================================
+'==================================================================================
+
+Public Property Get BatchRow(Index As Long) As APclsBatchLine
+    Set BatchRow = maryBatchLines(Index)
+End Property
+
+'==================================================================================
+'==================================================================================
+
+Private Sub ExpandArrayAsNeeded(ByVal rowIndex As Long)
+    If UBound(maryBatchLines) < rowIndex Then
+        ReDim Preserve maryBatchLines(mFIRSTROWNUMBER To rowIndex)
+        Dim i As Long
+        For i = LBound(maryBatchLines) To UBound(maryBatchLines)
+            If maryBatchLines(i) Is Nothing Then
+                Set maryBatchLines(i) = New APclsBatchLine
+            End If
+        Next i
+    End If
+End Sub
+
+'==================================================================================
+'==================================================================================
+
+Private Sub mBatchEvent_AfterAccountNumber(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).AccountNumber = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterAliasNumber(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).AliasNumber = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterApproverName(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).ApproverName = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterExpensePeriod(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).ExpensePeriod = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterFacilityName(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).FacilityName = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterInvoiceAmount(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).LineAmount = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterInvoiceDate(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).InvoiceDate = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterInvoiceFileName(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).fileName = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterInvoiceNumber(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).InvoiceNumber = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterLineDescription(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).LineDescription = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterPONumber(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).PurchaseOrder = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterRemitInfo(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).RemitInfo = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterSplitLine(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).SplitLine = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterSupplierName(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).SupplierName = target.Value2
+End Sub
+
+Private Sub mBatchEvent_AfterSupplierSite(ByVal target As Range)
+    ExpandArrayAsNeeded target.Row
+    maryBatchLines(target.Row).SupplierAddress = target.Value2
+End Sub
+
+'==================================================================================
+'==================================================================================
+
+Private Sub mBatchEvent_BeforeAccountNumber(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeAliasNumber(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeApproverName(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeExpensePeriod(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeFacilityName(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeInvoiceAmount(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeInvoiceDate(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeInvoiceFileName(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeInvoiceNumber(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeLineDescription(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforePONumber(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeRemitInfo(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeSplitLine(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeSupplierName(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
+
+Private Sub mBatchEvent_BeforeSupplierSite(ByVal target As Range, CancelAction As Boolean)
+    If target.Value2 = vbNullString Then CancelAction = True
+End Sub
