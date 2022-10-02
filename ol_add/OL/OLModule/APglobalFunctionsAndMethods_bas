@@ -1,0 +1,969 @@
+Attribute VB_Name = "APglobalFunctionsAndMethods"
+Option Explicit
+
+#Const CCC_dbPL = True
+
+Public Const DBLLN As String = vbNewLine & vbNewLine
+Public Const EMAILADDRESS_ADAM As String = "adam.atkinson@neurorestorative.com"
+Public Const EXPLORERCAPTION_APINBOX As String = "CareMeridian_AP - Inbox - CareMeridian_AP - Outlook"
+Public Const VIEW_AUTOINBOX As String = "AutoInbox"
+Public Const RECIPIENT_AP As String = "CareMeridian_AP"
+Public Const FOLDERSTUB_INBOX As String = "\Inbox"
+Public Const FOLDERSTUB_MANAGEDFOLDERS As String = "\Managed Folders"
+Public Const FOLDERSTUB_2YEAR As String = "2Year"
+
+
+
+Public gEvents As clsOutlookEvents
+Public gCustomForm As clsCustomTemplateHandler
+
+
+
+Public Type typeInvoiceDetails
+    CaseNumber As String
+    supplierName As String
+    InvoiceNumber As String
+    totalAmount As String
+    rejectReason As String
+    searchString As String
+End Type
+
+
+Private Const copierSubject As String = "FW: Scanned from a Xerox multifunction device"
+Private Const copierEmailAddress As String = "ALICA22@thementornetwork.com"
+Private Const oldSignaturePath As String = "C:\Users\e-aatkinson\AppData\Local\VBA\Outlook\"
+Private Const newSignaturePath As String = "\Microsoft\Signatures\"
+Private Const newSignatureFileName As String = "Basic Reply.htm"
+Private Const oldSignatureFileName As String = "ReplaceSignature.htm"
+
+Sub SetViewFromQAT()
+    ActiveExplorer.CurrentView = VIEW_AUTOINBOX
+End Sub
+
+
+Sub MassForward()
+'requires Private Const EMAILADDRESS_ADAM
+    Dim mailCount As Long
+    Dim mailIndex As Long
+    Dim oolItem As MailItem
+    Dim oolForward As MailItem
+    Dim sendToRecipient As String
+    Dim progressBar As ProgressIndicatorForm
+    Dim objOutlookObject As Object
+    Dim OutlookApp As Outlook.Application
+    Dim myInbox As Outlook.MAPIFolder
+    Dim moveToFolder As Outlook.MAPIFolder
+    Dim myNameSpace As Outlook.NameSpace
+    Dim myRecipient As Outlook.Recipient
+
+    Set progressBar = New ProgressIndicatorForm
+
+    If Application.ActiveExplorer.Caption <> EXPLORERCAPTION_APINBOX Then
+        MsgBox "Wrong inbox"
+        GoTo CLEANUPANDEXIT
+    End If
+
+    Set OutlookApp = CreateObject("Outlook.Application")
+    Set myNameSpace = OutlookApp.GetNamespace("MAPI")
+    Set myRecipient = myNameSpace.CreateRecipient(RECIPIENT_AP)
+    myRecipient.Resolve
+    Select Case myRecipient.Resolved
+        Case Is = True
+            Set myInbox = myNameSpace.GetSharedDefaultFolder(myRecipient, olFolderInbox)
+            Set moveToFolder = myNameSpace.Folders(RECIPIENT_AP) _
+                    .Folders(FOLDERSTUB_MANAGEDFOLDERS).Folders(FOLDERSTUB_2YEAR).Folders("Printed Invoices")
+        Case Is = False
+            MsgBox "Error: Unable To Resolve AP Inbox"
+            GoTo CLEANUPANDEXIT
+        Case Else
+            MsgBox "Error: Undefined Error Resolving AP Inbox"
+            GoTo CLEANUPANDEXIT
+    End Select
+
+    Select Case MsgBox("Enter the recipient's email address or leave blank to exit" & Chr(13) & EMAILADDRESS_ADAM, vbYesNo, "Send to Default Recipient")
+        Case vbYes
+            sendToRecipient = EMAILADDRESS_ADAM
+        Case vbNo
+            sendToRecipient = InputBox("Email address to use:")
+            If sendToRecipient = vbNullString Then GoTo CLEANUPANDEXIT
+    End Select
+
+    mailCount = Application.ActiveExplorer.Selection.Count
+    mailIndex = 0
+    progressBar.StartIndicator mailIndex, mailCount
+
+    For Each oolItem In Application.ActiveExplorer.Selection
+        Set oolForward = oolItem.Forward
+        With oolForward
+            .To = sendToRecipient
+            .Send
+        End With
+        DoEvents
+        With oolItem
+            .UnRead = False
+            .FlagStatus = olNoFlag
+            .Move moveToFolder
+        End With
+        DoEvents
+        mailIndex = mailIndex + 1
+        progressBar.UpdateProgressIndicator mailIndex, mailCount
+    Next
+
+CLEANUPANDEXIT:
+
+    progressBar.CloseIndicator
+
+    Set progressBar = Nothing
+    Set objOutlookObject = Nothing
+    Set OutlookApp = Nothing
+End Sub
+
+
+Public Function ReadFile(ByVal fileToRead As String) As String
+    Dim fsoConst_ForReading As Long: fsoConst_ForReading = 1
+    Dim fsoConst_TristateUseDefault As Long: fsoConst_TristateUseDefault = -2
+    Dim fso As Object
+    Dim fsoTextStream As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set fsoTextStream = fso.GetFile(fileToRead).OpenAsTextStream(fsoConst_ForReading, fsoConst_TristateUseDefault)
+    ReadFile = fsoTextStream.ReadAll
+    fsoTextStream.Close
+End Function
+
+'this is very generic and works well, defintely worth keeping
+Public Function pFileExists(ByVal FileToTest As String) As Boolean
+   pFileExists = (Dir(FileToTest) <> "")
+End Function
+
+
+'this is very generic and works well, defintely worth keeping
+Public Function gfGetPageCountFromPDF(longNameOfPDF As String) As String
+    Dim stringFromPDF As String
+    Dim fileNumberForPDF As Long
+    Dim vbsRegEx As Object
+    Set vbsRegEx = CreateObject("VBscript.RegExp")
+    vbsRegEx.Global = True
+    vbsRegEx.Pattern = "/Type\s*/Page[^s]"
+    fileNumberForPDF = FreeFile
+    Open (Replace(longNameOfPDF, """", vbNullString)) For Binary As #fileNumberForPDF
+        stringFromPDF = Space(LOF(fileNumberForPDF))
+        Get #fileNumberForPDF, , stringFromPDF
+    Close #fileNumberForPDF
+    gfGetPageCountFromPDF = vbsRegEx.Execute(stringFromPDF).Count
+End Function
+
+Public Function ChooseSingularOrPluralString(ByVal singular As String, ByVal plural As String, ByVal determinant As Long, ByVal zeroIsPlural As Boolean) As String
+    Dim returnString As String
+    Select Case determinant
+        Case 0
+            If zeroIsPlural Then
+                returnString = plural
+            Else
+                returnString = singular
+            End If
+        Case 1
+            returnString = singular
+        Case Else
+            returnString = plural
+        End Select
+    ChooseSingularOrPluralString = returnString
+End Function
+
+'works very well, keep this
+Public Function SelectFolderMAPI() As Outlook.folder
+    'opens window to select outlook folder
+    Dim objNS As NameSpace
+    Set objNS = Application.GetNamespace("MAPI")
+    Set SelectFolderMAPI = objNS.PickFolder
+    Set objNS = Nothing
+End Function
+
+Public Function gfGetStringCategoryNames() As String
+'uses comma as delim, returns nullstring if name contains delim
+    Dim objNS As NameSpace
+    Set objNS = Application.GetNamespace("MAPI")
+    Dim objCategory As Category
+    If objNS.Categories.Count > 0 Then
+        For Each objCategory In objNS.Categories
+            Dim returnString As String
+            If CBool(Len(returnString)) Then returnString = returnString & ","
+            Dim delimConflict As Boolean
+            If InStr(objCategory.Name, ",") Then delimConflict = True
+            returnString = returnString & objCategory.Name
+        Next
+    End If
+    If Not delimConflict Then gfGetStringCategoryNames = returnString
+End Function
+
+Public Function gfValidateCategoryStringsAllMatch(assignedCategories As String, ParamArray needValidation() As Variant) As Boolean
+    Dim i As Long
+    For i = LBound(needValidation) To UBound(needValidation)
+        Dim failedMatch As Boolean
+        If Not CBool(InStr(assignedCategories, needValidation(i))) Then failedMatch = True
+    Next i
+    gfValidateCategoryStringsAllMatch = Not failedMatch
+End Function
+Public Function gfValidateCategoryStringsNoneMatch(assignedCategories As String, ParamArray needValidation() As Variant) As Boolean
+    Dim i As Long
+    For i = LBound(needValidation) To UBound(needValidation)
+        Dim foundMatch As Boolean
+        If CBool(InStr(assignedCategories, needValidation(i))) Then foundMatch = True
+    Next i
+    gfValidateCategoryStringsNoneMatch = Not foundMatch
+End Function
+
+'this is very generic and works well, defintely worth keeping
+Public Function gfGetMAPIFolder(strFolderPath As String) As MAPIFolder
+    ' strFolderPath needs to be something like
+    '   "Public Folders\All Public Folders\Company\Sales" or
+    '   "Personal Folders\Inbox\My Folder"
+    
+    Dim objApp As Outlook.Application
+    Dim objNS As Outlook.NameSpace
+    Dim colFolders As Outlook.Folders
+    Dim objFolder As Outlook.MAPIFolder
+    Dim arrFolders() As String
+    Dim i As Long
+    On Error Resume Next
+    
+    strFolderPath = Replace(strFolderPath, "/", "\")
+    arrFolders() = Split(strFolderPath, "\")
+    Set objApp = Application
+    Set objNS = objApp.GetNamespace("MAPI")
+    Set objFolder = objNS.Folders.Item(arrFolders(0))
+    If Not objFolder Is Nothing Then
+        For i = 1 To UBound(arrFolders)
+            Set colFolders = objFolder.Folders
+            Set objFolder = Nothing
+            Set objFolder = colFolders.Item(arrFolders(i))
+            If objFolder Is Nothing Then
+                Exit For
+            End If
+        Next
+    End If
+    
+    Set gfGetMAPIFolder = objFolder
+    Set colFolders = Nothing
+    Set objNS = Nothing
+    Set objApp = Nothing
+End Function
+
+
+
+Public Sub ShiftArrayLeftAndShrink(ByRef arrayToShift() As String)
+    Dim returnArray() As String
+    If LBound(arrayToShift) <> UBound(arrayToShift) Then
+        ReDim returnArray(LBound(arrayToShift) To UBound(arrayToShift) - 1)
+        Dim i As Long
+        For i = LBound(returnArray) To UBound(returnArray)
+         returnArray(i) = arrayToShift(i + 1)
+        Next
+    End If
+    arrayToShift = returnArray
+End Sub
+
+Public Function BuildSearchStringFromRejectedNotification(mail As Outlook.MailItem) As typeInvoiceDetails
+'    Dim mail As Outlook.MailItem
+'    Set mail = Application.ActiveExplorer.Selection.Item(1)
+
+    Dim mailDoc As Word.Document
+    Set mailDoc = mail.GetInspector.WordEditor
+    Dim invoice As typeInvoiceDetails
+    invoice.supplierName = mailDoc.Tables(1).Rows(4).Cells(2).Range.Text
+    invoice.InvoiceNumber = mailDoc.Tables(1).Rows(11).Cells(2).Range.Text
+    invoice.CaseNumber = mailDoc.Tables(1).Rows(1).Cells(2).Range.Text
+    invoice.rejectReason = mailDoc.Tables(1).Rows(12).Cells(2).Range.Text
+    invoice.searchString = left(invoice.supplierName, 7) & left(invoice.InvoiceNumber, 9) & "*"
+
+    Set mailDoc = Nothing
+    BuildSearchStringFromRejectedNotification = invoice
+End Function
+
+
+
+Sub DoFolders(HostFolder As String)
+    Dim FileSystem As Object
+    Set FileSystem = CreateObject("Scripting.FileSystemObject")
+    DoFolder FileSystem.GetFolder(HostFolder)
+End Sub
+Sub DoFolder(folder As Object)
+    Dim i As Long
+    Dim SubFolder As Object
+    For Each SubFolder In folder.SubFolders
+        DoFolder SubFolder
+    Next
+    Dim File As Object
+
+    For Each File In folder.Files
+
+        ' Operate on each file
+    Next
+    Debug.Print folder.Path
+End Sub
+
+
+
+'this is mostly generic and works well, defintely worth keeping
+Public Function gfReplaceSpecialCharacters(ByVal Txt As String, _
+                                        Optional ByVal replaceWith As String, _
+                                        Optional ByVal allowSpace As Boolean, _
+                                        Optional ByVal alsoInclude As String, _
+                                        Optional ByVal maxLength As Long) As String
+    Dim regexPattern As String
+    If allowSpace Then
+        regexPattern = "[^A-Z\s0-9()" & alsoInclude & "]+"
+    Else
+        regexPattern = "[^A-Z0-9" & alsoInclude & "]+"
+    End If
+    With CreateObject("VBScript.RegExp")
+        .Pattern = regexPattern
+        .Global = True
+        .ignoreCase = True
+        If Not CBool(maxLength) Then maxLength = Len(Txt)
+        gfReplaceSpecialCharacters = left(Trim(.Replace(Txt, replaceWith)), maxLength)
+    End With
+End Function
+
+                                                           '
+'                                                                           |
+'  PUBLIC METHODS                                                           |
+'                                                                           |
+                                                                            '
+
+'this is very generic and works well, defintely worth keeping
+Public Sub gmDeleteFile(ByVal FileToDelete As String)
+' Requires function     AP_GLOBAL_METHODS.pFileExists
+   If pFileExists(FileToDelete) Then 'See above
+      ' First remove readonly attribute, if set
+      SetAttr FileToDelete, vbNormal
+      ' Then delete the file
+      Kill FileToDelete
+    End If
+End Sub
+
+
+Public Sub EditField()
+    
+'    Dim strAcct As String
+'    Dim propertyAccessor As Outlook.propertyAccessor
+
+    If Application.ActiveExplorer.Selection.Count > 0 Then
+        Dim obj As Object
+        Set obj = Application.ActiveExplorer.Selection.Item(1)
+    
+        On Error Resume Next
+        Dim UserProp As Object
+        Set UserProp = obj.UserProperties.Find("MyNotes")
+        Dim strCurrent As String
+        If Not UserProp Is Nothing Then
+            strCurrent = obj.UserProperties("MyNotes").Value
+        End If
+        'Debug.Print strCurrent
+        Dim strNote As String
+        strNote = InputBox("Current Value: " & strCurrent, "Edit the Notes field", strCurrent)
+        Dim objProp As Outlook.UserProperty
+        Set objProp = obj.UserProperties.Add("MyNotes", olText, True)
+            objProp.Value = strNote
+            obj.Save
+            Err.Clear
+    
+        Set obj = Nothing
+    End If
+End Sub
+
+
+
+'dbP is one of the best <10 line tools i've written
+'and dbPL makes it even better !!!!!!!!!!!!!!!!!!!!
+Public Sub dbP(ParamArray condenseStrings() As Variant)
+    Dim printStrings() As Variant
+    If VarType(condenseStrings(0)) >= vbArray Then
+        printStrings = condenseStrings(0)
+    Else
+        printStrings = condenseStrings
+    End If
+    Dim delimString As String: delimString = " ; "
+    Debug.Print Join(printStrings, delimString)
+End Sub
+Public Sub dbPL(ParamArray conditionalDisplayStrings() As Variant)
+    #If CCC_dbPL Then
+        'expand and shift right to append time and date
+        Dim newArray() As Variant
+        ReDim newArray(0 To UBound(conditionalDisplayStrings) + 1)
+        newArray(0) = Now
+        Dim i As Long
+        For i = UBound(newArray) To 1 Step -1
+            newArray(i) = conditionalDisplayStrings(i - 1)
+        Next i
+        dbP newArray
+    #End If
+End Sub
+'Public Sub dbPT(ParamArray tableRowStrings() As Variant)
+'    Dim joinStrings() As Variant
+'    If VarType(printStrings(0)) >= vbArray Then
+'        joinStrings = tableRowStrings(0)
+'    Else
+'        joinStrings = tableRowStrings
+'    End If
+'    Dim printString As String
+'    For i = LBound(joinStrings) To UBound(joinStrings)
+'        If Len(joinStrings(i)) > columnWidths(0, i) Then columnWidths(0, i) = Len(joinStrings(i))
+'        Dim j As Long
+'        For j = 1 To columnWidths(0, i)
+'
+'    Next i
+'    Dim delimString As String: delimString = Chr(9)
+'    Debug.Print Join(joinStrings, delimString)
+'End Sub
+
+
+Sub ReplyWithAttachment()
+'written for Dom because he wanted to include attachments when replaying
+    Dim oolItem As MailItem
+    Dim oolForward As MailItem
+    Set oolItem = Application.ActiveExplorer.Selection.Item(1)
+    Set oolForward = oolItem.Forward
+    oolForward.Display
+    oolForward.To = oolItem.To
+    oolForward.Subject = Replace(oolItem.Subject, "FW: ", vbNullString)
+End Sub
+
+Sub EnumerateEnviron()
+Dim i As Long
+For i = 1 To 100
+    Debug.Print i, Environ(i)
+Next
+End Sub
+
+Sub EnumerateItemProperties()
+    Dim oM As Outlook.MailItem
+    Dim i As Integer
+    Set oM = Application.ActiveInspector.CurrentItem
+    If Not (oM Is Nothing) Then
+        For i = 0 To oM.ItemProperties.Count - 1
+            Debug.Print oM.ItemProperties(i).Name
+        Next
+ End If
+End Sub
+
+'Public Sub MoveMailToRefFolder()
+'    Dim InboxItems As Items
+'    Set InboxItems = gfGetMAPIFolder("Adam.Atkinson@neurorestorative.com\Inbox").Items
+'    Dim inboxItem As Object
+'    For Each inboxItem In InboxItems
+'    dbP "running"
+'        If TypeName(inboxItem) = "MailItem" Then
+'            If inboxItem.UnRead = False Then
+'                Dim d As MailItem
+'                Dim ackFolder As Outlook.MAPIFolder
+'                Set ackFolder = gfGetMAPIFolder("Adam.Atkinson@neurorestorative.com\Inbox\Ref")
+'                Set inboxItem = inboxItem.Move(ackFolder)
+'                DoEvents
+'                dbP "moving ...."
+'            End If
+'        End If
+'    Next
+'End Sub
+
+
+
+'this is simple version of the below, very generic and works well, might be worth keeping both
+Public Sub gmSimpleOpenFolder(ByVal strDirectory As String)
+'how to call
+'strPath = "C:\Windows"
+'Call gmOpenFolder(strPath)
+    Dim w As Variant
+    Dim pID As Variant
+    Dim sh As Variant
+    If Right(strDirectory, 1) = Chr(92) Then strDirectory = left(strDirectory, Len(strDirectory) - 1)
+    On Error GoTo EXITSUB
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+            If w.Document.folder.self.Path = strDirectory Then
+                'if already open, bring it front
+                w.Visible = False
+                w.Visible = True
+                Exit Sub
+            End If
+        End If
+    Next
+    'if you get here, the folder isn't open so open it
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+EXITSUB:
+End Sub
+
+
+'this is an enhanced version of the above, it is very generic and works well, defintely worth keeping
+Public Sub gmOpenFolder(Optional strDirectory As String)
+'requires AP_WINDOWS_API.ShowWindow
+'requires AP_WINDOWS_API.IsIconic
+    'Private Const SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+    Dim SW_RESTORE As Single: SW_RESTORE = 9
+    Dim pID As Variant
+    Dim sh As Variant
+    Dim w As Object
+    If Right(strDirectory, 1) = Chr(92) Then strDirectory = left(strDirectory, Len(strDirectory) - 1)
+    If strDirectory = vbNullString Then strDirectory = Environ("USERPROFILE") & Chr(92)
+    On Error GoTo ERRORSEEN:
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+'            Debug.Print w.Name
+            If w.Document.folder.self.Path = strDirectory Then
+                'if already open, bring it front
+                If CBool(IsIconic(w.hWnd)) Then ' If it's minimized, show it
+                    w.Visible = False
+                    w.Visible = True
+                    ShowWindow w.hWnd, SW_RESTORE
+                Else
+                    w.Visible = False
+                    w.Visible = True
+                End If
+                Exit Sub
+            End If
+        End If
+    Next
+    'if you get here, the folder isn't open so open it
+    pID = Shell("explorer.exe " & strDirectory, vbNormalFocus)
+    Exit Sub
+ERRORSEEN:
+'    Debug.Print Err.Number
+End Sub
+
+
+
+
+Sub RenameAttachmentsWhenForwarding()
+    Dim AttachedFile As Outlook.Attachment
+    Dim sourceMailItem As Outlook.MailItem
+    Dim allAttachments As Outlook.Attachments
+    Dim AttachmentCount As Long
+    Dim attachmentDisplayName As String
+    Dim attachmentFileExtension As String
+    Dim fullAttachmentFilename As String
+    Dim i As Long
+    Dim newAttachmentFilename As String
+    Dim renameFileDialogTitle As String
+    Dim temporarySavePath As String
+    Dim thisInspector As Outlook.Inspector
+    Dim signaturePath As String
+    Dim newSignature As String
+    Dim oldSignature As String
+    Dim messageBody As String
+    Dim destinationMailItem As Outlook.MailItem
+    
+    If GetTheDesiredMailItemInEditMode(destinationMailItem, False, "Move attachments to this email?", "Active Email Composition Detected") Then
+
+        If Application.ActiveExplorer.Selection.Count > 0 Then
+            If TypeOf Application.ActiveExplorer.Selection.Item(1) Is Outlook.MailItem Then
+                Set sourceMailItem = Application.ActiveExplorer.Selection.Item(1)
+                Set allAttachments = sourceMailItem.Attachments
+                AttachmentCount = allAttachments.Count
+            End If
+        End If
+        
+        If AttachmentCount = 0 Then
+            MsgBox "How can you rename and forward an attachment without an attachment?", vbCritical, "Unable to Continue"
+            Exit Sub
+        End If
+
+        If destinationMailItem Is Nothing Then
+            Set destinationMailItem = sourceMailItem.Forward
+            For Each AttachedFile In destinationMailItem.Attachments
+                AttachedFile.Delete
+            Next
+        End If
+    
+            
+        'if the source email is from the copier then convert to html and use an html signature
+        If sourceMailItem.SenderEmailAddress = copierEmailAddress Then
+            If sourceMailItem.BodyFormat = olFormatPlain Then
+                signaturePath = Environ("APPDATA") & newSignaturePath & newSignatureFileName
+                If CBool(Len(Dir(signaturePath))) Then newSignature = ReadFile(signaturePath)
+                signaturePath = oldSignaturePath & oldSignatureFileName
+                If CBool(Len(Dir(signaturePath))) Then oldSignature = ReadFile(signaturePath)
+                If CBool(Len(newSignature)) And CBool(Len(oldSignature)) Then
+                    messageBody = destinationMailItem.HTMLBody
+                    messageBody = Replace(messageBody, oldSignature, vbNullString)
+                    messageBody = "<br><br><br><br>" & newSignature & messageBody
+                    destinationMailItem.HTMLBody = messageBody
+                End If
+            End If
+        End If
+                
+        destinationMailItem.Display
+        temporarySavePath = Environ("LOCALAPPDATA") & "\Temp\"
+        If Not CBool(Len(Dir(temporarySavePath, vbDirectory))) Then MkDir temporarySavePath
+        
+        For Each AttachedFile In allAttachments
+            attachmentFileExtension = Right(AttachedFile.FileName, Len(AttachedFile.FileName) - InStrRev(AttachedFile.FileName, ".") + 1)
+            attachmentDisplayName = Replace(AttachedFile.FileName, attachmentFileExtension, vbNullString)
+            renameFileDialogTitle = "Rename Attachment " & AttachedFile.Index & " of " & AttachmentCount
+            newAttachmentFilename = InputBox("Click 'Cancel' to keep original name." & DBLLN & "New name for:" & vbNewLine & attachmentDisplayName, renameFileDialogTitle)
+            
+            If CBool(Len(newAttachmentFilename)) Then
+                fullAttachmentFilename = temporarySavePath & newAttachmentFilename & attachmentFileExtension
+            Else
+                fullAttachmentFilename = temporarySavePath & AttachedFile.FileName
+            End If
+            
+            AttachedFile.SaveAsFile fullAttachmentFilename
+            destinationMailItem.Attachments.Add fullAttachmentFilename
+            Kill fullAttachmentFilename
+        Next
+        
+        If destinationMailItem.Subject = copierSubject Then destinationMailItem.Subject = "Regarding Attachment: " & _
+                        left(destinationMailItem.Attachments.Item(1).DisplayName, InStrRev(destinationMailItem.Attachments.Item(1).DisplayName, ".") - 1)
+        
+    End If
+End Sub
+
+
+Sub AddPicklette()
+Dim s As Selection
+Set s = ActiveInspector.WordEditor.Application.Selection(1)
+dbP s.Item(1).Range.shaperanges.Count
+End Sub
+
+
+Sub FormatShapeBorder()
+'    On Error GoTo HANDLER
+    Const NR_Light = 13862354
+    Const NR_Shadow = 11238573
+    Const NR_Dark = 8465018
+    
+    Const AddBorder = True
+    Const BorderWidth = 4
+    Const BorderLineStyle = msoLineThickBetweenThin 'msoLineSingle
+    Const BorderTransparency = 0.2
+'    Const BorderColorRGB_Red = 122
+'    Const BorderColorRGB_Green = 42
+'    Const BorderColorRGB_Blue = 129
+'
+    Const AddShadow = True
+    Const ShadowBlur = 4 '23
+    Const ShadowTransparency = 0.4 '0.35
+    Const ShadowOffsetX = 2
+    Const ShadowOffsetY = 2 '5.7
+'    Const ShadowColorRGB_Red = 173
+'    Const ShadowColorRGB_Green = 124
+'    Const ShadowColorRGB_Blue = 171
+    Dim i As Long
+    
+    With ActiveInspector
+        If TypeName(.CurrentItem) = "MailItem" Then
+            If .IsWordMail Then
+                With .WordEditor
+'                    Select Case True
+'
+'                        Case Is = CBool(.Range.ShapeRange.Count)
+'                                Dim sh As Word.Shape
+'                                For i = .Range.ShapeRange.Count To 1 Step -1
+'                                    .Range.ShapeRange(i).ConvertToInlineShape
+'                                Next i
+'                        Case Is = CBool(.InlineShapes.Count)
+                                With .Application.Selection
+                                     For i = .InlineShapes.Count To 1 Step -1
+                                        With .InlineShapes(i)
+                                            With .Shadow
+                                                .Visible = AddShadow
+                                                .IncrementOffsetX ShadowOffsetX
+                                                .IncrementOffsetY ShadowOffsetY
+                                                .Blur = ShadowBlur
+                                                .ForeColor = NR_Shadow 'RGB(ShadowColorRGB_Red, ShadowColorRGB_Green, ShadowColorRGB_Blue)
+                                                .Transparency = ShadowTransparency
+    
+                                            End With
+                                            
+                                            With .Line
+                                                .Visible = AddBorder
+                                                .ForeColor = NR_Dark 'RGB(BorderColorRGB_Red, BorderColorRGB_Green, BorderColorRGB_Blue)
+                                                .Weight = BorderWidth
+                                                .Style = BorderLineStyle
+                                            End With
+                                            
+                                            With .Fill
+                                                .TwoColorGradient msoGradientDiagonalDown, 4
+                                                .GradientAngle = 45
+                                            End With
+'                                            .ConvertToShape
+'                                            With .Range
+'                                                With .ShapeRange
+'                                                    With .WrapFormat
+'                                                        .Type = wdWrapTopBottom
+'                                                        .AllowOverlap = False
+'                                                    End With
+'                                                End With
+'                                            End With
+                                        End With
+                                    Next i
+                                End With
+
+'                    End Select
+                    
+                End With
+            End If
+        End If
+    End With
+    Exit Sub
+HANDLER:
+    If Err.Number = 445 Then Resume Next
+    MsgBox "An unexpected error occured.  Please send a screen shot of this message to Adam." & _
+    vbNewLine & vbNewLine & "Error " & Err.Number & " - " & Err.Description, vbExclamation, "Unexpected Error"
+End Sub
+
+
+
+Sub InsertHTML()
+    Dim targetEmail As Outlook.MailItem
+    If GetTheDesiredMailItemInEditMode(targetEmail, "View HTML of this email?", "Cycling emails") Then
+        Dim plainTextEmail As Outlook.MailItem
+        Set plainTextEmail = Outlook.CreateItem(olMailItem)
+        plainTextEmail.Display
+        plainTextEmail.Body = targetEmail.HTMLBody
+    End If
+End Sub
+
+Sub InsertW9Request()
+
+    Dim w9Tag As String
+    w9Tag = "[w9]"
+    
+    Dim replaceSTring As String
+    replaceSTring = "Please forward a completed W9 so we may create and assign a vendor record and remit payment of invoices." & "<br><br>" & _
+                    "Please also:" & "<br>" & _
+                    "&nbsp &nbsp &nbsp -&nbsp &nbsp &nbsp Ensure the bill-to address is correctly identified as <b>163 Technology Drive, Suite 200, Irvine, CA 92618 </b> <br>" & _
+                    "&nbsp &nbsp &nbsp -&nbsp &nbsp &nbsp Ensure the ship-to/service address is identified on the invoice and that it is different from the bill-to address" & "<br>" & _
+                    "&nbsp &nbsp &nbsp -&nbsp &nbsp &nbsp We accept electronic invoices via email to <a href=" & Chr(34) & "mailto:accountspayable@neurorestorative.com" & Chr(34) & ">accountspayable@neurorestorative.com</a>" & "<br>" & _
+                    "&nbsp &nbsp &nbsp  &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp We prefer to recieve invoices as an attached PDF, DOCX, XLSX but also accept attachments in other formats or embedded in the body of the email <br>" & _
+                    "&nbsp &nbsp &nbsp  &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp Please <b>DO NOT</b> send links to download your invoice from a website, your invoice must be submitted <br>" & _
+                    "&nbsp &nbsp &nbsp  &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp We are a health care provider and restrict internet access as a security measure to protect patient privacy <br><br><o:p></o:p></p>"
+    
+    Dim emailRequest As Outlook.MailItem
+    If GetTheDesiredMailItemInEditMode(emailRequest, "Search this email for [W9] tag?", "Cycling emails") Then
+        With emailRequest
+            .HTMLBody = Replace(.HTMLBody, w9Tag, replaceSTring)
+        End With
+    End If
+End Sub
+
+Function GetTheDesiredMailItemInEditMode(ByRef returnMailItem As Outlook.MailItem, _
+                       Optional ByVal failIfNotFound As Boolean, _
+                       Optional ByVal promptText As String, _
+                       Optional ByVal promptTitle As String) _
+                       As Boolean
+
+    If Not CBool(Len(promptText)) Then promptText = "Work with this email?"
+    If Not CBool(Len(promptTitle)) Then promptTitle = "Cycling Through Open Email Edit Windows"
+
+    Dim mailItemArray() As Outlook.MailItem
+    ReDim mailItemArray(0 To 0)
+    
+    Dim thisInspector As Outlook.Inspector
+    For Each thisInspector In Application.Inspectors
+        If TypeOf thisInspector.CurrentItem Is Outlook.MailItem Then
+            With thisInspector
+                If Not .CurrentItem.Sent Then
+                    ReDim Preserve mailItemArray(0 To UBound(mailItemArray) + 1)
+                    Set mailItemArray(UBound(mailItemArray)) = thisInspector.CurrentItem
+                End If
+            End With
+        End If
+    Next thisInspector
+
+    Dim useNewEmail As Boolean
+    Dim functionFailed As Boolean
+    Dim returnSuccess As Boolean
+    If UBound(mailItemArray) > 0 Then
+        If UBound(mailItemArray) > 1 Then
+            Select Case MsgBox("You are composing " & UBound(mailItemArray) & " emails.  Do you want to work with any of them?", vbYesNoCancel, "Multiple Email Compositions Detected")
+                Case vbYes
+                    'do nothing
+                Case vbNo
+                    useNewEmail = True
+                Case vbCancel
+                    functionFailed = True
+            End Select
+        End If
+        
+        If Not functionFailed And Not useNewEmail Then
+            Dim i As Long
+            For i = 1 To UBound(mailItemArray)
+                mailItemArray(i).Display
+                Select Case MsgBox(mailItemArray(i).Subject & DBLLN & promptText, vbYesNoCancel, promptTitle)
+                    Case vbYes
+                        Set mailItemArray(0) = mailItemArray(i)
+                        useNewEmail = False
+                        Exit For
+                    Case vbNo
+                        useNewEmail = True
+                    Case vbCancel
+                        functionFailed = True
+                        Exit For
+                End Select
+            Next i
+            
+            If Not functionFailed And Not useNewEmail Then
+                If mailItemArray(0) Is Nothing Then
+                    Select Case MsgBox("Cycled through all open compositions, create a new email?", vbYesNo, "No Emails Chosen")
+                        Case vbYes
+                            useNewEmail = True
+                        Case vbNo
+                            functionFailed = True
+                    End Select
+                End If
+            End If
+            
+        End If
+    Else
+        If failIfNotFound Then
+            MsgBox "Could not find an email being edited."
+        Else
+            returnSuccess = True
+        End If
+    End If
+
+    
+    If functionFailed Then
+        Set returnMailItem = Nothing
+        returnSuccess = False
+    Else
+        If useNewEmail Then
+            Set returnMailItem = Nothing
+            returnSuccess = True
+        Else
+            If Not mailItemArray(0) Is Nothing Then
+                Set returnMailItem = mailItemArray(0)
+                returnSuccess = True
+            End If
+        End If
+    End If
+
+    GetTheDesiredMailItemInEditMode = returnSuccess
+
+End Function
+
+Public Sub ResetView()
+
+Dim a As Outlook.Application
+Set a = Outlook.Application
+dbP a.Name
+
+Dim e As Outlook.Explorer
+Set e = a.ActiveExplorer
+dbP e.Caption
+
+Dim v As Outlook.View
+Set v = e.CurrentView
+dbP v.Name
+v.Apply
+
+
+Dim s As Outlook.Selection
+Set s = e.Selection
+If s.Count > 0 Then
+Dim m As Outlook.MailItem
+
+    Set m = s.Item(1)
+    dbP m.Subject
+    Dim f As Outlook.folder
+    Set f = m.Parent
+    dbP f.Name
+Else
+    dbP "No mail item set"
+End If
+
+
+dbP v.Name
+
+End Sub
+
+Sub ShowCategoryDialogSelectedItems()
+'quickly shows the categories dialog for all selected items
+    On Error GoTo HANDLER
+    Dim oSelection As Outlook.Selection
+    Set oSelection = Application.ActiveExplorer.Selection
+    If Not oSelection Is Nothing Then
+        If oSelection.Count > 0 Then
+            On Error Resume Next
+            Dim oItem As Object
+            For Each oItem In oSelection
+                oItem.ShowCategoriesDialog
+            Next oItem
+        End If
+    End If
+HANDLER:
+End Sub
+
+
+Public Sub AssignCategoryForSelectedItems(Optional ByVal categoryString As String)
+    On Error GoTo HANDLER
+    Dim oSelection As Outlook.Selection
+    Set oSelection = Application.ActiveExplorer.Selection
+    If Not oSelection Is Nothing Then
+        If oSelection.Count > 0 Then
+            On Error Resume Next
+            Dim oItem As Object
+            For Each oItem In oSelection
+                If CBool(Len(categoryString)) And CBool(InStr(gfGetStringCategoryNames, categoryString)) Then
+                    If Not CBool(InStr(oItem.Categories, categoryString)) Then
+                        If CBool(Len(oItem.Categories)) Then
+                            oItem.Categories = oItem.Categories & ", " & categoryString
+                        Else
+                            oItem.Categories = oItem.Categories & categoryString
+                        End If
+                    Else
+                        Dim tempString As String
+                        tempString = Replace(oItem.Categories, categoryString, vbNullString)
+                        tempString = Replace(tempString, ",,", vbNullString)
+                        If left(tempString, 1) = "," Then tempString = Right(tempString, Len(tempString) - 1)
+                        If Right(tempString, 1) = "," Then tempString = left(tempString, Len(tempString) - 1)
+                        oItem.Categories = tempString
+                    End If
+                Else
+                    oItem.ShowCategoriesDialog
+                End If
+                oItem.Save
+            Next oItem
+        End If
+    End If
+HANDLER:
+End Sub
+
+Private Sub DisplayTableViewFields()
+    Dim objTableView As TableView
+    Dim objViewField As ViewField
+    Dim strOutput As String
+    If Application.ActiveExplorer.CurrentView.ViewType = olTableView Then
+        ' Obtain a TableView object reference for the current table view.
+        Set objTableView = _
+        Application.ActiveExplorer.CurrentView
+        ' Iterate through the ViewFields collection for the table view,
+        ' obtaining the label and the XML schema name for each field included in the view.
+        For Each objViewField In objTableView.ViewFields
+            With objViewField
+                strOutput = strOutput & .ColumnFormat.Label & " (" & .ViewXMLSchemaName & ")" & vbCrLf
+            End With
+        Next
+        ' Display a dialog box containing the concatenated view field information.
+        dbP strOutput
+    End If
+End Sub
+
+Public Function GetShortNameFromLongFileName(longFilename As String, Optional ByVal excludeExtension As Boolean) As String
+    Dim returnString As String
+    returnString = Replace(longFilename, left(longFilename, InStrRev(longFilename, Chr(92))), vbNullString)
+    If excludeExtension Then returnString = Replace(returnString, GetFileNameExtension(returnString, False), vbNullString)
+    GetShortNameFromLongFileName = returnString
+End Function
+
+Public Function GetFileNameExtension(ByVal longORshortFileName As String, Optional ByVal excludeDecimal As Boolean) As String
+    Dim returnString As String
+    Dim changeStringLength As Single
+    If Not excludeDecimal Then changeStringLength = 1
+    If longORshortFileName Like "*.???" Or longORshortFileName Like "*.????" Then
+        returnString = Right(longORshortFileName, Len(longORshortFileName) - InStrRev(longORshortFileName, ".") + changeStringLength)
+    End If
+    GetFileNameExtension = returnString
+End Function

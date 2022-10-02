@@ -1,0 +1,65 @@
+Attribute VB_Name = "APproperties"
+Option Explicit
+
+Private mMail As Outlook.MailItem
+Private mEmail As Outlook.MailItem
+Private mcEmails As Collection
+Private miEmail As Long
+
+Public Property Get mail() As Outlook.MailItem
+    Set mMail = Nothing
+    With ActiveExplorer.Selection
+        If .Count = 1 Then
+            If TypeName(.Item(1)) = "MailItem" Then
+                Set mMail = .Item(1)
+            End If
+        End If
+    End With
+    Set mail = mMail
+End Property
+
+Public Property Get mailDoc() As Word.Document
+'    Set mailDoc = Nothing
+    If TypeName(ActiveInspector.CurrentItem) = "MailItem" Then
+        If ActiveInspector.IsWordMail Then Set mailDoc = ActiveInspector.WordEditor
+    End If
+End Property
+
+Public Property Get eMail() As Outlook.MailItem
+    Set mMail = Nothing
+    If Not mcEmails Is Nothing Then
+        If mcEmails.Count > 0 Then
+            If mcEmails.Count < miEmail Or miEmail = 0 Then miEmail = 1
+            Set mMail = mcEmails(miEmail)
+        Else
+            miEmail = 0
+        End If
+    Else
+        miEmail = 0
+    End If
+    Set eMail = mMail
+End Property
+
+Public Property Get eMails() As Collection
+    Set eMails = mcEmails
+End Property
+
+Public Sub SetEmailCollectionFromSelection()
+    miEmail = 0
+    Dim selectedItems As Outlook.Selection
+    Set selectedItems = ActiveExplorer.Selection
+    Set mMail = Nothing
+    Set mcEmails = New Collection
+            
+    If selectedItems.Count > 0 Then
+        Dim i As Long
+        For i = 1 To selectedItems.Count
+            If TypeName(selectedItems.Item(i)) = "MailItem" Then mcEmails.Add selectedItems.Item(i)
+        Next i
+        
+    End If
+    If mcEmails.Count > 0 Then
+        If mcEmails.Count > 0 Then miEmail = 1
+        Set mMail = mcEmails.Item(miEmail)
+    End If
+End Sub

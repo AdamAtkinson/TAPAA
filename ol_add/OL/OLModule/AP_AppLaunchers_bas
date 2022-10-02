@@ -1,0 +1,73 @@
+Attribute VB_Name = "AP_AppLaunchers"
+Option Explicit
+
+
+
+Public Sub StartEvents()
+    Set gEvents = New clsOutlookEvents
+    gEvents.StartOutlookEvents
+End Sub
+Public Sub StartDelayedEvents()
+    Set gEvents = New clsOutlookEvents
+    gEvents.StartOutlookEventsAfterDelay
+End Sub
+Public Sub StopEvents()
+    If gEvents Is Nothing Then
+        MsgBox "There were no events to disable", vbExclamation
+    Else
+        Set gEvents = Nothing
+        MsgBox "Events are now disabled!", vbCritical
+    End If
+End Sub
+Public Sub EventStatus()
+    Dim msgboxStyle As Long
+    Dim dbpString As String
+    dbpString = "Class application events are"
+    If gEvents Is Nothing Then
+        dbpString = dbpString & " disabled!"
+        msgboxStyle = vbCritical
+    Else
+        With gEvents
+            If .OutlookEventsEnabled Then
+                dbpString = dbpString & " enabled"
+            Else
+                dbpString = dbpString & " disabled"
+                msgboxStyle = vbExclamation
+            End If
+            If .ClassProperty_DelayedEventTrigger Is Nothing Then
+                dbpString = dbpString & " without a pending trigger."
+                If CBool(msgboxStyle) Then
+                    msgboxStyle = vbCritical
+                Else
+                    msgboxStyle = 0
+                End If
+            Else
+                With .ClassProperty_DelayedEventTrigger
+                    If .ReminderSet Then
+                        dbpString = dbpString & " and a reminder is set " & .ReminderMinutesBeforeStart
+                        dbpString = dbpString & ChooseSingularOrPluralString(" minute", " minutes", .ReminderMinutesBeforeStart, True)
+                    Else
+                        dbpString = dbpString & " without a reminder"
+                    End If
+                    dbpString = dbpString & " before the trigger fires at " & .Start & "."
+                    msgboxStyle = vbExclamation
+                End With
+            End If
+        End With
+    End If
+    dbP dbpString
+    MsgBox dbpString, msgboxStyle
+End Sub
+
+
+Public Sub CreateCustomForm()
+    If gCustomForm Is Nothing Then
+        Set gCustomForm = New clsCustomTemplateHandler
+        gCustomForm.CreateForm eASSIGNCATEGORY
+    Else
+        Set gCustomForm = Nothing
+        dbP gCustomForm Is Nothing
+        Set gCustomForm = New clsCustomTemplateHandler
+        gCustomForm.CreateForm eASSIGNCATEGORY
+    End If
+End Sub

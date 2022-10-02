@@ -1,0 +1,229 @@
+Attribute VB_Name = "testingModule"
+Option Explicit
+Private cls As clsTestEvents
+Option Compare Text
+Private Const POINTERSIZE As Long = 4
+Private Const ZEROPOINTER As Long = 0
+Private Declare Sub RtlMoveMemory Lib "kernel32" (ByRef Destination As Any, _
+                                                  ByRef Source As Any, _
+                                                  ByVal Length As Long)
+
+Public Function GetPointer(ByRef objThisObject As Object) As Long
+    Dim lngThisPointer As Long
+    RtlMoveMemory lngThisPointer, objThisObject, POINTERSIZE
+    GetPointer = lngThisPointer
+End Function
+'
+'Public Function GetObject(ByVal lngThisPointer As Long) As Object
+'    Dim objThisObject As Object
+'    RtlMoveMemory objThisObject, lngThisPointer, POINTERSIZE
+'    Set GetObject = objThisObject
+'    RtlMoveMemory objThisObject, ZEROPOINTER, POINTERSIZE
+'    Set objThisObject = Nothing
+'End Function
+
+
+Sub testevents()
+Set cls = New clsTestEvents
+Set cls.OutlookApp = Outlook.Application
+Set cls.OutlookExplorer = cls.OutlookApp.ActiveExplorer
+
+End Sub
+
+Sub testingcoll()
+Dim col As New Collection
+Dim cls As clsTYPEattachmentDetails
+
+Set cls = New clsTYPEattachmentDetails
+col.Add cls
+Set cls = New clsTYPEattachmentDetails
+col.Add cls
+col(1).AttachedFileName = "hi"
+col(2).AttachedFileName = "bye"
+dbP col(1).AttachedFileName
+dbP col(2).AttachedFileName
+
+End Sub
+
+Public Sub acknowledgemail()
+
+
+    Dim InboxItems As Items
+    Set InboxItems = gfGetMAPIFolder(EMAILADDRESS_ADAM & FOLDERSTUB_INBOX).Items
+    Dim inboxItem As Object
+    For Each inboxItem In InboxItems
+    dbP "running"
+        If TypeName(inboxItem) = "MailItem" Then
+            If inboxItem.UnRead = False Then
+                Dim d As MailItem
+                Dim ackFolder As Outlook.MAPIFolder
+                Set ackFolder = gfGetMAPIFolder(EMAILADDRESS_ADAM & "FOLDERSTUB_INBOX & "\Ref")
+                Set inboxItem = inboxItem.Move(ackFolder)
+                DoEvents
+                dbP "moving ...."
+            End If
+        End If
+    Next
+    
+    
+    
+    
+End Sub
+'
+'Private mEvents As clsEvents
+'Private mEntryID As String
+'
+'Sub StartTest(Optional ByVal useThisSession As Boolean)
+'    Set mEvents = New clsEvents
+'    Set mEvents.OutlookExplorer = Outlook.ActiveExplorer
+'    If useThisSession Then ThisOutlookSession.startEvents
+'End Sub
+'
+'Sub StopTest(Optional ByVal useThisSession As Boolean)
+'    Set mEvents = Nothing
+'    If useThisSession Then ThisOutlookSession.stopEvents
+'End Sub
+'
+'Sub makeit()
+'
+'
+'Dim OApp As Object, OMail As Object, Signature As String
+'Set OApp = CreateObject("Outlook.Application")
+'Set OMail = OApp.CreateItem(0)
+'    With OMail
+'    .Display
+'
+'    Signature = OMail.HTMLBody
+'
+'    '.To = "someone@somedomain.com"
+'    '.Subject = "Type your email subject here"
+'    '.Attachments.Add
+'    .HTMLBody = "Add body text here" & vbNewLine & Signature
+'    '.Send
+'    End With
+'Set OMail = Nothing
+'Set OApp = Nothing
+'
+'End Sub
+'
+'
+'Sub testsplit()
+'
+'    Dim newSignaturePath As String
+'    Dim oldSignaturePath As String
+'    Dim newSignature As String
+'    Dim oldSignature As String
+'    Dim m As Outlook.MailItem
+'
+'    Dim messageHTMLBody As String
+'
+'    pathToReferenceFile = "C:\Users\e-aatkinson\AppData\Local\VBA\Outlook\ReplaceSignature.htm"
+'    pathToSignatureFile = Environ("APPDATA") & "\Microsoft\Signatures\Basic Reply.htm"
+'
+'    If CBool(Len(Dir(pathToSignatureFile))) Then signatureToAdd = myReadFile(pathToSignatureFile)
+'    If CBool(Len(Dir(pathToReferenceFile))) Then signatureToReplace = myReadFile(pathToReferenceFile)
+'    Set m = Application.ActiveInspector.CurrentItem
+'    emailBody = m.HTMLBody
+'    emailBody = Replace(emailBody, signatureToReplace, vbNullString)
+'    emailBody = "<br><br>" & signatureToAdd & emailBody
+'    m.HTMLBody = emailBody
+'    m.Display
+'
+'    dbP "done"
+'
+'End Sub
+'
+'Sub Mail_Outlook_With_Signature_Html_2()
+'' Don't forget to copy the function GetBoiler in the module.
+'' Working in Office 2000-2016
+'    Dim outlookApp As Object
+'    Dim outlookMailItem As Object
+'    Dim messageBody As String
+'    Dim pathToSignatureFile As String
+'    Dim pathToReferenceFile As String
+'    Dim signatureToAdd As String
+'    Dim signatureToReplace As String
+'
+'    Set outlookApp = CreateObject("Outlook.Application")
+'    Set outlookMailItem = OutApp.CreateItem(0)
+'
+''    messageBody = "<H3><B>Dear Customer Ron de Bruin</B></H3>" & _
+''              "Please visit this website to download the new version.<br>" & _
+''              "Let me know if you have problems.<br>" & _
+''              "<A HREF=""http://www.rondebruin.nl/tips.htm"">Ron's Excel Page</A>" & _
+''              "<br><br><B>Thank you</B>"
+'
+'    Dim pathToSignatureFile As String
+'    Dim pathToReferenceFile As String
+'    Dim signatureToAdd As String
+'    Dim signatureToReplace As String
+'
+'
+'    pathToReferenceFile = "C:\Users\e-aatkinson\AppData\Local\VBA\Outlook\ReplaceSignature.txt"
+'    pathToSignatureFile = Environ("APPDATA") & "\Microsoft\Signatures\Basic Reply.htm"
+'
+'    If CBool(Len(Dir(pathToSignatureFile))) Then signatureToAdd = myReadFile(pathToSignatureFile)
+'    If CBool(Len(Dir(pathToReferenceFile))) Then signatureToReplace = myReadFile(pathToReferenceFile)
+'
+'    On Error Resume Next
+'
+''    With OutMail
+''        .To = "adam.atkinson@neurorestorative.com"
+''        .CC = ""
+''        .BCC = ""
+''        .Subject = "This is the Subject line"
+''        .HTMLBody = messageBody & "<br><br>" & signatureToAdd
+''        '.Send
+''        .Display
+''    End With
+'
+'    On Error GoTo 0
+'    Set OutMail = Nothing
+'    Set OutApp = Nothing
+'End Sub
+'
+'
+'Private Function myReadFile(ByVal fileToRead As String) As String
+'    Dim fsoConst_ForReading As Long: fsoConst_ForReading = 1
+'    Dim fsoConst_TristateUseDefault As Long: fsoConst_TristateUseDefault = -2
+'    Dim fso As Object
+'    Dim fsoTextStream As Object
+'    Set fso = CreateObject("Scripting.FileSystemObject")
+'    Set fsoTextStream = fso.GetFile(fileToRead).OpenAsTextStream(fsoConst_ForReading, fsoConst_TristateUseDefault)
+'    myReadFile = fsoTextStream.ReadAll
+'    fsoTextStream.Close
+'End Function
+
+Sub ColorizeInlineResponse()
+Dim mail As Outlook.MailItem
+GetTheDesiredMailItemInEditMode mail
+mail.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "AA", "<span style='color:#C00000'>AA</span>")
+'mail.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='", "<i style='color:#22B4A6;")
+mail.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "</i></b><span style='color:#1F497D'>", "</i></b><span style='color:#22B4A6'>")
+
+End Sub
+
+
+Sub testactivinspector()
+ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='", "<i style='color:#22B4A6;")
+ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "</i></b><span style='color:#1F497D'>", "</i></b><span style='color:#22B4A6'>")
+'<i style='mso-bidi-font-style:normal' color='#22B4A6'>
+ActiveInspector.CurrentItem.HTMLBody
+ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='mso-bidi-font-style:normal'>", "<i style='mso-bidi-font-style:normal;color:#22B4A6'>")
+<span class=SpellE>
+ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='mso-bidi-font-style:normal'>", "<i style='mso-bidi-font-style:normal;color:#22B4A6'>")
+
+Print InStr(1, ActiveInspector.CurrentItem.HTMLBody, "<span class=SpellE>")
+0
+ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "</i></b><span style='color:#1F497D'>", "</i></b><span style='color:#22B4A6'>")
+a.Body = ActiveInspector.CurrentItem.HTMLBody
+'ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<span class=SpellE>", "<span class=SpellE style='color:#22B4A6'>")
+
+'ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='mso-bidi-font-style:normal'>[", "<i style='mso-bidi-font-style:normal'><span style='color:#22B4A6'>[</span>")
+'ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<i style='mso-bidi-font-style:normal'> AA ]",<i style='mso-bidi-font-style:normal'><span style='color:#22B4A6'> AA ]</span>")
+'ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<span style='color:#1F497D'>","<span style='color:#22B4A6'>")
+
+'Print InStr(1, ActiveInspector.CurrentItem.HTMLBody, "<span class=SpellE>")
+'ActiveInspector.CurrentItem.HTMLBody = Replace(ActiveInspector.CurrentItem.HTMLBody, "<span class=SpellE>", "<span class=SpellE style='color:#22B4A6'>")
+'<span style='color:#22B4A6'> ] </span></i></b><span style='color:#1F497D'>
+End Sub

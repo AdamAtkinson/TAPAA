@@ -1,0 +1,168 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmCustomTemplate 
+   Caption         =   "INFORMATION DISPLAY"
+   ClientHeight    =   7965
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   12795
+   OleObjectBlob   =   "frmCustomTemplate_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "frmCustomTemplate"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+
+Option Explicit
+
+Public Enum enumCONTROL_BUTTONS
+    eYES = 1
+    eNO = 2
+    eCANCEL = 4
+End Enum
+                                                                            '
+'                                                                           |
+'  EVENT DECLARATIONS                                                       |
+'                                                                           |
+                                                                            '
+Public Event YesClick()
+Public Event NoClick()
+Public Event CancelClick()
+Public Event WideClick()
+Public Event FormClose()
+                                                                            '
+'                                                                           |
+'  CRICTICAL FORM DIMENSION AND POSITION CONSTANTS                          |
+'                                                                           |
+                                                                            '
+Private Const mPADDING As Long = 6
+Private Const mMODIFIER_FORM_WIDTH As Long = 12
+Private Const mMODIFIER_FORM_HEIGHT As Long = 30
+Private Const mBUTTON_WIDTH As Long = 12 * mPADDING
+Private Const mBUTTON_HEIGHT As Long = 4 * mPADDING
+Private Const mFORM_WIDTH As Long = 4 * mPADDING + 3 * mBUTTON_WIDTH + mMODIFIER_FORM_WIDTH
+Private Const mPANEL_BUTTON_HEIGHT As Long = 2 * mPADDING + mBUTTON_HEIGHT
+Private Const mPANEL_STANDARD_HEIGHT As Long = 2 * mPANEL_BUTTON_HEIGHT
+
+                                                                            '
+'                                                                           |
+'  PRIVATE STRING DECLARATIONS                                              |
+'                                                                           |
+                                                                            '
+                                                                           
+Private mTextOut As String
+Private mTextIn As String
+                                                                            '
+'                                                                           |
+'  FORM INITIALIZATION, ACTIVATION AND TERMINATION EVENTS                   |
+'                                                                           |
+                                                                            '
+Private Sub UserForm_Initialize()
+    Me.Width = mFORM_WIDTH
+    Me.Height = mMODIFIER_FORM_HEIGHT
+End Sub
+Private Sub UserForm_Terminate()
+    RaiseEvent FormClose
+End Sub
+                                                                            '
+'                                                                           |
+'  CUSTOM FORM EVENTS                                                       |
+'                                                                           |
+                                                                            '
+Private Sub CommandButton_Yes_Click()
+    RaiseEvent YesClick
+End Sub
+Private Sub CommandButton_No_Click()
+    RaiseEvent NoClick
+End Sub
+Private Sub CommandButton_Cancel_Click()
+    RaiseEvent CancelClick
+End Sub
+Private Sub CommandButton_Wide_Click()
+    RaiseEvent WideClick
+End Sub
+                                                                            '
+'                                                                           |
+'  PRIVATE FUNCTIONS                                                        |
+'                                                                           |
+                                                                            '
+ Private Sub PlaceControlAndResizeForm(ByRef activeFrame As MSForms.Control)
+    With activeFrame
+        .left = 0
+        .top = Me.Height - mMODIFIER_FORM_HEIGHT
+        .Visible = True
+        Me.Height = .Height + Me.Height
+    End With
+ End Sub
+                                                                            '
+'                                                                           |
+'  PUBLIC GETTERS                                                           |
+'                                                                           |
+                                                                            '
+                                                                            
+Public Property Get TextOut() As String
+    TextOut = mTextOut
+End Property
+Public Property Get TextIn() As String
+    TextIn = mTextIn
+End Property
+Public Property Get SelectedCheckboxes() As String
+    Dim returnString As String
+    Dim categoryCheckbox As MSForms.CheckBox
+    For Each categoryCheckbox In Me.Frame_CategoryCheckboxes.Controls
+        If CBool(categoryCheckbox.Value) Then
+            If CBool(Len(returnString)) Then
+                returnString = returnString & ", " & categoryCheckbox.Caption
+            Else
+                returnString = categoryCheckbox.Caption
+            End If
+        End If
+    Next categoryCheckbox
+    SelectedCheckboxes = returnString
+End Property
+                                                                            '
+'                                                                           |
+'  PUBLIC LETTERS                                                           |
+'                                                                           |
+                                                                            '
+
+Public Property Let CheckboxCaptions(p As String)
+
+End Property
+                                                                            '
+'                                                                           |
+'  PUBLIC SUBS THAT ENABLE FORM FRAMES                                      |
+'                                                                           |
+                                                                            '
+Public Sub AddTitle(formTitle As String)
+    Me.Caption = formTitle
+End Sub
+
+Public Sub AddCategoryCheckboxes()
+    PlaceControlAndResizeForm Me.Frame_CategoryCheckboxes
+End Sub
+
+Public Sub AddControlButtons(eButtons As enumCONTROL_BUTTONS, buttonText As String)
+    Dim aryButtonText() As String
+    aryButtonText = Split(buttonText, ",")
+    With Me
+        If eButtons And eYES Then
+            .CommandButton_Yes.Visible = True
+            .CommandButton_Yes.Caption = aryButtonText(LBound(aryButtonText))
+            ShiftArrayLeftAndShrink aryButtonText
+        End If
+        If eButtons And eNO Then
+            .CommandButton_No.Visible = True
+            .CommandButton_No.Caption = aryButtonText(LBound(aryButtonText))
+            ShiftArrayLeftAndShrink aryButtonText
+        End If
+        If eButtons And eCANCEL Then
+            .CommandButton_Cancel.Visible = True
+            .CommandButton_Cancel.Caption = aryButtonText(LBound(aryButtonText))
+        End If
+    End With
+    PlaceControlAndResizeForm Me.Frame_PrimaryButtons
+End Sub

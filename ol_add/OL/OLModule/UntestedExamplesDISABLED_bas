@@ -1,0 +1,1010 @@
+Attribute VB_Name = "UntestedExamplesDISABLED"
+'Option Explicit
+'
+'Private Declare Function ShellExecute Lib "shell32.dll" Alias "ShellExecuteA" ( _
+'                            ByVal hwnd As Long, _
+'                            ByVal lpOperation As String, _
+'                            ByVal lpFile As String, _
+'                            ByVal lpParameters As String, _
+'                            ByVal lpDirectory As String, _
+'                            ByVal nShowCmd As Long) As Long
+'
+'Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+'
+'
+'Sub ShellAndShellExecutePrinting()
+''Dim strFileName As String
+''strFileName = "C:\Users\E-AAtkinson\Documents\temp\Today\180710\ASR 24750.pdf"
+''ShellExecute 0, "print", strFileName, vbNullString, vbNullString, 0
+''Shell """C:\Program Files (x86)\Adobe\Reader 11.0\Reader\AcroRd32.exe"" /p /h """ + strFileName + """", vbHide
+'End Sub
+'
+''Print Automatically; When; Emails; Arrive
+''You can print attachments automatically as soon as you receive them by email. It only requires that there's an application installed on your computer that can handle the type of file, e.g. Word for printing *.doc files etc. - and that the printer is running, of course.
+''
+''See the Select Case statement in the PrintAttachments procedure where the file types are listed. At present only Excel Workbooks (*.xls), Word (*.doc) and PDF documents will be printed. Add any file type you need.
+''
+''To be able to print an attachment, the macro first must save it as a file. See the sDirectory variable where you determine where to store the attachment. Change the value to a directory that does exist on your computer.
+''
+''
+''============================================================================================================
+'
+''
+''Private Declare Function ShellExecute Lib "shell32.dll" Alias _
+''  "ShellExecuteA" (ByVal hwnd As Long, ByVal lpOperation As String, _
+''  ByVal lpFile As String, ByVal lpParameters As String, _
+''  ByVal lpDirectory As String, ByVal nShowCmd As Long) As Long
+''
+''Private WithEvents Items As Outlook.Items
+''
+''Private Sub Application_Startup()
+''  Dim Ns As Outlook.NameSpace
+''  Dim Folder As Outlook.MAPIFolder
+''
+''  Set Ns = Application.GetNamespace("MAPI")
+''  Set Folder = Ns.GetDefaultFolder(olFolderInbox)
+''  Set Items = Folder.Items
+''End Sub
+''
+''Private Sub Items_ItemAdd(ByVal Item As Object)
+''  If TypeOf Item Is Outlook.MailItem Then
+''    PrintAttachments Item
+''  End If
+''End Sub
+''
+''Private Sub PrintAttachments(oMail As Outlook.MailItem)
+''  On Error Resume Next
+''  Dim colAtts As Outlook.Attachments
+''  Dim oAtt As Outlook.Attachment
+''  Dim sFile As String
+''  Dim sDirectory As String
+''  Dim sFileType As String
+''  sDirectory = "D:Attachments"
+''  Set colAtts = oMail.Attachments
+''  If colAtts.Count Then
+''    For Each oAtt In colAtts
+''      sFileType = LCase$(Right$(oAtt.FileName, 4))
+''      Select Case sFileType
+''      Case ".xls", ".doc", ".pdf"
+''        sFile = ATTACHMENT_DIRECTORY & oAtt.FileName
+''        oAtt.SaveAsFile sFile
+''        ShellExecute 0, "print", sFile, vbNullString, vbNullString, 0
+''      End Select
+''    Next
+''  End If
+''End Sub
+'
+'
+'Sub CreateUniqueTimeStamp()
+'    Dim i As Double
+'    Dim t As Double
+'    Dim UniqueIdentifier As String
+'    UniqueIdentifier = "-" 'to avoid undefined and out of range error
+'    t = Timer
+'    For i = 1 To 100
+'        If Split(UniqueIdentifier, "-")(1) = Format(Time, "hhnn") & Format((Timer - t) * 100, "#") Then
+'           ' Debug.Print "sleeping"
+'            Sleep 15
+'        End If
+'        UniqueIdentifier = Format(Date, "yymmdd-") & Format(Time, "hhnn") & Format((Timer - t) * 100, "#")
+'        'Debug.Print Split((DateDiff("s", "01/01/1970", Date) + Timer) * 1000, ".")(0)  'this gives you unix time
+'       ' Debug.Print UniqueIdentifier
+'    Next
+'End Sub
+'
+'Public Sub CreateNewMessage()
+'Dim objMsg As MailItem
+''Dim Selection As Selection
+''Dim obj As Object
+''Set Selection = ActiveExplorer.Selection
+''For Each obj In Selection
+'Set objMsg = Application.CreateItem(olMailItem)
+' With objMsg
+'  .To = "aatkinson@fjordventures.com"
+'  .Subject = "This is the subject"
+'  .Categories = "Test"
+'  .Body = "My notes" ' & vbCrLf & vbCrLf & obj.Body
+'  .Display
+'  .Send
+'End With
+'Set objMsg = Nothing
+''Next
+'End Sub
+'
+'Public Sub WorkWithCurrentMessage()
+'Dim objMsg As MailItem
+'Set objMsg = Application.ActiveInspector.currentItem
+'If objMsg.Subject = "Win!" Then
+'    objMsg.Send
+'Else
+'   ' Debug.Print "?"
+'End If
+'Set objMsg = Nothing
+'End Sub
+'
+'
+'
+''==================================================================================================
+''Print Attachments; Of; Selected; Emails
+''This sample doesn´t print automatically but must be called manually. Then it prints the attachments of all selected emails. Subject to the customization (which file types to print, and where to store the files) see the comments for the first sample above.
+''
+''Private Declare Function ShellExecute Lib "shell32.dll" Alias _
+''  "ShellExecuteA" (ByVal hwnd As Long, ByVal lpOperation As String, _
+''  ByVal lpFile As String, ByVal lpParameters As String, _
+''  ByVal lpDirectory As String, ByVal nShowCmd As Long) As Long
+''
+''Public Sub PrintSelectedAttachments()
+''  Dim Exp As Outlook.Explorer
+''  Dim Sel As Outlook.Selection
+''  Dim obj As Object
+''  Set Exp = Application.ActiveExplorer
+''  Set Sel = Exp.Selection
+''  For Each obj In Sel
+''    If TypeOf obj Is Outlook.MailItem Then
+''      PrintAttachments obj
+''    End If
+''  Next
+''End Sub
+''
+''Private Sub PrintAttachments(oMail As Outlook.MailItem)
+''  On Error Resume Next
+''  Dim colAtts As Outlook.Attachments
+''  Dim oAtt As Outlook.Attachment
+''  Dim sFile As String
+''  Dim sDirectory As String
+''  Dim sFileType As String
+''
+''  sDirectory = "D:\Attachments"
+''
+''  Set colAtts = oMail.Attachments
+''
+''  If colAtts.Count Then
+''    For Each oAtt In colAtts
+''
+''      sFileType = LCase$(Right$(oAtt.FileName, 4))
+''
+''      Select Case sFileType
+''      Case ".xls", ".doc", ".pdf"
+''        sFile = ATTACHMENT_DIRECTORY & oAtt.FileName
+''        oAtt.SaveAsFile sFile
+''        ShellExecute 0, "print", sFile, vbNullString, vbNullString, 0
+''      End Select
+''    Next
+''  End If
+''End Sub
+'
+'
+''============================================================================================================
+'
+'' VBA Script that gets info on the currently selected email using the Outlook Object Model
+'' (see other scripts a http://www.GregThatcher.com for other ways to get email properties)
+'' Use Tools->Macro->Security to allow Macros to run, then restart Outlook
+'' Run Outlook, Press Alt+F11 to open VBA
+'' Programming by Greg Thatcher, http://www.GregThatcher.com
+'
+'Public Sub GetCurrentEmailInfo()
+'    Dim Session As Outlook.NameSpace
+'    Dim currentExplorer As Explorer
+'    Dim Selection As Selection
+'    Dim currentItem As Object
+'    Dim currentMail As MailItem
+'    Dim Report As String
+'    Dim currentAction As Action
+'    Dim currentConflict As Conflict
+'    Dim currentLink As Link
+'    Dim currentRecipient As Recipient
+'
+'    Set currentExplorer = Application.ActiveExplorer
+'    Set Selection = currentExplorer.Selection
+'
+'    'for all items do...
+'    For Each currentItem In Selection
+'        If currentItem.Class = olMail Then
+'            Set currentMail = currentItem
+'            Report = Report & AddToReportIfNotBlank("EntryID: ", currentMail.EntryID) & vbCrLf
+'            Report = Report & "Actions: " & vbCrLf
+'            For Each currentAction In currentMail.Actions
+'                Report = Report & vbTab & currentAction.Name & vbCrLf
+'            Next
+'            Report = Report & vbCrLf
+'
+'            Report = Report & AddToReportIfNotBlank("AlternateRecipientAllowed: ", currentMail.AlternateRecipientAllowed)
+'            Report = Report & AddToReportIfNotBlank("Application: ", currentMail.Application.Name)
+'            Report = Report & AddToReportIfNotBlank("AutoForwarded: ", currentMail.AutoForwarded)
+'            Report = Report & AddToReportIfNotBlank("AutoResolvedWinner: ", currentMail.AutoResolvedWinner)
+'            Report = Report & AddToReportIfNotBlank("BCC: ", currentMail.BCC)
+'            Report = Report & AddToReportIfNotBlank("BillingInformation: ", currentMail.BillingInformation)
+'            Report = Report & AddToReportIfNotBlank("BodyFormat: ", currentMail.BodyFormat)
+'
+'            Report = Report & AddToReportIfNotBlank("Categories: ", currentMail.Categories)
+'            Report = Report & AddToReportIfNotBlank("CC: ", currentMail.CC)
+'            Report = Report & AddToReportIfNotBlank("Class: ", currentMail.Application.Class)
+'            Report = Report & AddToReportIfNotBlank("Companies: ", currentMail.Companies)
+'
+'            If currentMail.Conflicts.Count > 0 Then
+'                Report = Report & "Conflicts: " & vbCrLf
+'                For Each currentConflict In currentMail.Conflicts
+'                    Report = Report & vbTab & currentConflict.Name & vbCrLf
+'                Next
+'                Report = Report & vbCrLf
+'            End If
+'
+'
+'            Report = Report & AddToReportIfNotBlank("ConversationIndex: ", currentMail.ConversationIndex)
+'            Report = Report & AddToReportIfNotBlank("ConversationTopic: ", currentMail.ConversationTopic)
+'            Report = Report & AddToReportIfNotBlank("CreationTime: ", currentMail.CreationTime)
+'            Report = Report & AddToReportIfNotBlank("DeferredDeliveryTime: ", currentMail.DeferredDeliveryTime)
+'
+'            Report = Report & AddToReportIfNotBlank("DeleteAfterSubmit: ", currentMail.DeleteAfterSubmit)
+'            Report = Report & AddToReportIfNotBlank("DownloadState: ", currentMail.DownloadState)
+'            Report = Report & AddToReportIfNotBlank("Entry ID: ", currentMail.EntryID)
+'
+'            Report = Report & AddToReportIfNotBlank("ExpiryTime: ", currentMail.ExpiryTime)
+'            Report = Report & AddToReportIfNotBlank("FlagRequest: ", currentMail.FlagRequest)
+'            Report = Report & AddToReportIfNotBlank("FormDescription: ", currentMail.FormDescription)
+'            Report = Report & AddToReportIfNotBlank("Importance: ", currentMail.Importance)
+'            Report = Report & AddToReportIfNotBlank("InternetCodepage: ", currentMail.InternetCodepage)
+'            Report = Report & AddToReportIfNotBlank("IsConflict: ", currentMail.IsConflict)
+'            ' Not available for Outlook 2003
+'            'report = report & AddToReportIfNotBlank("IsMarkedAsTask: ", currentMail.IsMarkedAsTask)
+'            'report = report & AddToReportIfNotBlank("LastModificationTime: ", currentMail.ItemProperties)
+'
+'            Report = Report & AddToReportIfNotBlank("LastModificationTime: ", currentMail.LastModificationTime)
+'
+'            'If currentMail.Links.Count > 0 Then
+'            '    report = report & "Links: " & vbCrLf
+'            '    For Each currentLink In currentMail.Links
+'            '        report = report & vbTab & currentLink.Name & vbCrLf
+'            '    Next
+'            '    report = report & vbCrLf
+'            'End If
+'
+'            Report = Report & AddToReportIfNotBlank("MarkForDownload: ", currentMail.MarkForDownload)
+'            Report = Report & AddToReportIfNotBlank("MessageClass: ", currentMail.MessageClass)
+'            Report = Report & AddToReportIfNotBlank("Mileage: ", currentMail.Mileage)
+'            Report = Report & AddToReportIfNotBlank("NoAging: ", currentMail.NoAging)
+'            Report = Report & AddToReportIfNotBlank("OriginatorDeliveryReportRequested: ", currentMail.OriginatorDeliveryReportRequested)
+'            Report = Report & AddToReportIfNotBlank("OutlookInternalVersion: ", currentMail.OutlookInternalVersion)
+'            Report = Report & AddToReportIfNotBlank("OutlookVersion: ", currentMail.OutlookVersion)
+'            Report = Report & AddToReportIfNotBlank("Permission: ", currentMail.Permission)
+'            Report = Report & AddToReportIfNotBlank("PermissionService: ", currentMail.PermissionService)
+'            'report = report & AddToReportIfNotBlank("Permission: ", currentMail.PropertyAccessor)
+'            Report = Report & AddToReportIfNotBlank("ReadReceiptRequested: ", currentMail.ReadReceiptRequested)
+'            'report = report & AddToReportIfNotBlank("ReceivedByEntryID: ", currentMail.ReceivedByEntryID)
+'            Report = Report & AddToReportIfNotBlank("ReceivedByName: ", currentMail.ReceivedByName)
+'            'report = report & AddToReportIfNotBlank("ReceivedOnBehalfOfEntryID: ", currentMail.ReceivedOnBehalfOfEntryID)
+'            Report = Report & AddToReportIfNotBlank("ReceivedOnBehalfOfName: ", currentMail.ReceivedOnBehalfOfName)
+'            Report = Report & AddToReportIfNotBlank("ReceivedTime: ", currentMail.ReceivedTime)
+'            Report = Report & AddToReportIfNotBlank("RecipientReassignmentProhibited: ", currentMail.RecipientReassignmentProhibited)
+'
+'            Report = Report & "Recipients: " & vbCrLf
+'            For Each currentRecipient In currentMail.Recipients
+'                Report = Report & vbTab & "Name: " & currentRecipient.Name & vbCrLf
+'                Report = Report & vbTab & vbTab & "Address: " & currentRecipient.Address & vbCrLf
+'                Report = Report & vbTab & vbTab & "AddressEntry: " & currentRecipient.AddressEntry & vbCrLf
+'                Report = Report & vbTab & vbTab & "AutoResponse: " & currentRecipient.AutoResponse & vbCrLf
+'                Report = Report & vbTab & vbTab & "Class: " & currentRecipient.Class & vbCrLf
+'                'report = report & vbTab & vbTab & "DisplayType: " & currentRecipient.DisplayType & vbCrLf
+'                Report = Report & vbTab & vbTab & "EntryID: " & currentRecipient.EntryID & vbCrLf
+'                Report = Report & vbTab & vbTab & "Index: " & currentRecipient.Index & vbCrLf
+'                Report = Report & vbTab & vbTab & "MeetingResponseStatus: " & currentRecipient.MeetingResponseStatus & vbCrLf
+'                'report = report & vbTab & vbTab & "Parent: " & currentRecipient.Parent & vbCrLf
+'                'report = report & vbTab & vbTab & "PropertyAccessor: " & currentRecipient.PropertyAccessor & vbCrLf
+'                Report = Report & vbTab & vbTab & "Resolved: " & currentRecipient.Resolved & vbCrLf
+'                'report = report & vbTab & vbTab & "Session: " & currentRecipient.Session & vbCrLf
+'                Report = Report & vbTab & vbTab & "TrackingStatus: " & currentRecipient.TrackingStatus & vbCrLf
+'                Report = Report & vbTab & vbTab & "TrackingStatusTime: " & currentRecipient.TrackingStatusTime & vbCrLf
+'                Report = Report & vbTab & vbTab & "Type: " & currentRecipient.Type & vbCrLf
+'            Next
+'            Report = Report & vbCrLf
+'
+'            Report = Report & AddToReportIfNotBlank("ReminderOverrideDefault: ", currentMail.ReminderOverrideDefault)
+'            Report = Report & AddToReportIfNotBlank("ReminderPlaySound: ", currentMail.ReminderPlaySound)
+'            Report = Report & AddToReportIfNotBlank("ReminderSet: ", currentMail.ReminderSet)
+'            Report = Report & AddToReportIfNotBlank("ReminderSoundFile: ", currentMail.ReminderSoundFile)
+'            Report = Report & AddToReportIfNotBlank("ReminderTime: ", currentMail.ReminderTime)
+'            Report = Report & AddToReportIfNotBlank("ReminderTime: ", currentMail.RemoteStatus)
+'
+'            Report = Report & AddToReportIfNotBlank("ReplyRecipientNames: ", currentMail.ReplyRecipientNames)
+'
+'            If currentMail.ReplyRecipients.Count > 0 Then
+'                Report = Report & "ReplyRecipients: " & vbCrLf
+'                For Each currentRecipient In currentMail.ReplyRecipients
+'                    Report = Report & vbTab & "Name: " & currentRecipient.Name & vbCrLf
+'                    Report = Report & vbTab & vbTab & "Address: " & currentRecipient.Address & vbCrLf
+'                    Report = Report & vbTab & vbTab & "AddressEntry: " & currentRecipient.AddressEntry & vbCrLf
+'                    Report = Report & vbTab & vbTab & "AutoResponse: " & currentRecipient.AutoResponse & vbCrLf
+'                    Report = Report & vbTab & vbTab & "Class: " & currentRecipient.Class & vbCrLf
+'                    Report = Report & vbTab & vbTab & "DisplayType: " & currentRecipient.DisplayType & vbCrLf
+'                    Report = Report & vbTab & vbTab & "EntryID: " & currentRecipient.EntryID & vbCrLf
+'                    Report = Report & vbTab & vbTab & "Index: " & currentRecipient.Index & vbCrLf
+'                    Report = Report & vbTab & vbTab & "MeetingResponseStatus: " & currentRecipient.MeetingResponseStatus & vbCrLf
+'                    'report = report & vbTab & vbTab & "Parent: " & currentRecipient.Parent & vbCrLf
+'                    'report = report & vbTab & vbTab & "PropertyAccessor: " & currentRecipient.PropertyAccessor & vbCrLf
+'                    Report = Report & vbTab & vbTab & "Resolved: " & currentRecipient.Resolved & vbCrLf
+'                    'report = report & vbTab & vbTab & "Session: " & currentRecipient.Session & vbCrLf
+'                    Report = Report & vbTab & vbTab & "TrackingStatus: " & currentRecipient.TrackingStatus & vbCrLf
+'                    Report = Report & vbTab & vbTab & "TrackingStatusTime: " & currentRecipient.TrackingStatusTime & vbCrLf
+'                    Report = Report & vbTab & vbTab & "Type: " & currentRecipient.Type & vbCrLf
+'                Next
+'                Report = Report & vbCrLf
+'            End If
+'
+'
+'            Report = Report & AddToReportIfNotBlank("Saved: ", currentMail.Saved)
+'            Report = Report & AddToReportIfNotBlank("Subject: ", currentMail.Subject)
+'            Report = Report & AddToReportIfNotBlank("Submitted: ", currentMail.Submitted)
+'            ' Not Available for Outlook 2003
+'            'report = report & AddToReportIfNotBlank("TaskCompletedDate: ", currentMail.TaskCompletedDate)
+'            ' Not Available for Outlook 2003
+'            'report = report & AddToReportIfNotBlank("TaskDueDate: ", currentMail.TaskDueDate)
+'            ' Not Available for Outlook 2003
+'            'report = report & AddToReportIfNotBlank("TaskStartDate: ", currentMail.TaskStartDate)
+'            ' Not Available for Outlook 2003
+'            'report = report & AddToReportIfNotBlank("TaskSubject: ", currentMail.TaskSubject)
+'            Report = Report & AddToReportIfNotBlank("To: ", currentMail.To)
+'            ' Not Available for Outlook 2003
+'            ' report = report & AddToReportIfNotBlank("ToDoTaskOrdinal: ", currentMail.ToDoTaskOrdinal)
+'            Report = Report & AddToReportIfNotBlank("UnRead: ", currentMail.UnRead)
+'            'report = report & AddToReportIfNotBlank("UserProperties: ", currentMail.UserProperties)
+'            Report = Report & AddToReportIfNotBlank("VotingOptions: ", currentMail.VotingOptions)
+'            Report = Report & AddToReportIfNotBlank("VotingResponse: ", currentMail.VotingResponse)
+'
+'            Report = Report & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & "Body: " & vbCrLf
+'            Report = Report & currentMail.Body & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & "HTML Body: " & vbCrLf
+'            Report = Report & currentMail.HTMLBody & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & vbCrLf
+'            Report = Report & vbCrLf
+'        End If
+'    Next
+'
+'    Call CreateReportAsEmail("Current Email Report", Report)
+'
+'End Sub
+'
+'Private Function AddToReportIfNotBlank(FieldName As String, FieldValue As String)
+'    AddToReportIfNotBlank = ""
+'    If (FieldValue <> "") Then
+'        AddToReportIfNotBlank = FieldName & " : " & FieldValue & vbCrLf
+'    End If
+'
+'End Function
+'
+'' VBA SubRoutine which displays a report inside an email
+'' Programming by Greg Thatcher, http://www.GregThatcher.com
+'Public Sub CreateReportAsEmail(Title As String, Report As String)
+'    On Error GoTo On_Error
+'
+'    Dim Session As Outlook.NameSpace
+'    Dim mail As MailItem
+'    Dim MyAddress As AddressEntry
+'    Dim Inbox
+'
+'    Set Session = Application.Session
+'    Set Inbox = Session.GetDefaultFolder(olFolderInbox)
+'    Set mail = Inbox.Items.Add("IPM.Mail")
+'
+'    mail.Subject = Title
+'    mail.Body = Report
+'
+'    mail.Save
+'    mail.Display
+'
+'
+'Exiting:
+'        Set Session = Nothing
+'        Exit Sub
+'
+'On_Error:
+'    MsgBox "error=" & Err.Number & " " & Err.Description
+'    Resume Exiting
+'
+'End Sub
+'
+'
+'Public Sub MacroCategories()
+''reads assigned category and adds new one
+'    Dim oOutlook As Object
+''    Dim oInspector As Object
+'    Dim oExplorer As Object
+'    Dim x As Long
+'    Dim strCats As String
+'    Set oOutlook = CreateObject("Outlook.Application")
+'    Set oExplorer = oOutlook.ActiveExplorer
+'    If Not oExplorer Is Nothing Then
+'        Dim arrSelection As Object
+'        Set arrSelection = oExplorer.Selection
+'
+'        For x = 1 To arrSelection.Count
+'            strCats = arrSelection.Item(x).Categories
+'            If Not strCats = "" Then
+'                ' Your code
+'                strCats = strCats & ","
+'            End If
+'            strCats = strCats & "MyNewCategory"
+'            arrSelection.Item(x).Categories = strCats
+'            arrSelection.Item(x).Save
+'        Next x
+'    Else
+'        MsgBox "Explorer not open!", vbOKOnly
+'    End If
+'    Set oOutlook = Nothing
+'    Set oExplorer = Nothing
+'End Sub
+'
+''===============================================================================================================
+'''Flag an Appointment Private
+'''This code flags an appointment as private when you assign a certain category. Change the category name in the PropertyChange procedure to suit your needs.
+'''
+'''Private WithEvents Explorer As Outlook.Explorer
+'''Private WithEvents Appointment As Outlook.AppointmentItem
+''
+''Friend Sub Application_Startup()
+''  Set Explorer = Application.ActiveExplorer
+''End Sub
+''
+''Private Sub Explorer_SelectionChange()
+''  Dim obj As Object
+''  Dim Sel As Outlook.Selection
+''
+''  Set Appointment = Nothing
+''  Set Sel = Explorer.Selection
+''
+''  If Sel.Count > 0 Then
+''    Set obj = Sel(1)
+''    If TypeOf obj Is Outlook.AppointmentItem Then
+''      Set Appointment = obj
+''    End If
+''  End If
+''End Sub
+''
+''Private Sub Appointment_PropertyChange(ByVal Name As String)
+''  Dim i&
+''  Dim Cats As String
+''  Dim arrCats() As String
+''  Dim FindCategory As String
+''  Dim RunRules As Boolean
+''
+''  'Enter here the category name that should trigger the action
+''  FindCategory = "(Actionlist)"
+''
+''  If Name = "Categories" Then
+''    Cats = LCase$(Appointment.Categories)
+''    If Len(Cats) = 0 Then Exit Sub
+''    FindCategory = LCase$(FindCategory)
+''    Cats = Replace(Cats, ",", ";")
+''    arrCats = Split(Cats, ";")
+''    For i = 0 To UBound(arrCats)
+''      Cats = Trim$(arrCats(i))
+''      If Cats = FindCategory Then
+''        RunRules = True
+''        Exit For
+''      End If
+''    Next
+''  End If
+''
+''  If RunRules Then
+''    Appointment.Sensitivity = olPrivate
+''    Appointment.Save
+''  End If
+''End Sub
+''===============================================================================================================
+'
+''===============================================================================================================
+''Run all Your Rules
+''This sample runs all the rules you have set up as soon as you assign the category '(RunRules)' to an email.
+''
+''This one requires Outlook 2007 or higher.
+''
+''Private WithEvents Explorer As Outlook.Explorer
+''Private WithEvents Mail As Outlook.MailItem
+''Private MoveToThisFolder As Outlook.MAPIFolder
+''
+''Friend Sub Application_Startup()
+''  On Error Resume Next
+''  Set Explorer = Application.ActiveExplorer
+''End Sub
+''
+''Private Sub Explorer_SelectionChange()
+''  Dim obj As Object
+''  Dim Sel As Outlook.Selection
+''
+''  Set mail = Nothing
+''  Set Sel = Explorer.Selection
+''
+''  If Sel.Count > 0 Then
+''    Set obj = Sel(1)
+''    If TypeOf obj Is Outlook.MailItem Then
+''      Set mail = obj
+''    End If
+''  End If
+''End Sub
+''
+''Private Sub Mail_PropertyChange(ByVal Name As String)
+''  Dim CurrentFolder As Outlook.Folder
+''  Dim CurrentStore As Outlook.Store
+''  Dim Rules As Outlook.Rules
+''  Dim Rule As Outlook.Rule
+''  Dim i&
+''  Dim Cats As String
+''  Dim arrCats() As String
+''  Dim FindCategory As String
+''  Dim RunRules As Boolean
+''
+''  'Enter here the name of your category
+''  FindCategory = "(RunRules)"
+''
+''  If Name = "Categories" Then
+''    Cats = LCase$(mail.Categories)
+''    FindCategory = LCase$(FindCategory)
+''    If Len(Cats) = 0 Then Exit Sub
+''    Cats = Replace(Cats, ",", ";")
+''    arrCats = Split(Cats, ";")
+''    For i = 0 To UBound(arrCats)
+''      Cats = Trim$(arrCats(i))
+''      If Cats = FindCategory Then
+''        Set mail = Nothing
+''        RunRules = True
+''        Exit For
+''      End If
+''    Next
+''  End If
+''
+''  If RunRules Then
+''    Set CurrentFolder = Application.ActiveExplorer.CurrentFolder
+''    Set CurrentStore = CurrentFolder.Store
+''    Set Rules = CurrentStore.GetRules
+''    For Each Rule In Rules
+''      If Rule.Enabled Then
+''        Rule.Execute
+''      End If
+''    Next
+''  End If
+''End Sub
+''===============================================================================================================
+'
+'
+'
+''===============================================================================================================
+''Move all Emails to a Subfolder
+''The first example moves an email to a certain subfolder of the inbox as soon as you assign a certain category. If more categories are assigned, they'll be ignored. Just customize the two variables in the 'Mail_PropertyChange' procedure (the category to look for, and the name of the subfolder).
+''
+''As Outlook does not allow moving a message from within the PropertyChange procedure, we start a timer to move the message after the PropertyChange has been completed.
+''
+''Get the code for the API Timer here.
+''
+''
+''tip  How to add macros to Outlook
+''Private WithEvents Explorer As Outlook.Explorer
+''Private WithEvents Mail As Outlook.MailItem
+''Private MoveToThisFolder As Outlook.MAPIFolder
+''
+''Friend Sub Application_Startup()
+''  On Error Resume Next
+''  Set Explorer = Application.ActiveExplorer
+''End Sub
+''
+''Private Sub Explorer_SelectionChange()
+''  Dim obj As Object
+''  Dim Sel As Outlook.Selection
+''
+''  Set mail = Nothing
+''  Set Sel = Explorer.Selection
+''
+''  If Sel.Count > 0 Then
+''    Set obj = Sel(1)
+''    If TypeOf obj Is Outlook.MailItem Then
+''      Set mail = obj
+''    End If
+''  End If
+''End Sub
+''
+''Private Sub Mail_PropertyChange(ByVal Name As String)
+''  Dim Ns As Outlook.NameSpace
+''  Dim SubfolderName As String
+''  Dim Inbox As Outlook.MAPIFolder
+''  Dim Subfolder As Outlook.MAPIFolder
+''  Dim i&
+''  Dim Cats As String
+''  Dim arrCats() As String
+''  Dim FindCategory As String
+''
+''  'Enter here the category name to look for
+''  FindCategory = " (Actionlist)"
+''  'Enter here the name of the subfolder
+''  SubfolderName = "test"
+''
+''  Set Ns = Application.GetNamespace("MAPI")
+''  Set Inbox = Ns.GetDefaultFolder(olFolderInbox)
+''  Set Subfolder = Inbox.Folders(SubfolderName)
+''  If Subfolder.EntryID = mail.Parent.EntryID Then
+''    Exit Sub
+''  End If
+''
+''  If Name = "Categories" Then
+''    Cats = LCase$(mail.Categories)
+''    FindCategory = LCase$(FindCategory)
+''    If Len(Cats) = 0 Then Exit Sub
+''    Cats = Replace(Cats, ",", ";")
+''    arrCats = Split(Cats, ";")
+''    For i = 0 To UBound(arrCats)
+''      Cats = Trim$(arrCats(i))
+''      If Cats = FindCategory Then
+''        Set MoveToThisFolder = Subfolder
+''        EnableTimer 500, Me
+''        Exit For
+''      End If
+''    Next
+''  End If
+''End Sub
+''
+''Friend Sub TimerEvent()
+''  DisableTimer
+''  If mail Is Nothing Then Exit Sub
+''  If MoveToThisFolder Is Nothing Then Exit Sub
+''  mail.Move MoveToThisFolder
+''  Set mail = Nothing
+''  Set MoveToThisFolder = Nothing
+''End Sub
+'' OLKeeper OLKeeper
+''OLKeeper reliably prevents users from closing their Outlook window and thus possibly missing reminders or e-mails.
+''Move to a Folder with the Name of the Category
+''The second example moves the email to a subfolder of the inbox that matches the name of the category. Again, the moving itself will be triggered by the timer.
+''
+''Get the code for the API Timer here.
+''
+''Private WithEvents Explorer As Outlook.Explorer
+''Private WithEvents Mail As Outlook.MailItem
+''Private MoveToThisFolder As Outlook.MAPIFolder
+''
+''Friend Sub Application_Startup()
+''  On Error Resume Next
+''  Set Explorer = Application.ActiveExplorer
+''End Sub
+''
+''Private Sub Explorer_SelectionChange()
+''  Dim obj As Object
+''  Dim Sel As Outlook.Selection
+''
+''  Set mail = Nothing
+''  Set Sel = Explorer.Selection
+''
+''  If Sel.Count > 0 Then
+''    Set obj = Sel(1)
+''    If TypeOf obj Is Outlook.MailItem Then
+''      Set mail = obj
+''    End If
+''  End If
+''End Sub
+''
+''Private Sub Mail_PropertyChange(ByVal Name As String)
+''  Dim Ns As Outlook.NameSpace
+''  Dim Inbox As Outlook.MAPIFolder
+''  Dim Subfolder As Outlook.MAPIFolder
+''  Dim SubfolderName As String
+''
+''  If Name = "Categories" Then
+''    Set Ns = Application.GetNamespace("MAPI")
+''    Set Inbox = Ns.GetDefaultFolder(olFolderInbox)
+''    SubfolderName = mail.Categories
+''    If Len(SubfolderName) = 0 Then Exit Sub
+''    Set Subfolder = Inbox.Folders(SubfolderName)
+''    If Subfolder.EntryID <> mail.Parent.EntryID Then
+''      Set MoveToThisFolder = Subfolder
+''      EnableTimer 500, Me
+''    End If
+''  End If
+''End Sub
+''
+''Friend Sub TimerEvent()
+''  DisableTimer
+''  If mail Is Nothing Then Exit Sub
+''  If MoveToThisFolder Is Nothing Then Exit Sub
+''  mail.Move MoveToThisFolder
+''  Set mail = Nothing
+''  Set MoveToThisFolder = Nothing
+''End Sub
+'
+''===============================================================================================================
+'
+'
+'
+'Option Explicit
+'
+'Public Function ReadFile(sPath As String) As String
+'  On Error GoTo AUSGANG
+'  Dim lFileNr As Long
+'  Dim sText As String
+'
+'  lFileNr = FreeFile
+'
+'  Open sPath For Binary As #lFileNr
+'  sText = Space$(LOF(lFileNr))
+'  Get #lFileNr, , sText
+'
+'AUSGANG:
+'  If lFileNr Then Close #lFileNr
+'  If Err.Number Then Err.Raise Err.Number, Err.Source, Err.Description
+'  ReadFile = sText
+'End Function
+'
+'Public Sub WriteFile(sPath As String, _
+'  sText As String, _
+'  Optional ByVal bAppend As Boolean _
+')
+'  On Error GoTo AUSGANG
+'  Dim lFileNr As Long
+'
+'  lFileNr = FreeFile
+'
+'  Select Case bAppend
+'  Case False
+'    Open sPath For Output As #lFileNr
+'  Case Else
+'    Open sPath For Append As #lFileNr
+'  End Select
+'  Print #lFileNr, sText;
+'
+'AUSGANG:
+'  If lFileNr Then Close #lFileNr
+'  If Err.Number Then Err.Raise Err.Number, Err.Source, Err.Description
+'End Sub
+'
+
+'Option Explicit
+'
+'
+'
+'Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" _
+'    (ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, lParam As Any) As Long
+''// The SendMessage function sends the specified message to a window or windows.
+''// The function calls the window procedure for the specified window and does not
+''// return until the window procedure has processed the message.
+''// The PostMessage function, in contrast, posts a message to a thread’s message
+''// queue and returns immediately.
+''// PARAMETERS:
+''// hwnd
+''// Identifies the window whose window procedure will receive the message.
+''// If this parameter is HWND_BROADCAST, the message is sent to all top-level
+''// windows in the system, including disabled or invisible unowned windows,
+''// overlapped windows, and pop-up windows; but the message is not sent to child windows.
+''// Msg
+''// Specifies the message to be sent.
+''// wParam
+''// Specifies additional message-specific information.
+''// lParam
+''// Specifies additional message-specific information.
+''//////////////////////////////////////////////////////////////////////////
+'
+''// The IsWindow function determines whether the specified window handle
+''// identifies an existing window.
+'Private Declare Function IsWindow Lib "user32" (ByVal hwnd As Long) As Long
+''// PARAMETERS:
+''// hWnd
+''// Specifies the window handle.
+''//////////////////////////////////////////////////////////////////////////
+'
+'Private Declare Function InvalidateRect Lib "user32" (ByVal hwnd As Long, lpRect As Long, ByVal bErase As Long) As Long
+'
+'Private Declare Function UpdateWindow Lib "user32" (ByVal hwnd As Long) As Long
+'
+'Private Declare Function GetDesktopWindow Lib "user32" () As Long
+'
+'Public Function fncScreenUpdating(State As Boolean, Optional Window_hWnd As Long = 0)
+'Const WM_SETREDRAW = &HB
+'Const WM_PAINT = &HF
+'If Window_hWnd = 0 Then
+'    Window_hWnd = GetDesktopWindow()
+'Else
+'    If IsWindow(hwnd:=Window_hWnd) = False Then
+'        Exit Function
+'    End If
+'End If
+'
+'If State = True Then
+'    Call SendMessage(hwnd:=Window_hWnd, wMsg:=WM_SETREDRAW, wParam:=1, lParam:=0)
+'    Call InvalidateRect(hwnd:=Window_hWnd, lpRect:=0, bErase:=True)
+'    Call UpdateWindow(hwnd:=Window_hWnd)
+'Else
+'    Call SendMessage(hwnd:=Window_hWnd, wMsg:=WM_SETREDRAW, wParam:=0, lParam:=0)
+'End If
+'
+'End Function
+'
+'
+''-----------------------------
+'
+'Sub PrintDirect()
+'    fncScreenUpdating State:=False
+'    ActiveWindow.SelectedSheets.PrintOut Copies:=1
+'    fncScreenUpdating State:=True
+'End Sub
+'
+''-----------------------------
+'
+'
+'
+'Option Explicit
+'
+''PLACE IN YOUR USERFORM CODE
+'Option Explicit
+'Private Declare Function FindWindow Lib "user32" _
+'    Alias "FindWindowA" ( _
+'    ByVal lpClassName As String, _
+'    ByVal lpWindowName As String) As Long
+'
+'Private Declare Function GetWindowLong Lib "user32" _
+'    Alias "GetWindowLongA" ( _
+'    ByVal hWnd As Long, _
+'    ByVal nIndex As Long) As Long
+'
+'Private Declare Function SetWindowLong Lib "user32" _
+'    Alias "SetWindowLongA" ( _
+'    ByVal hWnd As Long, _
+'    ByVal nIndex As Long, _
+'    ByVal dwNewLong As Long) As Long
+'
+'Private Declare Function DrawMenuBar Lib "user32" ( _
+'    ByVal hWnd As Long) As Long
+'
+'Private Declare Function SetLayeredWindowAttributes Lib "user32" ( _
+'                ByVal hWnd As Long, _
+'                ByVal crKey As Long, _
+'                ByVal bAlpha As Byte, _
+'                ByVal dwFlags As Long) As Long
+'
+''Constants for title bar
+'Private Const GWL_STYLE As Long = (-16)           'The offset of a window's style
+'Private Const GWL_EXSTYLE As Long = (-20)         'The offset of a window's extended style
+'Private Const WS_CAPTION As Long = &HC00000       'Style to add a titlebar
+'Private Const WS_EX_DLGMODALFRAME As Long = &H1   'Controls if the window has an icon
+'
+''Constants for transparency
+'Private Const WS_EX_LAYERED = &H80000
+'Private Const LWA_COLORKEY = &H1                  'Chroma key for fading a certain color on your Form
+'Private Const LWA_ALPHA = &H2                     'Only needed if you want to fade the entire userform
+'
+'Private Sub UserForm_Activate()
+'HideTitleBarAndBorder Me 'hide the titlebar and border
+'MakeUserFormTransparent Me 'make certain color transparent
+'End Sub
+'
+'Sub MakeUserFormTransparent(frm As Object, Optional Color As Variant)
+''set transparencies on userform
+'Dim formhandle As Long
+'Dim bytOpacity As Byte
+'
+'formhandle = FindWindow(vbNullString, Me.Caption)
+'If IsMissing(Color) Then Color = vbWhite 'default to vbwhite
+'bytOpacity = 100 ' variable keeping opacity setting
+'
+'SetWindowLong formhandle, GWL_EXSTYLE, GetWindowLong(formhandle, GWL_EXSTYLE) Or WS_EX_LAYERED
+''The following line makes only a certain color transparent so the
+'' background of the form and any object whose BackColor you've set to match
+'' vbColor (default vbWhite) will be transparent.
+'    Me.BackColor = Color
+'    SetLayeredWindowAttributes formhandle, Color, bytOpacity, LWA_COLORKEY
+'End Sub
+'
+'Sub HideTitleBarAndBorder(frm As Object)
+''Hide title bar and border around userform
+'    Dim lngWindow As Long
+'    Dim lFrmHdl As Long
+'    lFrmHdl = FindWindow(vbNullString, frm.Caption)
+''Build window and set window until you remove the caption, title bar and frame around the window
+'    lngWindow = GetWindowLong(lFrmHdl, GWL_STYLE)
+'    lngWindow = lngWindow And (Not WS_CAPTION)
+'    SetWindowLong lFrmHdl, GWL_STYLE, lngWindow
+'    lngWindow = GetWindowLong(lFrmHdl, GWL_EXSTYLE)
+'    lngWindow = lngWindow And Not WS_EX_DLGMODALFRAME
+'    SetWindowLong lFrmHdl, GWL_EXSTYLE, lngWindow
+'    DrawMenuBar lFrmHdl
+'End Sub
+'
+'
+
+'Sub UseExportedClass_EarlyBinding()
+'    Dim anEmployee As ClassProvider.clsEmployee
+'    Set anEmployee = ClassProvider.New_clsEmployee
+'    anEmployee.Name = "Tushar Mehta"
+'    MsgBox anEmployee.Name
+'    End Sub
+'Sub UseExportedClass_LateBinding()
+'    Dim anEmployee As Object
+'    Dim str As String
+'    str = Environ("userprofile")
+'    Set anEmployee = Excel.Application.Run("C:\Users\E-AAtkinson\Documents\2) Dev\Test\wbClassProvider.xlsm")
+'    anEmployee.Name = "Tushar Mehta"
+'    MsgBox anEmployee.Name
+'    End Sub
+
+
+'There are two distinct set up steps required before one VBA project can access an object declared in the class module of another
+'VBA project.
+'The first set makes the class module usable outside of the project in which it is declared and provides a means by which an object
+'can be instantiated.
+'The second set deals with how the client project uses this class.
+'
+'Set up the project that contains the class definition
+'By default a class module has the Instancing property set to Private.  That means that only the project which contains the
+'definition of the class can
+'instantiate an object of that class.  The only other choice that VBA supports is Public, not creatable.  What that means is that
+'an external project can
+'use an object of this class, but it cannot instantiate it.  Might seem strange, but that's the way it is.  The way to change the
+'property from the default
+'value is to select the class module in the VBE Project Explorer, select the class module of interest, access the Properties Window
+'(if necessary, use F4 to
+'make it visible), and change the Instancing property to 2-PublicNotCreatable.
+'
+'To follow along with the example in this tip, create a class module, name it clsEmployee, change its Instancing property, and add
+'the following code to it.
+'
+'Option Explicit
+'Dim sName As String
+'Property Get Name() As String
+'    Name = sName
+'    End Property
+'Property Let Name(uName As String)
+'    sName = uName
+'    End Property
+'
+'Next, since the Instancing property of the class is PublicNotCreatable, the project must provide a way for a client to instantiate
+'the object.  Add a new
+'function in a standard module:
+'
+'Option Explicit
+'Public Function New_clsEmployee() As clsEmployee
+'    Set New_clsEmployee = New clsEmployee
+'    End Function
+'
+'where clsEmployee is the name of the class of interest.  Also, this should not be a private module.
+'
+'One final change will make life a little easier.  Rename the project from the default VBAProject to ClassProvider.  To do so,
+'select the project in the VBE
+'Project Explorer, then select Tools | VBAProject Properties… | General tab | and in the Project Name field enter ClassProvider.
+'
+'Save this file, say, as Class Provider.xls.
+'
+'Next, move on to the client project.
+'
+'Set up the project that will use the exported class
+'The client project uses the class very much as it would a class defined in any other external library (such as an userform) --
+'with one key difference.  Since it cannot instantiate an object of that class, it must use the New_clsEmployee() function
+'declared above.  As with any other external library, decide whether to use early binding or late binding.  The code below
+'demonstrates both.  Remember that to use the early binding code, the client project must include a reference (Tools |
+'References…) to the Class Provider.xls file.
+'
+'Option Explicit
+'Sub UseExportedClass_EarlyBinding()
+'    Dim anEmployee As ClassProvider.clsEmployee
+'    Set anEmployee = ClassProvider.New_clsEmployee
+'    anEmployee.Name = "Tushar Mehta"
+'    MsgBox anEmployee.Name
+'    End Sub
+'Sub UseExportedClass_LateBinding()
+'    Dim anEmployee As Object
+'    Set anEmployee = Application.Run("'g:\temp\class provider.xls'!new_clsEmployee")
+'    anEmployee.Name = "Tushar Mehta"
+'    MsgBox anEmployee.Name
+'    End Sub
+'
+'Final Note
+'The external library doesn't have to be a normally saved file.  It can be in a application-specific add-in (such as a file saved
+'with the suffix .xla or .ppa).  Just remember that such an add-in is opened not through the normal File | Open… method but
+'loaded with the Tools | Add-Ins… command.
+'
+'
+
+
+
+
+
+
+

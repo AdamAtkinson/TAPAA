@@ -1,0 +1,31 @@
+Attribute VB_Name = "Module2"
+Option Explicit
+
+
+
+Sub EnumerateSearchFoldersInStores()
+ Dim colStores As Outlook.Stores
+ Dim oStore As Outlook.Store
+ Dim oSearchFolders As Outlook.Folders
+ Dim oFolder As Outlook.folder
+ 
+ On Error Resume Next
+ Set colStores = Application.Session.Stores
+ 
+ For Each oStore In colStores
+    Set oSearchFolders = oStore.GetSearchFolders
+    For Each oFolder In oSearchFolders
+       Debug.Print oFolder.FolderPath, oFolder.Name
+    Next
+ Next
+End Sub
+
+
+Sub BEnumerateSearchFoldersInStores()
+ Dim oFolder As Outlook.folder
+ On Error Resume Next
+    For Each oFolder In Application.Session.Stores.Item(1).GetSearchFolders
+       Debug.Print oFolder.FolderPath, oFolder.Name
+    Next
+End Sub
+

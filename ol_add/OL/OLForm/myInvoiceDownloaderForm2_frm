@@ -1,0 +1,184 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} myInvoiceDownloaderForm2 
+   ClientHeight    =   4380
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   15105
+   OleObjectBlob   =   "myInvoiceDownloaderForm2_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "myInvoiceDownloaderForm2"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+
+Private mMoveToFolder As Outlook.MAPIFolder
+
+Public Property Set moveToFolder(p_MoveToFolder As Outlook.MAPIFolder)
+    Set mMoveToFolder = p_MoveToFolder
+End Property
+
+
+
+Private Sub UserForm_Activate()
+
+    With Me.ListBox_Header
+        .AddItem
+        .List(0, 0) = "Received"
+        .List(0, 1) = "From"
+        .List(0, 2) = "Subject"
+        .List(0, 3) = "File Name"
+        .List(0, 4) = "Files"
+        .List(0, 5) = "D/ L"
+        .List(0, 6) = "Omit"
+        .List(0, 7) = "Was"
+    End With
+    
+    Dim i As Long
+    For i = LBound(mAttachmentDetails) To UBound(mAttachmentDetails)
+        With Me.ListBox_Details
+            .AddItem
+            .List(i - 1, 0) = mAttachmentDetails(i).eMailDate
+            .List(i - 1, 1) = mAttachmentDetails(i).eMailSender
+            .List(i - 1, 2) = mAttachmentDetails(i).eMailSubject
+            .List(i - 1, 3) = mAttachmentDetails(i).AttachedFileName
+            .List(i - 1, 4) = mAttachmentDetails(i).AttachmentCount
+            .List(i - 1, 5) = mAttachmentDetails(i).SavedCount
+            .List(i - 1, 6) = mAttachmentDetails(i).UnsavedCount
+            Select Case mAttachmentDetails(i).AttachedFileWasSaved
+                Case True
+                    .List(i - 1, 7) = "Saved"
+                Case False
+                    .List(i - 1, 7) = "Omitted"
+            End Select
+        End With
+    Next i
+    
+End Sub
+Private Sub CommandButton_ShowInMAPI_Click()
+    OpenMoveToFolder
+End Sub
+Private Sub CommandButton_MoveToInBox_Click()
+    Dim indexValue As Long
+    indexValue = GetSelectedIndex
+    Set mAttachmentDetails(indexValue).eMail = MoveEmailToFolderMAPI(mAttachmentDetails(indexValue).eMail, mAttachmentDetails(indexValue).eMailInBox)
+    UpdateArrayWithNewEmailLocation mAttachmentDetails(indexValue).eMail
+End Sub
+Private Sub CommandButton_OpenFolder_Click()
+    Dim indexValue As Long
+    indexValue = GetSelectedIndex
+    If mAttachmentDetails(indexValue).AttachedFileWasSaved Then
+        myInvoiceDownloader.OpenDownloadFolder InStrRev(mAttachmentDetails(indexValue).AttachedFilePath, "\")
+    Else
+        MsgBox "That would require you to save the file first!"
+    End If
+End Sub
+Private Sub CommandButton_Save_Click()
+    Dim indexValue As Long
+    indexValue = GetSelectedIndex
+    If CBool(indexValue) Then
+        myInvoiceDownloader.SaveSelectedSkippedAttachments indexValue
+    End If
+End Sub
+
+Private Sub CommandButton_ShowEmail_Click()
+    Dim indexValue As Long
+    indexValue = GetSelectedIndex
+    If CBool(indexValue) Then
+        mAttachmentDetails(indexValue).eMail.Display
+    End If
+End Sub
+
+Private Sub CommandButton_Exit_Click()
+    Unload Me
+End Sub
+
+Private Sub CommandButton_OpenAttachment_Click()
+    Dim wsh As New WshShell
+    Dim shellCommand As String
+    Dim indexValue As Long
+    Dim fName As String
+    Dim att As Outlook.Attachment
+    Dim wasSaved As Boolean
+
+    indexValue = GetSelectedIndex
+    If CBool(indexValue) Then
+        With mAttachmentDetails(indexValue)
+            fName = "C:\Users\e-aatkinson\AppData\Local\VBA\Temp\"
+            fName = fName & Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+            fName = fName & RandomFileNameNumberToLetter(Int((1000000 - 100000 + 1) * Rnd + 10000))
+            fName = fName & Right(.AttachedFile.FileName, Len(.AttachedFile.FileName) - InStrRev(.AttachedFile.FileName, ".") + 1)
+            For Each att In .eMail.Attachments
+                If (att.Index = .AttachedFile.Index) Or (att.Index = 1 And .AttachedFile.Index = 0) _
+                        And (att.FileName = .AttachedFile.FileName) Then
+                    dbP att.FileName, .AttachedFile.FileName
+                    att.SaveAsFile fName
+                    wasSaved = True
+                    Exit For
+                End If
+            Next att
+            shellCommand = fName
+            If wasSaved Then wsh.Run shellCommand, vbNormalFocus, False
+        End With
+    End If
+End Sub
+
+Private Function RandomFileNameNumberToLetter(N As Long) As String
+    Dim returnString As String
+    Dim workingString As String
+    Dim i As Long
+    workingString = str(N)
+    For i = 1 To Len(workingString)
+        Select Case Mid(workingString, i, 1)
+            Case 1
+                returnString = returnString & "Z"
+            Case 2
+                returnString = returnString & "X"
+            Case 3
+                returnString = returnString & "C"
+            Case 4
+                returnString = returnString & "W"
+            Case 5
+                returnString = returnString & "T"
+            Case 6
+                returnString = returnString & "J"
+            Case 7
+                returnString = returnString & "Y"
+            Case 8
+                returnString = returnString & "V"
+            Case 9
+                returnString = returnString & "R"
+            Case 0
+                returnString = returnString & "Q"
+        End Select
+    Next i
+    RandomFileNameNumberToLetter = returnString
+End Function
+
+
+Private Function GetSelectedIndex() As Long
+    Dim i As Long
+    Dim returnValue As Long
+    With Me.ListBox_Details
+        For i = 0 To .ListCount - 1
+            If .Selected(i) Then
+                returnValue = i + 1
+                Exit For
+            End If
+        Next i
+        If Not CBool(returnValue) Then
+            MsgBox "That would require you to select something in the list!"
+        Else
+            GetSelectedIndex = returnValue
+        End If
+    End With
+End Function
+
+                                                                                                
+Sub OpenMoveToFolder()
+    If Not mMoveToFolder Is Nothing Then mMoveToFolder.Display
+End Sub

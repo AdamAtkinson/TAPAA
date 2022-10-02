@@ -1,0 +1,134 @@
+Attribute VB_Name = "Module1"
+Option Explicit
+
+Sub fuckthis()
+Dim nm As MailItem
+Dim fm As MailItem
+Set fm = ActiveInspector.CurrentItem
+Set nm = Outlook.CreateItem(olMailItem)
+nm.Body = fm.Body
+nm.Display
+End Sub
+
+Sub fuckthis1()
+Dim nm As MailItem
+Dim fm As MailItem
+Set fm = ActiveInspector.CurrentItem
+Set nm = Outlook.CreateItem(olMailItem)
+nm.HTMLBody = fm.Body
+nm.Display
+End Sub
+
+
+'1. Unzip the file icons.zip to C:\icons
+'
+'2. Define the code below as Visual Basic Macros
+'
+'3. Adapt the function ColorizeOutlookFolders according to your needs
+'
+'4. In the object ThisOutlookSession, define the following function:
+        ''Private Sub Application_Startup()
+        ''ColorizeOutlookFolders
+        ''End Sub
+
+
+
+Function GetFolder(ByVal FolderPath As String) As Outlook.folder
+    ' Returns an Outlook folder object basing on the folder path
+    '
+    Dim TempFolder As Outlook.folder
+    Dim FoldersArray As Variant
+    Dim i As Integer
+ 
+    On Error GoTo GetFolder_Error
+    
+    'Remove Leading slashes in the folder path
+    If left(FolderPath, 2) = "\\" Then
+        FolderPath = Right(FolderPath, Len(FolderPath) - 2)
+    End If
+    
+    'Convert folderpath to array
+    FoldersArray = Split(FolderPath, "\")
+    Set TempFolder = Application.Session.Folders.Item(FoldersArray(0))
+    
+    If Not TempFolder Is Nothing Then
+        For i = 1 To UBound(FoldersArray, 1)
+            Dim SubFolders As Outlook.Folders
+            Set SubFolders = TempFolder.Folders
+            Set TempFolder = SubFolders.Item(FoldersArray(i))
+            If TempFolder Is Nothing Then
+                Set GetFolder = Nothing
+            End If
+        Next
+    End If
+    'Return the TempFolder
+    Set GetFolder = TempFolder
+    Exit Function
+ 
+GetFolder_Error:
+    Set GetFolder = Nothing
+    Exit Function
+End Function
+ 
+Sub ColorizeOneFolder(FolderPath As String, FolderColour As String)
+    Dim myPic As IPictureDisp
+    Dim folder As Outlook.folder
+  
+    Set folder = GetFolder(FolderPath)
+    Set myPic = LoadPicture("C:\icons\" + FolderColour + ".ico")
+    If Not (folder Is Nothing) Then
+        ' set a custom icon to the folder
+        folder.SetCustomIcon myPic
+        'Debug.Print "setting colour to " + FolderPath + " as " + FolderColour
+    End If
+End Sub
+
+Sub ColorizeFolderAndSubFolders(strFolderPath As String, strFolderColour As String)
+    ' this procedure colorizes the foler given by strFolderPath and all subfolfers
+
+    Dim olProjectRootFolder As Outlook.folder
+    Set olProjectRootFolder = GetFolder(strFolderPath)
+  
+    Dim i As Long
+    Dim olNewFolder As Outlook.MAPIFolder
+    Dim olTempFolder As Outlook.MAPIFolder
+    Dim strTempFolderPath As String
+    
+    ' colorize folder
+    Call ColorizeOneFolder(strFolderPath, strFolderColour)
+    
+     ' Loop through the items in the current folder.
+    For i = olProjectRootFolder.Folders.Count To 1 Step -1
+          
+        Set olTempFolder = olProjectRootFolder.Folders(i)
+          
+        strTempFolderPath = olTempFolder.FolderPath
+          
+         'prints the folder path and name in the VB Editor's Immediate window
+         'Debug.Print sTempFolderPath
+         
+         ' colorize folder
+         Call ColorizeOneFolder(strTempFolderPath, strFolderColour)
+    Next
+    
+    For Each olNewFolder In olProjectRootFolder.Folders
+        ' recursive call
+        'Debug.Print olNewFolder.FolderPath
+        Call ColorizeFolderAndSubFolders(olNewFolder.FolderPath, strFolderColour)
+    Next
+
+End Sub
+
+Sub ColorizeOutlookFolders()
+    
+    Call ColorizeFolderAndSubFolders("\\Personal\Documents\000-Mgmt-CH\100-People", "blue")
+    Call ColorizeFolderAndSubFolders("\\Personal\Documents\000-Mgmt-CH\200-Projects", "red")
+    Call ColorizeFolderAndSubFolders("\\Personal\Documents\000-Mgmt-CH\500-Meeting", "green")
+    Call ColorizeFolderAndSubFolders("\\Personal\Documents\000-Mgmt-CH\800-Product", "magenta")
+    Call ColorizeFolderAndSubFolders("\\Personal\Documents\000-Mgmt-CH\600-Departments", "grey")
+    
+    Call ColorizeFolderAndSubFolders("\\Mailbox - Dan Wilson\Inbox\Customers", "grey")
+
+
+End Sub
+

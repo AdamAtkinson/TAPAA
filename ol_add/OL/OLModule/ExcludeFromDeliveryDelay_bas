@@ -1,0 +1,14 @@
+Attribute VB_Name = "ExcludeFromDeliveryDelay"
+Option Explicit
+
+Sub AssignCategoryToRemoveDelayedSend()
+    If Not Application.ActiveInspector Is Nothing Then
+        If TypeOf Application.ActiveInspector.CurrentItem Is Outlook.MailItem Then
+            If Not Application.ActiveInspector.CurrentItem.Sent Then
+                Application.ActiveInspector.CurrentItem.Categories = "Do Not Delay"
+            End If
+        End If
+    End If
+End Sub
+
+

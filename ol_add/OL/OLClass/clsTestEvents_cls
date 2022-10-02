@@ -1,0 +1,234 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "clsTestEvents"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Explicit
+
+Private WithEvents mOlApp As Outlook.Application
+Attribute mOlApp.VB_VarHelpID = -1
+Private WithEvents mXlApp As Excel.Application
+Attribute mXlApp.VB_VarHelpID = -1
+Private WithEvents mOlExplorer As Outlook.Explorer
+Attribute mOlExplorer.VB_VarHelpID = -1
+Private WithEvents mOlMailItem As Outlook.MailItem
+Attribute mOlMailItem.VB_VarHelpID = -1
+Private WithEvents mOlDeletedItems As Outlook.Items
+Attribute mOlDeletedItems.VB_VarHelpID = -1
+Private WithEvents mOlCurrentItems As Outlook.Items
+Attribute mOlCurrentItems.VB_VarHelpID = -1
+Private WithEvents mOlCurrentMailItem As Outlook.MailItem
+Attribute mOlCurrentMailItem.VB_VarHelpID = -1
+
+Private mOlRemovedItemEntryID As String
+Private mOlNameSpace As Outlook.NameSpace
+Private mOlRecipient As Outlook.Recipient
+Private mOlCurrentFolder As Outlook.MAPIFolder
+Private mOlDeletedFolder As Outlook.MAPIFolder
+Private mOlMailFormat As OlBodyFormat
+Private mEntryID As String
+
+Private mIgnoreEvents As Boolean
+                                                                            '
+'                                                                           |
+'  CLASS INITIALIZATION AND TERMINATION EVENTS                              |
+'                                                                           |
+                                                                            '
+Private Sub Class_Initialize()
+    mOlMailFormat = olFormatHTML
+    Set mOlApp = Outlook.Application
+    Set mOlExplorer = mOlApp.ActiveExplorer
+    
+    Set mOlNameSpace = mOlApp.GetNamespace("MAPI")
+    Set mOlRecipient = mOlNameSpace.CreateRecipient("Adam Atkinson")
+    mOlRecipient.Resolve
+    If mOlRecipient.Resolved Then
+        Set mOlDeletedFolder = mOlNameSpace.GetDefaultFolder(olFolderDeletedItems)
+        Set mOlDeletedItems = mOlDeletedFolder.Items
+        dbP "class initialized with deleted items"
+    End If
+End Sub
+
+                                                                            '
+'                                                                           |
+'  EXCEL PUBLIC PROPERTIES                                                  |
+'                                                                           |
+                                                                            '
+Public Property Set excelApp(p_App As Excel.Application)
+    Set mXlApp = p_App
+End Property
+                                                                            '
+'                                                                           |
+'  OUTLOOK PUBLIC SETTERS                                                  |
+'                                                                           |
+                                                                            '
+Public Property Set OutlookApp(p_App As Outlook.Application)
+    Set mOlApp = p_App
+End Property
+
+Public Property Set OutlookExplorer(p_Explorer As Outlook.Explorer)
+    Set mOlExplorer = p_Explorer
+End Property
+
+Public Property Set outlookMailItem(p_MailItem As Outlook.MailItem)
+    Set mOlMailItem = p_MailItem
+End Property
+                                                                            
+                                                                            '
+'                                                                           |
+'  OUTLOOK PUBLIC GETTERS                                                  |
+'                                                                           |
+                                                                            '
+Public Property Get OutlookApp() As Outlook.Application
+    Set OutlookApp = mOlApp
+End Property
+
+Public Property Get OutlookExplorer() As Outlook.Explorer
+    Set OutlookExplorer = mOlExplorer
+End Property
+
+Public Property Get outlookMailItem() As Outlook.MailItem
+    Set outlookMailItem = mOlMailItem
+End Property
+                                                                            '
+'                                                                           |
+'  EXCEL APPLICATION EVENTS                                                 |
+'                                                                           |
+                                                                            '
+
+
+
+
+
+
+
+
+
+
+Private Sub mOlCurrentItems_ItemRemove()
+mOlRemovedItemEntryID = mOlCurrentMailItem.EntryID
+dbP "item remove", mOlRemovedItemEntryID
+End Sub
+
+Private Sub mOlCurrentMailItem_CustomAction(ByVal Action As Object, ByVal Response As Object, Cancel As Boolean)
+
+End Sub
+
+Private Sub mOlCurrentMailItem_CustomPropertyChange(ByVal Name As String)
+
+End Sub
+
+Private Sub mOlCurrentMailItem_Open(Cancel As Boolean)
+
+End Sub
+
+Private Sub mOlDeletedItems_ItemAdd(ByVal Item As Object)
+dbP "new item added"
+    If Item.EntryID = mOlRemovedItemEntryID Then
+        dbP "item match"
+    Else
+        dbP "added to delete", Item.EntryID, Item.Subject
+        dbP "from current", mOlCurrentMailItem.EntryID, mOlCurrentMailItem.Subject
+        'dbP "active", mOlApp.ActiveExplorer.Selection(1).EntryID, mOlApp.ActiveExplorer.Selection(1).Subject 'this doen'st work beause selection is empty
+    End If
+End Sub
+
+Private Sub mOlExplorer_BeforeFolderSwitch(ByVal NewFolder As Object, Cancel As Boolean)
+dbP "before explorer folder switch"
+End Sub
+
+Private Sub mOlExplorer_BeforeMove(Cancel As Boolean)
+dbP "before explorer move"
+End Sub
+
+Private Sub mOlMailItem_BeforeDelete(ByVal Item As Object, Cancel As Boolean)
+dbP "before mailitem delete"
+End Sub
+
+
+
+                                                                            '
+'                                                                           |
+'  OUTLOOK APPLICATION EVENTS                                               |
+'                                                                           |
+                                                                            '
+
+                                                                            '
+'                                                                           |
+'  OUTLOOK MAIL ITEM EVENTS                                                 |
+'                                                                           |
+                                                                            '
+
+
+
+Private Sub mOlMailItem_Forward(ByVal Forward As Object, Cancel As Boolean)
+    Dim fwdMessage As MailItem
+    Set fwdMessage = mOlMailItem.Reply
+    
+    If mIgnoreEvents Or mOlMailItem.BodyFormat = mOlMailFormat Then Exit Sub
+
+    Dim pathToSignatureFile As String
+    Dim pathToReferenceFile As String
+    Dim signatureToAdd As String
+    Dim signatureToReplace As String
+    Dim messageBody As String
+
+    If mOlMailItem.SenderEmailAddress = "ALICA22@thementornetwork.com" Then
+    pathToReferenceFile = "C:\Users\e-aatkinson\AppData\Local\VBA\Outlook\ReplaceSignature.txt"
+    pathToSignatureFile = Environ("APPDATA") & "\Microsoft\Signatures\Basic Reply.htm"
+
+    If CBool(Len(Dir(pathToSignatureFile))) Then signatureToAdd = ReadFile(pathToSignatureFile)
+    If CBool(Len(Dir(pathToReferenceFile))) Then signatureToReplace = ReadFile(pathToReferenceFile)
+
+    messageBody = Replace(fwdMessage.Body, signatureToReplace, vbNullString)
+    fwdMessage.HTMLBody = signatureToAdd & messageBody
+
+    dbP fwdMessage.Body
+    dbP fwdMessage.HTMLBody
+
+    Cancel = True
+
+    mIgnoreEvents = True
+'
+    fwdMessage.BodyFormat = mOlMailFormat
+    fwdMessage.Display
+'
+'    mIgnoreEvents = False
+
+
+End Sub
+
+                                                                            '
+'                                                                           |
+'  OUTLOOK EXPLORER EVENTS                                                  |
+'                                                                           |
+                                                                            '
+
+Private Sub mOlExplorer_SelectionChange()
+    Static echoTest As clsSelectionEcho
+    If echoTest Is Nothing Then Set echoTest = New clsSelectionEcho
+    Dim itemCount As Long
+    itemCount = mOlExplorer.Selection.Count
+    If itemCount = 1 Then
+        If TypeOf mOlExplorer.Selection.Item(1) Is Outlook.MailItem Then
+            Set mOlMailItem = mOlExplorer.Selection(1)
+            Dim mailItemEntryID As String
+            mailItemEntryID = mOlMailItem.EntryID
+            If echoTest.IsSelectionChangeEcho(mailItemEntryID) Then Exit Sub
+        Else: Exit Sub
+        End If
+    Else: Exit Sub
+    End If
+    Set mOlCurrentFolder = mOlExplorer.CurrentFolder
+    Set mOlCurrentItems = mOlCurrentFolder.Items
+    If Not mOlMailItem Is Nothing Then Set mOlCurrentMailItem = mOlMailItem
+    dbP "selection change"
+End Sub
+
+Private Sub mOlMailItem_PropertyChange(ByVal Name As String)
+    dbP "mailitem property change", Name
+End Sub

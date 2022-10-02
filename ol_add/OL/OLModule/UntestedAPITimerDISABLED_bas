@@ -1,0 +1,64 @@
+Attribute VB_Name = "UntestedAPITimerDISABLED"
+'Option Explicit
+'
+'Private Declare Function SetTimer Lib "user32.dll" (ByVal hwnd As Long, _
+'  ByVal nIDEvent As Long, ByVal uElapse As Long, _
+'  ByVal lpTimerFunc As Long) As Long
+'
+'Private Declare Function KillTimer Lib "user32.dll" (ByVal hwnd As Long, _
+'  ByVal nIDEvent As Long) As Long
+'
+'Const WM_TIMER = &H113
+'
+'Private hEvent As Long
+'Private m_Callback As ThisOutlookSession
+'
+'Public Sub TimerProc(ByVal hwnd As Long, ByVal uMsg As Long, _
+'  ByVal wParam As Long, ByVal lParam As Long _
+')
+'  If uMsg = WM_TIMER Then
+'    m_Callback.TimerEvent
+'  End If
+'End Sub
+'
+'Public Function EnableTimer(ByVal Interval As Long, Callback As ThisOutlookSession) As Boolean
+'  If hEvent <> 0 Then
+'    Exit Function
+'  End If
+'  hEvent = SetTimer(0&, 0&, Interval, AddressOf TimerProc)
+'  Set m_Callback = Callback
+'  EnableTimer = CBool(hEvent)
+'End Function
+'
+'Public Function DisableTimer()
+'  If hEvent = 0 Then
+'    Exit Function
+'  End If
+'  KillTimer 0&, hEvent
+'  hEvent = 0
+'End Function
+'
+'
+'
+'
+'
+'
+''Sample Call
+''The folowing is a sample for how to start the timer when Outlook starts. The interval is set to 60,000 ms, that is the TimerEvent procedure will be called after 60 seconds. In that event procedure you can disable the timer if you just need that one call. Or keep the timer running if you need regular calls every 60 seconds.
+''
+''In any case, before Outlook terminates at the latest you must disable the timer else Outlook would crash. Calling DisableTimer from within Application_Quit as shown is sufficient.
+'''===================================================================================================
+'Private Sub Application_Startup()
+'  EnableTimer 60000, Me
+'End Sub
+'
+'Public Sub TimerEvent()
+'  'disable if you don't need more signals
+'  DisableTimer
+'End Sub
+'
+'Private Sub Application_Quit()
+'  DisableTimer
+'End Sub
+''===================================================================================================
+'

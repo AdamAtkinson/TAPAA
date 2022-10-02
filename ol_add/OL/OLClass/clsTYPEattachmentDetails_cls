@@ -1,0 +1,115 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "clsTYPEattachmentDetails"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = True
+Option Explicit
+
+Private mMailItem As Outlook.MailItem
+Private mAttachment As Outlook.Attachment
+Private mInbox As Outlook.MAPIFolder
+Private mAttachmentIndex As Long
+Private mAttachedFileName As String
+Private mAttachedFilePath As String
+Private mAttachmentWasSaved As Boolean
+Private mAttachmentCount As Long
+Private mDate As String
+Private mSender As String
+Private mSubject As String
+Private mMailItemWasMoved As Boolean
+Private mSavedCount As Long
+Private mUnsavedCount As Long
+
+'PUBLIC SETTERS AND LETTERS
+Public Property Set eMail(p_MailItem As Outlook.MailItem)
+    Set mMailItem = p_MailItem
+End Property
+Public Property Set AttachedFile(p_Attachment As Outlook.Attachment)
+    Set mAttachment = p_Attachment
+End Property
+Public Property Set eMailInBox(p_InBox As Outlook.MAPIFolder)
+    Set mInbox = p_InBox
+End Property
+Public Property Let AttachedFileIndex(p_Index As Long)
+    mAttachmentIndex = p_Index
+    Set mAttachment = mMailItem.Attachments.Item(mAttachmentIndex)
+End Property
+Public Property Let AttachedFileName(p_FileName As String)
+    mAttachedFileName = p_FileName
+End Property
+Public Property Let AttachedFilePath(p_FilePath As String)
+    mAttachedFilePath = p_FilePath
+End Property
+Public Property Let AttachedFileWasSaved(p_WasSaved As Boolean)
+    mAttachmentWasSaved = p_WasSaved
+End Property
+Public Property Let AttachmentCount(p_Count As Long)
+    mAttachmentCount = p_Count
+End Property
+Public Property Let eMailDate(p_Date As String)
+    mDate = p_Date
+End Property
+Public Property Let eMailSender(p_Sender As String)
+    mSender = p_Sender
+End Property
+Public Property Let eMailSubject(p_Subject As String)
+    mSubject = p_Subject
+End Property
+Public Property Let eMailWasMoved(p_WasMoved As Boolean)
+    mMailItemWasMoved = p_WasMoved
+End Property
+Public Property Let SavedCount(p_Count As Long)
+    mSavedCount = p_Count
+End Property
+Public Property Let UnsavedCount(p_Count As Long)
+    mUnsavedCount = p_Count
+End Property
+
+'PUBLIC GETTERS
+Public Property Get eMail() As Outlook.MailItem
+    Set eMail = mMailItem
+End Property
+Public Property Get AttachedFile() As Outlook.Attachment
+    Set AttachedFile = mAttachment
+End Property
+Public Property Get eMailInBox() As Outlook.MAPIFolder
+    Set eMailInBox = mInbox
+End Property
+Public Property Get AttachedFileIndex() As Long
+    AttachedFileIndex = mAttachmentIndex
+End Property
+Public Property Get AttachedFileName() As String
+    AttachedFileName = mAttachedFileName
+End Property
+Public Property Get AttachedFilePath() As String
+    AttachedFilePath = mAttachedFilePath
+End Property
+Public Property Get AttachedFileWasSaved() As Boolean
+    AttachedFileWasSaved = mAttachmentWasSaved
+End Property
+Public Property Get AttachmentCount() As Long
+    AttachmentCount = mAttachmentCount
+End Property
+Public Property Get eMailDate() As String
+    eMailDate = mDate
+End Property
+Public Property Get eMailSender() As String
+    eMailSender = mSender
+End Property
+Public Property Get eMailSubject() As String
+    eMailSubject = mSubject
+End Property
+Public Property Get eMailWasMoved() As Boolean
+    eMailWasMoved = mMailItemWasMoved
+End Property
+Public Property Get SavedCount() As Long
+    SavedCount = mSavedCount
+End Property
+Public Property Get UnsavedCount() As Long
+    UnsavedCount = mUnsavedCount
+End Property
+

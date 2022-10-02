@@ -1,0 +1,55 @@
+Attribute VB_Name = "myOpenNewOutlookWindowsForAP"
+Option Explicit
+
+
+Sub OpenNewAPInboxWindow()
+    Dim oOutlookApplication As Outlook.Application
+    Dim oMailboxFolder As Outlook.MAPIFolder
+    Dim oNameSpace As Outlook.NameSpace
+    Dim oRecipient As Outlook.Recipient
+
+    Set oOutlookApplication = CreateObject("Outlook.Application")
+    Set oNameSpace = oOutlookApplication.GetNamespace("MAPI")
+    Set oRecipient = oNameSpace.CreateRecipient(RECIPIENT_AP)
+    
+    oRecipient.Resolve
+    Select Case oRecipient.Resolved
+        Case Is = True
+            Set oMailboxFolder = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+            If oMailboxFolder Is Nothing Then
+                MsgBox "Could Not Find Email Folder"
+            Else
+                oMailboxFolder.Display
+            End If
+        Case Is = False
+            MsgBox "Error: Unable To Resolve AP Inbox"
+    End Select
+    
+End Sub
+
+Sub OpenNewAPPrintedInvoiceWindow()
+    Dim oOutlookApplication As Outlook.Application
+    Dim oMailboxFolder As Outlook.MAPIFolder
+    Dim oNameSpace As Outlook.NameSpace
+    Dim oRecipient As Outlook.Recipient
+
+    Set oOutlookApplication = CreateObject("Outlook.Application")
+    Set oNameSpace = oOutlookApplication.GetNamespace("MAPI")
+    Set oRecipient = oNameSpace.CreateRecipient(RECIPIENT_AP)
+    
+    oRecipient.Resolve
+    Select Case oRecipient.Resolved
+        Case Is = True
+            Set oMailboxFolder = oNameSpace.Folders(RECIPIENT_AP) _
+                    .Folders(FOLDERSTUB_MANAGEDFOLDERS).Folders(FOLDERSTUB_2YEAR).Folders("Printed Invoices")
+            If oMailboxFolder Is Nothing Then
+                MsgBox "Could Not Find Email Folder"
+            Else
+                oMailboxFolder.Display
+            End If
+        Case Is = False
+            MsgBox "Error: Unable To Resolve AP Inbox"
+    End Select
+    
+End Sub
+

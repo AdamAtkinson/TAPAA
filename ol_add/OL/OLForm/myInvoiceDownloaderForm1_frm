@@ -1,0 +1,420 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} myInvoiceDownloaderForm1 
+   Caption         =   "Attachment Downloader"
+   ClientHeight    =   4035
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   8880
+   OleObjectBlob   =   "myInvoiceDownloaderForm1_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "myInvoiceDownloaderForm1"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Option Explicit
+
+Private WithEvents mActiveExplorer As Outlook.Explorer
+Attribute mActiveExplorer.VB_VarHelpID = -1
+
+Private Declare Function ShowWindow Lib "user32" (ByVal hWnd As Long, ByVal nCmdShow As Long) As Long
+Private Declare Function IsIconic Lib "user32.dll" (ByVal hWnd As Long) As Long
+
+
+
+'##########################################################################################################\
+'                                                                                                          |
+'   Modify these constants to maintain and select between two download paths                               |
+'                                                                                                          |
+'---------------------------------------------------------------------------------------------------.      |
+Private Const mACTIVE_USER As String = "Adam"                                                       '      |
+'---------------------------------------------------------------------------------------------------'      |
+Private Const mUSER_1 As String = "Adam"                                                            '      |
+Private Const mUSER_1_Path As String = "C:\Users\e-aatkinson\iServe\Active Queue\_MAIL PROCESSING\" '      |
+'---------------------------------------------------------------------------------------------------'      |
+Private Const mUSER_2 As String = "Dom"                                                             '      |
+Private Const mUSER_2_Path As String = "S:\ACCOUNTING 1\Accounts Payable\VBA\"                      '      |
+'---------------------------------------------------------------------------------------------------'      |
+'__________________________________________________________________________________________________________|
+'##########################################################################################################/
+
+Private Const mWIDTH As Long = 269
+Private Const mEXTENDEDWIDTH As Long = 462
+Private Const mHEIGHT As Long = 112
+Private Const mEXTENDEDHEIGHT As Long = 160
+Private Const mDBLLN As String = vbCr & vbCr
+Private Const mPDF_EXT As String = ".PDF"
+Private Const mPNG_EXT As String = ".PNG"
+Private Const mXLS_EXT As String = ".XLS"
+Private Const mXLSX_EXT As String = ".XLSX"
+Private Const mDOCX_EXT As String = ".DOCX"
+Private Const mJPG_EXT As String = ".JPG"
+Private Const mJPEG_EXT As String = ".JPEG"
+Private Const mGIF_EXT As String = ".GIF"
+Private Const mDOC_EXT As String = ".DOC"
+Private Const mOTHER_EXT As String = "OTHER"
+Private Const SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+
+Private mDownloadFolder As String
+Private mSelectedTypes As String
+Private mMoveToFolder As Outlook.MAPIFolder
+Private mCancelEvents As Boolean
+Private mComplete As Boolean
+Private mCallerFinished As Boolean
+
+
+
+
+
+
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       with events mActiveExplorer                                                                         |
+'.......................................................................................................... |
+                                                                                                            '
+Private Sub mActiveExplorer_SelectionChange()
+    If mActiveExplorer.Selection.Count > 0 Then
+    If TypeOf mActiveExplorer.Selection.Item(1) Is Outlook.MailItem Then
+        Static echoTest As clsSelectionEcho
+        If echoTest Is Nothing Then Set echoTest = New clsSelectionEcho
+        If echoTest.IsSelectionChangeEcho(mActiveExplorer.Selection.Item(1).EntryID) Then Exit Sub
+        CheckActiveExplorerSelection
+    End If
+    End If
+End Sub
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+
+
+
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       userform initialize and terminate                                                                   |
+'.......................................................................................................... |
+                                                                                                           ''
+Private Sub UserForm_Initialize()                                                                           '
+    Me.Width = mWIDTH
+    Me.Height = mHEIGHT
+    Me.Frame_Panel_Help.Visible = False
+    Me.Frame_Panel_ProgressBar.Visible = False
+    CreateStringOfSelectedTypes
+    Me.Label_SummaryText.Caption = vbNullString
+    Me.Label_ResultFlag.BackColor = 8421504
+    Set mActiveExplorer = Outlook.ActiveExplorer
+    CheckActiveExplorerSelection
+
+    '-------------------------------------------'
+    'TODO USE THE INI CLASS TO HANDLE THIS      '
+    '-------------------------------------------'
+    Select Case mACTIVE_USER                    '
+        Case mUSER_1                            '
+            mDownloadFolder = mUSER_1_Path      '
+        Case mUSER_2                            '
+            mDownloadFolder = mUSER_2_Path      '
+    End Select                                  '
+    '--------------------------------------------
+
+End Sub
+
+Private Sub UserForm_Terminate()
+    myInvoiceDownloader.ClearDownloader
+End Sub
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       properties                                                                                          |
+'.......................................................................................................... |
+                                                                                                           ''
+Public Property Let DownloadFolder(p_DownloadFolder As String)                                              '
+    mDownloadFolder = p_DownloadFolder
+End Property
+
+Public Property Get DownloadFolder() As String
+    DownloadFolder = mDownloadFolder
+End Property
+
+Public Property Set moveToFolder(p_MoveToFolder As Outlook.MAPIFolder)
+    Set mMoveToFolder = p_MoveToFolder
+End Property
+
+Public Property Let CancelEvents(p_CancelEvents As Boolean)
+    mCancelEvents = p_CancelEvents
+End Property
+Public Property Let CallerFinished(p_CallerFinished As Boolean)
+    mCallerFinished = p_CallerFinished
+End Property
+Public Property Get CallerFinished() As Boolean
+    CallerFinished = mCallerFinished
+End Property
+Public Property Get Complete() As Boolean
+    Complete = mComplete
+End Property
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       command button click                                                                                |
+'.......................................................................................................... |
+                                                                                                           ''
+Private Sub CommandButton_ChangeMoveToFolder_Click()                                                        '
+    Set mMoveToFolder = SelectFolderMAPI
+End Sub
+
+Private Sub CommandButton_OpenDownloadFolder_Click()
+    myInvoiceDownloader.OpenDownloadFolder mDownloadFolder
+End Sub
+
+Private Sub CommandButton_Options_Click()
+    If Me.Width = mEXTENDEDWIDTH Then
+        Me.Width = mWIDTH
+        Me.Height = mHEIGHT
+        Me.Frame_Panel_Help.Visible = False
+    Else
+        Me.Width = mEXTENDEDWIDTH
+        Me.Height = mEXTENDEDHEIGHT
+        Me.Frame_Panel_Help.Visible = True
+    End If
+End Sub
+
+Private Sub CommandButton_StartDownload_Click()
+    Me.Label_ResultFlag.BackColor = 8421504
+    mCallerFinished = False
+    myInvoiceDownloader.SaveAttachmentsFromSelection
+End Sub
+
+Private Sub CommandButton_ViewDetails_Click()
+    ShowAttachmentDetails
+End Sub
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       checkbox change events                                                                              |
+'.......................................................................................................... |
+                                                                                                           ''
+Private Sub CheckBox_DOC_Change()                                                                           '
+    CreateStringOfSelectedTypes
+End Sub
+Private Sub CheckBox_GIF_Change()
+    CreateStringOfSelectedTypes
+End Sub
+Private Sub CheckBox_JPG_Change()
+    CreateStringOfSelectedTypes
+End Sub
+Private Sub CheckBox_OTHER_Change()
+    CreateStringOfSelectedTypes
+End Sub
+Private Sub CheckBox_PDF_Change()
+    CreateStringOfSelectedTypes
+End Sub
+Private Sub CheckBox_PNG_Change()
+    CreateStringOfSelectedTypes
+End Sub
+
+Private Sub CheckBox_XLS_Change()
+    CreateStringOfSelectedTypes
+End Sub
+
+Private Sub CheckBox_AP_Change()
+    If CheckBox_AP And CheckBox_iServeQueue And Not mCancelEvents Then CheckBox_iServeQueue = Not CheckBox_iServeQueue
+End Sub
+
+Private Sub CheckBox_iServeQueue_Change()
+    If CheckBox_AP And CheckBox_iServeQueue And Not mCancelEvents Then CheckBox_AP = Not CheckBox_AP
+End Sub
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+
+Private Sub OptionButton_MoveEmailNo_Change()
+    ChangeAccount
+End Sub
+Private Sub OptionButton_MoveEmailYes_Change()
+    ChangeAccount
+End Sub
+Private Sub ChangeAccount()
+    If Not mCancelEvents Then
+        mCancelEvents = True
+        If OptionButton_UseDefaultAccount Then
+            Label_SelectedAccount.Caption = Application.GetNamespace("MAPI").GetDefaultFolder(olFolderInbox).Parent
+        Else
+        
+        End If
+        mCancelEvents = False
+    End If
+End Sub
+
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       private methods                                                                                     |
+'.......................................................................................................... |
+                                                                                                           ''
+Private Sub ShowAttachmentDetails()                                                                         '
+    Dim attachmentDetailsForm As New myInvoiceDownloaderForm2
+    Set attachmentDetailsForm.moveToFolder = mMoveToFolder
+    attachmentDetailsForm.Show
+End Sub
+'
+
+Private Sub CheckActiveExplorerSelection()
+    Dim pluralNoun As String
+    Dim oSelectedItem As Object
+    Dim oAttachment As Outlook.Attachment
+    Dim attachmentFound As Boolean
+    Dim docExt As String
+    For Each oSelectedItem In mActiveExplorer.Selection
+        If TypeOf oSelectedItem Is Outlook.MailItem Then
+            If oSelectedItem.Attachments.Count > 0 Then
+                For Each oAttachment In oSelectedItem.Attachments
+                    docExt = UCase(Right(oAttachment.FileName, Len(oAttachment.FileName) - InStrRev(oAttachment.FileName, ".") + 1))
+                    Select Case True
+                        Case Me.CheckBox_DOC And (docExt Like mDOC_EXT Or docExt Like mDOCX_EXT)
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_GIF And docExt Like mGIF_EXT
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_JPG And (docExt Like mJPG_EXT Or docExt Like mJPEG_EXT)
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_PDF And docExt Like mPDF_EXT
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_PNG And docExt Like mPNG_EXT
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_XLS And (docExt Like mXLS_EXT Or docExt Like mXLSX_EXT)
+                            attachmentFound = True
+                            Exit For
+                        Case Me.CheckBox_OTHER _
+                                            And Not (docExt Like mXLS_EXT Or docExt Like mPNG_EXT Or docExt Like mPDF_EXT Or docExt Like mJPG_EXT _
+                                            Or docExt Like mJPEG_EXT Or docExt Like mGIF_EXT Or docExt Like mDOC_EXT Or docExt Like mXLSX_EXT _
+                                            Or docExt Like mDOCX_EXT)
+                            attachmentFound = True
+                            Exit For
+                    End Select
+                Next oAttachment
+                If attachmentFound Then
+                    Me.CommandButton_StartDownload.BackColor = 32768
+                Else
+                     Me.CommandButton_StartDownload.BackColor = 128
+                End If
+            Else
+                Me.CommandButton_StartDownload.BackColor = 128
+            End If
+        End If
+        If attachmentFound Then Exit For
+    Next oSelectedItem
+'    Me.Label_Notice.Caption = "Download destination:" & mDBLLN & mDownloadFolder
+End Sub
+'
+
+Private Sub CreateStringOfSelectedTypes()
+    Dim strVal As String
+    Dim aryString() As String
+    Dim useComma As String
+    Dim i As Long
+    With Me
+        If .CheckBox_DOC Then strVal = strVal & UCase(mDOC_EXT) & UCase(mDOCX_EXT)
+        If .CheckBox_GIF Then strVal = strVal & UCase(mGIF_EXT)
+        If .CheckBox_JPG Then strVal = strVal & UCase(mJPG_EXT) & UCase(mJPEG_EXT)
+        If .CheckBox_PDF Then strVal = strVal & UCase(mPDF_EXT)
+        If .CheckBox_PNG Then strVal = strVal & UCase(mPNG_EXT)
+        If .CheckBox_XLS Then strVal = strVal & UCase(mXLS_EXT) & UCase(mXLSX_EXT)
+        If .CheckBox_OTHER Then strVal = strVal & "." & UCase(mOTHER_EXT)
+    End With
+    aryString = Split(strVal, ".")
+    strVal = vbNullString
+    If UBound(aryString) > LBound(aryString) + 2 Then useComma = ", "
+    For i = LBound(aryString) + 1 To UBound(aryString)
+        strVal = strVal & aryString(i)
+        If i <> UBound(aryString) Then strVal = strVal & " / "
+    Next i
+    mSelectedTypes = strVal
+    Me.Caption = mSelectedTypes
+End Sub
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````
+
+
+'____________________________________________________________________________________________________________
+'```````````````````````````````````````````````````````````````````````````````````````````````````````````|
+'       public methods                                                                                      |
+'.......................................................................................................... |
+                                                                                                           '|
+                                                                                                            '
+
+
+Public Sub StartAttachmentIndicator(ByVal emailsProcessed As Long, ByVal selectedEmailsCount As Long)
+'    Me.Height = mEXTENDEDHEIGHT
+    Me.Frame_Panel_ProgressBar.Visible = True
+    mComplete = False
+    UpdateAttachmentIndicator emailsProcessed, selectedEmailsCount
+End Sub
+'
+
+Public Sub UpdateAttachmentIndicator(ByVal emailsProcessed As Long, ByVal selectedEmailsCount As Long, Optional movedEmailCount As Long, _
+                                Optional savedAttachmentsCount As Long, Optional skippedAttachmentsCount As Long, Optional lngTotalCount As Long)
+    Dim intPercentComplete As Integer
+    Dim pluralNoun As String
+    Dim gap As String
+    gap = Space(5)
+    Dim moveToFolderName As String
+    If Not mMoveToFolder Is Nothing Then
+        moveToFolderName = mMoveToFolder.Name
+    Else
+        moveToFolderName = "Not Moved"
+    End If
+    If selectedEmailsCount > 1 Then pluralNoun = "S"
+    intPercentComplete = Int(emailsProcessed / selectedEmailsCount * 100)
+    Me.Label_SummaryText.Caption = selectedEmailsCount & "  EMAIL" & pluralNoun & " SELECTED  /  " & emailsProcessed & "  PROCESSED" & _
+                                    vbNewLine & gap & movedEmailCount & "  MOVED TO:  " & moveToFolderName
+    pluralNoun = vbNullString
+    If lngTotalCount > 1 Then pluralNoun = "S"
+    Me.Label_SummaryText.Caption = Me.Label_SummaryText.Caption & mDBLLN & _
+                                    lngTotalCount & "  ATTACHMENT" & pluralNoun & " FOUND /  " & savedAttachmentsCount & "  SAVED" & _
+                                    vbNewLine & gap & skippedAttachmentsCount & "  SKIPPED"
+    Me.Label_ProgressBar.Width = CInt(intPercentComplete)
+    Me.Label_ProgessPercent.Caption = CInt(intPercentComplete) & " %"
+    If skippedAttachmentsCount > 0 Or movedEmailCount = 0 Or savedAttachmentsCount = 0 Or lngTotalCount = 0 Or emailsProcessed = 0 Or selectedEmailsCount = 0 Then
+        Me.Label_ResultFlag.BackColor = vbRed '8421631
+    Else
+        Me.Label_ResultFlag.BackColor = 32768 ' 8421504
+    End If
+    If intPercentComplete = 100 Then
+        mComplete = True
+        Me.Label_ProgessPercent.Caption = "Job Finished"
+    End If
+End Sub
+'
+
+
+                                                                                                            '
+'___________________________________________________________________________________________________________|
+'````````````````````````````````````````````````````````````````````````````````````````````````````````````

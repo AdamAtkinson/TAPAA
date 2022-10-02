@@ -1,0 +1,116 @@
+Attribute VB_Name = "myWorkingProceduresDISABLED"
+'
+'Option Explicit
+'
+'
+'Private Const myEnvironment As String = "LOCALAPPDATA"
+'Private Const myFolder As String = "\VBA\"
+'Private Const myShortFileName As String = ""
+'Private Const mySubjectTitle As String = "REMINDER - AP Batch Approval"
+'Private Const myRecipients As String = ""
+'Private Const myCarbonCopy As String = "Finance Team (Irvine)"
+'Private Const myBlindCopy As String = "Approvers"
+''
+'
+'Private Sub SendReminderEmail()
+''automatically sends an email based on a scheduled task
+'
+''the email will be sent when the reminder pops
+''if a reminder was not set then the email will not be sent
+'
+'    Dim objMailMessage As MailItem
+'    Dim iFile As Integer
+'    Dim strvar As String
+'    Dim LongFileName As String
+'
+'
+'    LongFileName = Environ(myEnvironment) + myFolder + myShortFileName
+'
+'    iFile = FreeFile
+'    Open LongFileName For Input As #iFile
+'    strvar = Input(LOF(iFile), iFile)
+'    Close #iFile
+'          Set objMailMessage = Outlook.Application.CreateItem(olMailItem)
+'          'email data
+'          With objMailMessage
+'               .Subject = mySubjectTitle
+'               .To = myRecipients
+'               .CC = myCarbonCopy
+'               .BCC = myBlindCopy
+'               .HTMLBody = strvar
+''
+''               .Attachments.Add ("C:\Attachments\Excel.xlsx")
+''               .Importance = olImportanceHigh
+''               .ReadReceiptRequested = True
+'
+'                .Display
+''               .Send
+'
+'          End With
+'
+'End Sub
+'
+
+'
+''Call WaitForPrintingToFinish() from outside
+'
+'
+'Option Explicit
+'
+''' Win32 API declarations
+'Private Declare Function OpenPrinter Lib "winspool.drv" Alias "OpenPrinterA" ( _
+'                            ByVal pPrinterName As String, _
+'                            phPrinter As Long, _
+'                            pDefault As Any) As Long
+'
+'Private Declare Function ClosePrinter Lib "winspool.drv" ( _
+'                            ByVal hPrinter As Long) As Long
+'
+'Private Declare Function EnumJobs Lib "winspool.drv" Alias "EnumJobsA" ( _
+'                            ByVal hPrinter As Long, _
+'                            ByVal FirstJob As Long, _
+'                            ByVal NoJobs As Long, _
+'                            ByVal Level As Long, _
+'                            pJob As Any, _
+'                            ByVal cdBuf As Long, _
+'                            pcbNeeded As Long, _
+'                            pcReturned As Long) As Long
+'
+'Public Sub WaitForPrintingToFinish()
+'Dim myCount As Long
+'    Do
+'    myCount = CountPrintJobs
+'    Loop Until myCount = 0
+'End Sub
+'
+'Public Function CountPrintJobs() As Long
+'    Dim hPrinter As Long
+'    Dim lNeeded As Long
+'    Dim lReturned As Long
+'    Dim lJobCount As Long
+'    Dim oleWordApp As Word.Application
+'
+'    Set oleWordApp = CreateObject("Word.Application")
+'
+'    OpenPrinter oleWordApp.ActivePrinter, hPrinter, Nothing
+'    'OpenPrinter Left(oleWordApp.ActivePrinter, InStr(oleWordApp.ActivePrinter, " o") - 1), hPrinter, ByVal 0&
+'    EnumJobs hPrinter, 0, 99, 1, ByVal 0&, 0, lNeeded, lReturned
+'
+'    If lNeeded > 0 Then
+'        ReDim byteJobsBuffer(lNeeded - 1) As Byte
+'        EnumJobs hPrinter, 0, 99, 1, byteJobsBuffer(0), lNeeded, lNeeded, lReturned
+'        If lReturned > 0 Then
+'            lJobCount = lReturned
+'        Else
+'            lJobCount = 0
+'        End If
+'    Else
+'        lJobCount = 0
+'    End If
+'
+'    ClosePrinter hPrinter
+'    CountPrintJobs = lJobCount
+'
+'End Function
+
+

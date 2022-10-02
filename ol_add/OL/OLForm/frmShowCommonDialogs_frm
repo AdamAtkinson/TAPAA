@@ -1,0 +1,123 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmShowCommonDialogs 
+   Caption         =   " Dialog Windows"
+   ClientHeight    =   4095
+   ClientLeft      =   45
+   ClientTop       =   390
+   ClientWidth     =   1995
+   OleObjectBlob   =   "frmShowCommonDialogs_frm.frx":0000
+   ShowModal       =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "frmShowCommonDialogs"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+
+
+
+
+Option Explicit
+
+
+
+Private Declare Function apiGetDesktopWindow Lib "user32" Alias _
+                "GetDesktopWindow" () As Long
+
+
+
+Private Sub CommandButton1_Click()
+Dim sOpen As SelectedFile
+Dim Count As Integer
+Dim FileList As String
+
+    On Error GoTo e_Trap
+    
+    FileDialog.sFilter = "Text Files (*.txt)" & Chr$(0) & "*.sky" & Chr$(0) & "All Files (*.*)" & Chr$(0) & "*.*"
+    
+    ' See Standard CommonDialog Flags for all options
+    FileDialog.flags = OFN_EXPLORER Or OFN_LONGNAMES Or OFN_HIDEREADONLY Or OFN_ALLOWMULTISELECT
+    FileDialog.sDlgTitle = "Show Open"
+    FileDialog.sInitDir = Application.Path & "\"
+    sOpen = ShowOpen(desktophwnd)
+    If Err.Number <> 32755 And sOpen.bCanceled = False Then
+        FileList = "Directory : " & sOpen.sLastDirectory & vbCr
+        For Count = 1 To sOpen.nFilesSelected
+            FileList = FileList & sOpen.sFiles(Count) & vbCr
+        Next Count
+        Call MsgBox(FileList, vbOKOnly + vbInformation, "Show Open Selected")
+    End If
+    Exit Sub
+e_Trap:
+    Exit Sub
+    Resume
+
+End Sub
+
+Private Sub CommandButton2_Click()
+Dim sSave As SelectedFile
+Dim Count As Integer
+Dim FileList As String
+
+    On Error GoTo e_Trap
+    
+    FileDialog.sFilter = "Text Files (*.txt)" & Chr$(0) & "*.sky" & Chr$(0) & "All Files (*.*)" & Chr$(0) & "*.*"
+    
+    ' See Standard CommonDialog Flags for all options
+    FileDialog.flags = OFN_HIDEREADONLY
+    FileDialog.sDlgTitle = "Show Save"
+    FileDialog.sInitDir = Application.Path & "\"
+    sSave = ShowSave(desktophwnd)
+    If Err.Number <> 32755 And sSave.bCanceled = False Then
+        FileList = "Directory : " & sSave.sLastDirectory & vbCr
+        For Count = 1 To sSave.nFilesSelected
+            FileList = FileList & sSave.sFiles(Count) & vbCr
+        Next Count
+        Call MsgBox(FileList, vbOKOnly + vbInformation, "Show Save Selected")
+    End If
+    Exit Sub
+e_Trap:
+    Exit Sub
+    Resume
+
+End Sub
+
+Private Sub CommandButton3_Click()
+Dim sFont As SelectedFont
+    On Error GoTo e_Trap
+    FontDialog.iPointSize = 12 * 10
+    sFont = ShowFont(desktophwnd, "Times New Roman")
+    Exit Sub
+e_Trap:
+    Exit Sub
+End Sub
+
+Private Sub CommandButton4_Click()
+    On Error GoTo e_Trap
+    Call ShowPrinter(desktophwnd)
+    Exit Sub
+e_Trap:
+    Exit Sub
+End Sub
+
+Private Sub CommandButton5_Click()
+Dim sColor As SelectedColor
+    On Error GoTo e_Trap
+    sColor = ShowColor(desktophwnd, False)
+    Me.CommandButton5.BackColor = sColor.oSelectedColor
+    Exit Sub
+e_Trap:
+    Exit Sub
+End Sub
+
+Function desktophwnd() As Long
+Dim lnghWnd As Long
+lnghWnd = apiGetDesktopWindow()
+desktophwnd = lnghWnd
+End Function
+
+
+
+

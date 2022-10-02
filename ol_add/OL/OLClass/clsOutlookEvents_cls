@@ -1,0 +1,721 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "clsOutlookEvents"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+
+'The purpose of this app is to monitor the managed folders and automatically mark emails as read when they are moved                '
+'problems were observed when this was launched with 'application.startup' so this was stopped                                       '
+'now on startup, we set an appointment that is a few minutes in the future.  we cleanup and launch the app when the reminder pops   '
+
+
+'                                                                           |
+'  DELCARATIONS                                                             |
+'                                                                           |
+                                                                            '
+Option Explicit
+Private Const mPROMPTAFTERSELECTED As Long = 10
+Private Const mSTARTUPDELAY As Long = 2                             'in minutes                                                                                         '
+Private Const mTIMEDIVOSOR As Long = 1440                           'minutes/1440, hours/24, days/1                                                                     '
+Private Const mMINUTESBEFORESTART As Long = 1                       'reminder must occur before the appointment starts, be sure to account for this with mSTARTUPDELAY  '
+Private Const mCATEGORY_VBATRIGGER As String = "VBA Trigger"        'used to ensure we delete the right appointment                                                     '
+Private Const mTRIGGERTITLE As String = "Delay VBA Execution"       'used to ensure we dismiss the right appointment reminder                                           '
+Private Const mTRIGGERBODYTEXT As String = "Launches VBA program"   'used so the application doesn't hardcode a string                                                  '
+Private Const mFOLDERSTUB_ROOT As String = EMAILADDRESS_ADAM '"Adam.Atkinson@neurorestorative.com"
+Private Const mFOLDERSTUB_DELETED As String = "\Deleted Items"
+Private Const mFOLDERSTUB_MANAGEDFOLDERS As String = "\Managed Folders"
+Private Const mFOLDERSTUB_RESTORED As String = "\Restored"
+Private Const mFOLDERSTUB_2YEAROUT As String = "\2Year\Out"
+Private Const mFOLDERSTUB_2YEARIN As String = "\2Year\In"
+Private Const mFOLDERSTUB_5YEAR As String = "\5Year"
+Private Const mFOLDERSTUB_POLICY As String = "\Company Resources"
+Private Const mFOLDERSTUB_INBOX As String = "\Inbox"
+Private Const mCATEGORY_2YEAR As String = "2Year"
+Private Const mCATEGORY_DELETE As String = "Delete"
+Private Const mCATEGORY_RESTORED As String = "Restored"
+Private Const mCATEGORY_APNEURO As String = "AP Neuro"
+Private Const mCATEGORY_INVOICEAPPROVED As String = "Invoice Approved"
+Private Const mCATEGORY_APSSC As String = "AP SSC"
+Private Const mCATEGORY_POLICY As String = "Policy"
+Private Const mCATEGORY_DEFER As String = "Defer"
+Private Const mCATEGORY_DELEGATE As String = "Delegate"
+Private Const mCATEGORY_INVOICEREJECTED As String = "Invoice Rejected"
+Private Const mCATEGORY_5YEAR As String = "5Year"
+Private Const mCATEGORY_VBADL As String = "VBA DL"
+Private Const mCATEGORY_DO As String = "Do"
+
+Private WithEvents mDelayedEventTrigger As Outlook.AppointmentItem
+Attribute mDelayedEventTrigger.VB_VarHelpID = -1
+
+Private WithEvents mRestoredFolder As Outlook.folder
+Attribute mRestoredFolder.VB_VarHelpID = -1
+Private WithEvents mDeletedFolder As Outlook.folder
+Attribute mDeletedFolder.VB_VarHelpID = -1
+Private WithEvents mDeletedItems As Outlook.Items
+Attribute mDeletedItems.VB_VarHelpID = -1
+Private WithEvents m2YearOutFolder As Outlook.folder
+Attribute m2YearOutFolder.VB_VarHelpID = -1
+Private WithEvents m2YearInFolder As Outlook.folder
+Attribute m2YearInFolder.VB_VarHelpID = -1
+Private WithEvents mPolicyFolder As Outlook.folder
+Attribute mPolicyFolder.VB_VarHelpID = -1
+Private WithEvents m5YearFolder As Outlook.folder
+Attribute m5YearFolder.VB_VarHelpID = -1
+Private WithEvents mInboxFolder As Outlook.folder
+Attribute mInboxFolder.VB_VarHelpID = -1
+Private WithEvents mActiveExplorer As Outlook.Explorer
+Attribute mActiveExplorer.VB_VarHelpID = -1
+Private WithEvents mOutlookApp As Outlook.Application
+Attribute mOutlookApp.VB_VarHelpID = -1
+Private WithEvents mInboxItems As Outlook.Items
+Attribute mInboxItems.VB_VarHelpID = -1
+Private WithEvents m2YearInItems As Outlook.Items
+Attribute m2YearInItems.VB_VarHelpID = -1
+Private WithEvents m2YearOuItems As Outlook.Items
+Attribute m2YearOuItems.VB_VarHelpID = -1
+Private WithEvents mOutlookReminders As Outlook.Reminders
+Attribute mOutlookReminders.VB_VarHelpID = -1
+Private WithEvents mMailItem As Outlook.MailItem
+Attribute mMailItem.VB_VarHelpID = -1
+
+Private mEventsAreActive As Boolean
+Private mCategories As String
+
+                                                                            '
+'                                                                           |
+'  CLASS INITIALIZE AND TERMINATE EVENTS                                    |
+'                                                                           |
+                                                                            '
+Private Sub Class_Initialize()
+
+    dbPL "Initializing the class clsOutlookEvents"
+    
+    Set mOutlookApp = Outlook.Application
+End Sub
+
+Private Sub Class_Terminate()
+    
+    dbPL "Terminating the class clsOutlookEvents"
+    
+    Set mOutlookReminders = Nothing
+    Set m2YearInItems = Nothing
+    Set m2YearOuItems = Nothing
+    Set mActiveExplorer = Nothing
+    Set mInboxItems = Nothing
+    Set mOutlookApp = Nothing
+End Sub
+
+                                                                            '
+'                                                                           |
+'  EVENTS FROM PRIVATE WITHEVENTS DECLARATIONS                              |
+'                                                                           |
+                                                                            '
+Private Sub m2YearOuItems_ItemAdd(ByVal Item As Object)
+    dbPL "m2YearOuItems_ItemAdd"
+    If TypeOf Item Is Outlook.MailItem And Item.UnRead Then
+        Item.UnRead = False
+        dbPL "marked item read", "item = " & Item.Subject
+    End If
+End Sub
+
+Private Sub m2YearInItems_ItemAdd(ByVal Item As Object)
+    dbPL "m2YearInItems_ItemAdd"
+    If TypeOf Item Is Outlook.MailItem And Item.UnRead Then
+        On Error Resume Next
+        Item.UnRead = False
+        On Error GoTo 0
+        dbPL "marked item read", "item = " & Item.Subject
+    End If
+End Sub
+
+Private Sub mActiveExplorer_BeforeFolderSwitch(ByVal NewFolder As Object, Cancel As Boolean)
+     dbPL "mActiveExplorer_BeforeFolderSwitch", "switching to = " & NewFolder.Name
+End Sub
+
+Private Sub mActiveExplorer_BeforeItemCopy(Cancel As Boolean)
+     dbPL "mActiveExplorer_BeforeItemCopy"
+End Sub
+
+Private Sub mActiveExplorer_BeforeItemPaste(ClipboardContent As Variant, ByVal Target As MAPIFolder, Cancel As Boolean)
+     dbPL "mActiveExplorer_BeforeItemPaste"
+End Sub
+
+Private Sub mActiveExplorer_BeforeMove(Cancel As Boolean)
+     dbPL "mActiveExplorer_BeforeMove"
+End Sub
+
+Private Sub mActiveExplorer_BeforeViewSwitch(ByVal NewView As Variant, Cancel As Boolean)
+     dbPL "mActiveExplorer_BeforeViewSwitch", "NewView = " & NewView
+End Sub
+
+Private Sub mActiveExplorer_FolderSwitch()
+     With ActiveExplorer
+        dbPL "mActiveExplorer_FolderSwitch", "folder = " & .CurrentFolder.Name
+        Select Case .CurrentFolder
+            Case "Inbox"
+                .CurrentView = VIEW_AUTOINBOX
+                dbPL "set view = " & .CurrentView
+            Case "Sent Items"
+                .CurrentView = "My Sent"
+                dbPL "set view = " & .CurrentView
+        End Select
+    End With
+End Sub
+
+Private Sub mActiveExplorer_ViewSwitch()
+     dbPL "mActiveExplorer_ViewSwitch", "view  = " & ActiveExplorer.CurrentFolder.CurrentView
+End Sub
+
+
+Private Sub mDeletedFolder_BeforeItemMove(ByVal Item As Object, ByVal MoveTo As MAPIFolder, Cancel As Boolean)
+    dbPL "mDeletedFolder_BeforeItemMove", vbNewLine & Space(10) & "item type = " & TypeName(Item), vbNewLine & Space(10) & "to folder = " & MoveTo.Name
+End Sub
+
+Private Sub mDeletedItems_ItemAdd(ByVal Item As Object)
+    dbPL "mDeletedItems_ItemAdd", " item type = " & TypeName(Item)
+    If TypeOf Item Is Outlook.MailItem Then
+        dbPL "deleted subject = " & Item.Subject
+        If Not Item.UnRead Then
+            Item.UnRead = True
+            dbPL "deleted item changed to UnRead"
+        End If
+    End If
+    '    On Error GoTo HANDLER
+    '    If TypeName(Item) = "MailItem" Then
+    '        Dim mail As Outlook.MailItem
+    '        Set mail = Item
+    '        If Not CBool(InStr(mail.Categories, mCATEGORY_DELETE)) Then
+    '            mail.UnRead = True
+    '            Set mail = mail.Move(mRestoredFolder)
+    '        End If
+    '    End If
+    'HANDLER:
+End Sub
+
+Private Sub mInboxFolder_BeforeFolderMove(ByVal MoveTo As MAPIFolder, Cancel As Boolean)
+     dbPL "mInboxFolder_BeforeFolderMove", "move to folder = " & MoveTo.Name
+End Sub
+
+Private Sub mInboxFolder_BeforeItemMove(ByVal Item As Object, ByVal MoveTo As MAPIFolder, Cancel As Boolean)
+    dbPL "mInboxFolder_BeforeItemMove", vbNewLine & Space(10) & "item type = " & TypeName(Item), vbNewLine & Space(10) & "to folder = " & MoveTo.Name
+    If MoveTo.Name = "Deleted Items" Then
+        If TypeOf Item Is Outlook.MailItem Then
+            dbPL "prompting to delete subject = " & Item.Subject
+            Select Case MsgBox("Delete " & Item.Subject, vbYesNo, "Confirm Delete")
+                Case vbYes
+                    Item.UnRead = True
+                    Cancel = False
+                    dbPL "user returned okay to delete"
+                Case vbNo
+                    Cancel = True
+                     dbPL "user returned do not delete"
+            End Select
+        End If
+    End If
+End Sub
+
+Private Sub mInboxItems_ItemAdd(ByVal Item As Object)
+'
+'    If Not Item Is Nothing Then
+'        If TypeName(Item) = "MailItem" Then
+'            Dim mail As Outlook.MailItem
+'            Set mail = Item
+'            If CBool(InStr(mail.Categories, mCATEGORY_INVOICEREJECTED)) Then
+'                Dim invoice As typeInvoiceDetails
+'                invoice = BuildSearchStringFromRejectedNotification(mail)
+'                Dim apBatchWB As New clsAPbatchWorkbook
+'                With apBatchWB
+'                    .CaseNumber = invoice.CaseNumber
+'                    .InvoiceNumber = invoice.InvoiceNumber
+'                    If .OpenedDate > DateValue("1/1/2019") Then
+'                        Dim targetFolder As String
+'                        targetFolder = "\\ALICA002\Clinical\ACCOUNTING 1\Accounts Payable\Spreadsheets - ALL\2019\NONCA Invoices" & "\" & Format(.OpenedDate, "yymmdd")
+'                        If CBool(Len(Dir(targetFolder, vbDirectory))) Then
+'                            Dim invoiceFilename As String
+'                            invoiceFilename = Dir(invoice.searchString, vbNormal)
+'                            If CBool(Len(invoiceFilename)) Then
+'                                With mail.Forward
+'                                    .Attachments.Add invoiceFilename
+'                                    .To = "adam.atkinson@neurorestorative.com"
+'                                    .Display
+'                                End With
+'                                dbP "should be shown"
+'                            Else
+'                                dbP "did not find the filename"
+'                            End If
+'                        Else
+'                            dbP "did not find the directory"
+'                        End If
+'                    Else
+'                        dbP "opened date was not after 1/1/2019"
+'                    End If
+'                End With
+'            Else
+'                dbP "not a mailitem"
+'            End If
+'        End If
+'    End If
+'
+End Sub
+
+Private Sub mInboxItems_ItemChange(ByVal Item As Object)
+    dbPL "mInboxItems_ItemChange"
+    On Error GoTo HANDLER
+    dbPL "mInboxItems_ItemChange", "item type - " & TypeName(Item)
+    If Not Item Is Nothing Then
+        If TypeName(Item) = "MailItem" Or TypeName(Item) = "MeetingItem" Then
+            dbPL "is Mailitem/MeetingItem validating for move"
+            ValidateAndMoveToFolder Item
+        End If
+    End If
+    Exit Sub
+HANDLER:
+'MsgBox "Error in mInboxItems_ItemChange" & DBLLN & "Error Number " & Err.Number & vbNewLine & Err.Description, vbCritical, "Custom Error Message"
+    dbPL "Error in mInboxItems_ItemChange", Err.Number, Err.Description
+End Sub
+
+Private Sub mMailItem_AfterWrite()
+     dbPL "mMailItem_AfterWrite"
+End Sub
+
+Private Sub mMailItem_BeforeCheckNames(Cancel As Boolean)
+     dbPL "mMailItem_BeforeCheckNames"
+End Sub
+
+Private Sub mMailItem_BeforeDelete(ByVal Item As Object, Cancel As Boolean)
+    dbPL "mMailItem_BeforeDelete", "item type = " & TypeName(Item)
+    dbPL "prompting user for delete authorization"
+    Select Case MsgBox("Delete " & mMailItem.Subject, vbYesNo, "Confirm Delete")
+        Case vbYes
+            Cancel = False
+            dbPL "user returned ok to delete"
+        Case vbNo
+            Cancel = True
+            dbP "user returned do nto delete"
+    End Select
+
+End Sub
+
+Private Sub mMailItem_BeforeRead()
+     dbPL "mMailItem_BeforeRead"
+End Sub
+
+Private Sub mMailItem_Close(Cancel As Boolean)
+     dbPL "mMailItem_Close"
+End Sub
+
+Private Sub mMailItem_CustomAction(ByVal Action As Object, ByVal Response As Object, Cancel As Boolean)
+     dbPL "mMailItem_CustomAction"
+End Sub
+
+Private Sub mMailItem_CustomPropertyChange(ByVal Name As String)
+     dbPL "mMailItem_CustomPropertyChange"
+End Sub
+
+Private Sub mMailItem_Forward(ByVal Forward As Object, Cancel As Boolean)
+    dbPL "mMailItem_Forward", "item type = " & TypeName(Item)
+End Sub
+
+Private Sub mMailItem_Open(Cancel As Boolean)
+    dbPL "mMailItem_Open"
+End Sub
+
+Private Sub mMailItem_PropertyChange(ByVal Name As String)
+    dbPL "mMailItem_PropertyChange", "property name = " & Name
+End Sub
+
+Private Sub mMailItem_Read()
+    dbPL "mMailItem_Read"
+End Sub
+
+Private Sub mMailItem_ReadComplete(Cancel As Boolean)
+    dbPL "mMailItem_ReadComplete"
+End Sub
+
+Private Sub mMailItem_Unload()
+    dbPL "mMailItem_Unload"
+End Sub
+
+Private Sub mMailItem_Write(Cancel As Boolean)
+    dbPL "mMailItem_Write"
+End Sub
+
+Private Sub mOutlookApp_ItemLoad(ByVal Item As Object)
+    dbPL "mOutlookApp_ItemLoad", "item type = " & TypeName(Item)
+    If mEventsAreActive Then
+        Set mActiveExplorer = ActiveExplorer
+        dbPL "set mActiveExplorer = ActiveExplorer", "mEventsAreActive = " & mEventsAreActive
+    End If
+End Sub
+
+Private Sub mOutlookApp_NewMail()
+     dbPL "mOutlookApp_NewMail"
+End Sub
+
+Private Sub mOutlookApp_NewMailEx(ByVal EntryIDCollection As String)
+'    Dim newMessage As Outlook.MailItem
+'    Dim appNameSpace As Outlook.NameSpace
+'    Set appNameSpace = Application.Session
+'    Select Case appNameSpace.GetItemFromID(EntryIDCollection).Class
+'        Case Is = olMail
+'            dbPL "NewMailEx from olApp in GetIncomingMailEntryID is olMail"
+'            Set newMessage = appNameSpace.GetItemFromID(EntryIDCollection)
+'    End Select
+End Sub
+
+
+Private Sub mActiveExplorer_SelectionChange()
+dbPL "mActiveExplorer_SelectionChange"
+Dim dbET As String
+
+On Error GoTo HANDLER
+    With mActiveExplorer
+        Dim selectionCount As Long
+                
+        dbET = "mActiveExplorer.Count"
+        selectionCount = .Selection.Count
+        
+        If selectionCount = 0 Then
+            dbPL "nothing selected, exiting sub"
+            Exit Sub
+        End If
+        
+'        dbET = "mActiveExplorer.CurrentFolder"
+'        If .CurrentFolder <> "Inbox" Then Exit Sub
+        
+        Static echoTest As clsSelectionEcho
+        dbET = "Echo test"
+        dbPL "echo test"
+        If echoTest Is Nothing Then Set echoTest = New clsSelectionEcho
+        If echoTest.IsSelectionChangeEcho(mActiveExplorer.Selection(1).EntryID) Then
+            dbPL "echo test failed - exiting sub"
+            Exit Sub
+        Else
+            dbPL "echo test passed"
+        End If
+        
+        
+        dbPL "mPROMPTAFTERSELECTED =  " & mPROMPTAFTERSELECTED, "selection count = " & selectionCount
+        
+        Dim okToLoop As Boolean
+        If selectionCount > mPROMPTAFTERSELECTED Then
+            dbPL "mPROMPTAFTERSELECTED exceeded, prompt user to proceed"
+            Select Case MsgBox("Selection count is larger than 10, each item may be moved, proceed?", vbYesNo, "Caution")
+                Case vbYes
+                    okToLoop = True
+                    dbPL "user returned ok to proceed"
+                Case vbNo
+                    okToLoop = False
+                    dbPL "user returned do not proceed"
+            End Select
+        End If
+        
+        If selectionCount <= mPROMPTAFTERSELECTED Or okToLoop Then
+            dbPL "proceedeing with selection"
+            With .Selection
+                Dim i As Long
+                For i = 1 To selectionCount
+                    dbPL "selection item # " & i, "is type = " & TypeName(.Item(1))
+                    If TypeName(.Item(i)) = "MailItem" Or TypeName(.Item(i)) = "MeetingItem" Then
+                        dbPL "proceeding to ValidateAndMoveToFolder item # " & i
+                        ValidateAndMoveToFolder .Item(i)
+                        dbPL "returned from ValidateAndMoveToFolder item # " & i
+                    End If
+                Next i
+            End With
+        End If
+
+    End With
+'    Static prevSelection As Selection
+'    If prevSelection Is Nothing Then Set prevSelection = mActiveExplorer.Selection
+'    Dim curItem As Object
+'    If mActiveExplorer.Selection.Count = 1 Then
+'        Set curItem = mActiveExplorer.Selection.Item(1)
+'        MoveItemToAcknowledged curItem
+'    End If
+'    Dim prevItem As Object
+'    If prevSelection.Count = 1 Then
+'        Set prevItem = prevSelection.Item(1)
+'        MoveItemToAcknowledged prevItem
+'    End If
+'    Set prevSelection = mActiveExplorer.Selection
+Exit Sub
+HANDLER:
+    MsgBox "Adam - Error " & Err.Number & " - " & Err.Description & DBLLN & dbET
+
+End Sub
+
+'this is the trigger that fires the app
+Private Sub mOutlookApp_Reminder(ByVal Item As Object)
+    On Error GoTo HANDLER
+    dbPL "mOutlookApp reminder fired - testing for trigger"
+    Set mOutlookReminders = Outlook.Reminders
+    If Not mDelayedEventTrigger Is Nothing Then
+        If InStr(1, "Reminder", TypeName(Item)) Then
+            If Item.GlobalAppointmentID = mDelayedEventTrigger.GlobalAppointmentID Then
+                StartOutlookEvents     ' call the app
+                mDelayedEventTrigger.Delete
+                Set mDelayedEventTrigger = Nothing
+                dbPL "trigger confirmed - app launched and appointment deleted"
+            End If
+        End If
+    End If
+HANDLER:
+End Sub
+
+' dismiss reminder
+Private Sub mOutlookReminders_BeforeReminderShow(Cancel As Boolean)
+    Dim reminder_ As Outlook.Reminder
+    dbPL "attempting to dismiss trigger reminder"
+    For Each reminder_ In mOutlookReminders
+        If reminder_.Caption = mTRIGGERTITLE Then
+            If reminder_.IsVisible Then
+                reminder_.Dismiss
+                Cancel = True
+                dbPL "dismissed trigger reminder"
+            End If
+            Exit For
+        End If
+    Next reminder_
+End Sub
+                                                                            '
+'                                                                           |
+'  PRIVATE PROCEDURES                                                       |
+'                                                                           |
+                                                                            '
+                                                                            
+Private Sub ValidateAndMoveToFolder(Item As Object)
+    dbPL "ValidateAndMoveToFolder", "item type = " & TypeName(Item)
+    If Item.FlagStatus <> olFlagMarked Then
+        dbPL "item flagstatus is not olFlagmarked"
+        Dim itemMoved As Boolean
+        dbPL "item is in folder = " & Item.Parent.Name
+        Select Case Item.Parent
+            Case Is = "Inbox"
+                If Not itemMoved And CBool(InStr(Item.Categories, mCATEGORY_2YEAR)) Then
+                    dbPL "validating for move to 2year"
+                    itemMoved = ValidateAndMoveTo2YearInFolder(Item)
+                End If
+                If Not itemMoved And CBool(InStr(Item.Categories, mCATEGORY_POLICY)) Then
+                    dbPL "validating for move to policy"
+                    itemMoved = ValidateAndMoveToPolicyFolder(Item)
+                End If
+'                If Not itemMoved And CBool(InStr(Item.Categories, mCATEGORY_DELETE)) Then
+'                    dbPL "validating for move to delete"
+'                    itemMoved = ValidateAndMoveToDeleteFolder(Item)
+'                End If
+            Case Is = "In"
+                If Not itemMoved And CBool(InStr(Item.Categories, mCATEGORY_POLICY)) Then
+                    dbPL "validating for move to policy"
+                    itemMoved = ValidateAndMoveToPolicyFolder(Item)
+                End If
+        End Select
+    End If
+    dbPL "item moved flag = " & itemMoved
+End Sub
+
+'Private Function ValidateAndMoveToDeleteFolder(Item As Object) As Boolean
+'    dbPL "ValidateAndMoveToDeleteFolder", "item subject = " & Item.Subject
+'    dbPL "validating with gfValidateCategoryStringsNoneMatch"
+'    If gfValidateCategoryStringsNoneMatch(Item.Categories, mCATEGORY_5YEAR, mCATEGORY_2YEAR) Then
+'        dbPL "item validated, mark as read and move to delete folder"""
+'        Item.Move mDeletedFolder
+'        ValidateAndMoveToDeleteFolder = True
+'    Else
+'        dbPL "item not validated"
+'    End If
+'End Function
+
+Private Function ValidateAndMoveTo2YearInFolder(Item As Object) As Boolean
+    dbPL "ValidateAndMoveTo2YearInFolder", "item subject = " & Item.Subject
+    dbPL "validating with gfValidateCategoryStringsNoneMatch"
+    If gfValidateCategoryStringsNoneMatch(Item.Categories, mCATEGORY_APNEURO, _
+                                                          mCATEGORY_5YEAR, _
+                                                          mCATEGORY_INVOICEAPPROVED, _
+                                                          mCATEGORY_POLICY, _
+                                                          mCATEGORY_DEFER, _
+                                                          mCATEGORY_DELEGATE, _
+                                                          mCATEGORY_INVOICEREJECTED, _
+                                                          mCATEGORY_DO, _
+                                                          mCATEGORY_RESTORED, _
+                                                          mCATEGORY_DELETE) _
+    Then
+        dbPL "item validated, mark as read and move to 2year folder"""
+        Set Item = Item.Move(m2YearInFolder)
+        Item.UnRead = False
+        ValidateAndMoveTo2YearInFolder = True
+    Else
+        dbPL "item not validated"
+    End If
+End Function
+
+Private Function ValidateAndMoveToPolicyFolder(Item As Object) As Boolean
+    dbPL "ValidateAndMoveToPolicyFolder", "item subject = " & Item.Subject
+    dbPL "validating with gfValidateCategoryStringsNoneMatch"
+    If gfValidateCategoryStringsNoneMatch(Item.Categories, mCATEGORY_DELETE) Then
+        dbPL "item validated, move to policy folder"
+        Set Item = Item.Move(mPolicyFolder)
+        ValidateAndMoveToPolicyFolder = True
+    Else
+        dbPL "item not validated"
+    End If
+End Function
+
+                                                                            '
+'                                                                           |
+'  PRIVATE PROPERTY LETTERS                                                 |
+'                                                                           |
+                                                                            '
+Private Property Let OutlookEventsEnabled(p_OutlookEventsEnabled As Boolean)
+    mEventsAreActive = p_OutlookEventsEnabled
+End Property
+                                                                            '
+'                                                                           |
+'  PUBLIC PROPERTY GETTERS                                                  |
+'                                                                           |
+                                                                            '
+Public Property Get OutlookEventsEnabled() As Boolean
+    OutlookEventsEnabled = mEventsAreActive
+End Property
+                                                                            '
+'                                                                           |
+'  PUBLIC METHODS                                                           |
+'                                                                           |
+                                                                            '
+Public Sub StartOutlookEvents()
+    dbPL "StartOutlookEvents"
+    Set mActiveExplorer = Outlook.ActiveExplorer
+    
+    Set m5YearFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_MANAGEDFOLDERS & mFOLDERSTUB_5YEAR)
+    Set mPolicyFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_MANAGEDFOLDERS & mFOLDERSTUB_5YEAR & mFOLDERSTUB_POLICY)
+    Set mRestoredFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_INBOX & mFOLDERSTUB_RESTORED)
+    
+    Set mDeletedFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_DELETED)
+    Set mDeletedItems = mDeletedFolder.Items
+    
+    Set mInboxFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_INBOX)
+    Set mInboxItems = mInboxFolder.Items
+
+    Set m2YearInFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_MANAGEDFOLDERS & mFOLDERSTUB_2YEARIN)
+    Set m2YearInItems = m2YearInFolder.Items
+    
+    Set m2YearOutFolder = gfGetMAPIFolder(mFOLDERSTUB_ROOT & mFOLDERSTUB_MANAGEDFOLDERS & mFOLDERSTUB_2YEAROUT)
+    Set m2YearOuItems = m2YearOutFolder.Items
+    
+    mCategories = gfGetStringCategoryNames
+    If Not gfValidateCategoryStringsAllMatch(mCategories, mCATEGORY_APNEURO, mCATEGORY_5YEAR, mCATEGORY_INVOICEAPPROVED, mCATEGORY_APSSC, mCATEGORY_POLICY, _
+                                          mCATEGORY_DEFER, mCATEGORY_DELEGATE, mCATEGORY_INVOICEREJECTED, mCATEGORY_VBADL, mCATEGORY_DO, _
+                                          mCATEGORY_RESTORED, mCATEGORY_VBATRIGGER, mCATEGORY_2YEAR, mCATEGORY_DELETE) Then
+        MsgBox ("Failed Category Check")
+    End If
+    
+    OutlookEventsEnabled = True
+    
+    dbP "Events Started"
+    
+End Sub
+
+
+Public Sub StartOutlookEventsAfterDelay()
+    dbPL "StartOutlookEventsAfterDelay"
+    Dim startTime As Date
+    startTime = Now() + mSTARTUPDELAY / mTIMEDIVOSOR
+    Set mDelayedEventTrigger = Application.CreateItem(olAppointmentItem)
+    With mDelayedEventTrigger
+      .Categories = mCATEGORY_VBATRIGGER
+      .Sensitivity = olPrivate
+      .Body = mTRIGGERBODYTEXT
+      .Start = startTime
+      .End = startTime
+      .Subject = mTRIGGERTITLE
+      .ReminderSet = True
+      .ReminderMinutesBeforeStart = mMINUTESBEFORESTART
+      .Save
+    End With
+    
+    dbP "Delayed Event Trigger Set"
+    
+End Sub
+                                                                            '
+'                                                                           |
+'  EXPOSED CLASS OBJECTS                                                    |
+'                                                                           |
+                                                                            '
+Public Property Get ClassProperty_RestoredFolder() As Outlook.folder
+    Set ClassProperty_RestoredFolder = mRestoredFolder
+End Property
+Public Property Get ClassProperty_DeletedFolder() As Outlook.folder
+    Set ClassProperty_DeletedFolder = mDeletedFolder
+End Property
+Public Property Get ClassProperty_DeletedItems() As Outlook.Items
+    Set ClassProperty_DeletedItems = mDeletedItems
+End Property
+Public Property Get ClassProperty_2YearOutFolder() As Outlook.folder
+    Set ClassProperty_2YearOutFolder = m2YearOutFolder
+End Property
+Public Property Get ClassProperty_2YearInFolder() As Outlook.folder
+    Set ClassProperty_2YearInFolder = m2YearInFolder
+End Property
+Public Property Get ClassProperty_InboxFolder() As Outlook.folder
+    Set ClassProperty_InboxFolder = mInboxFolder
+End Property
+Public Property Get ClassProperty_ActiveExplorer() As Outlook.Explorer
+    Set ClassProperty_ActiveExplorer = mActiveExplorer
+End Property
+Public Property Get ClassProperty_OutlookApp() As Outlook.Application
+    Set ClassProperty_OutlookApp = mOutlookApp
+End Property
+Public Property Get ClassProperty_InboxItems() As Outlook.Items
+    Set ClassProperty_InboxItems = mInboxItems
+End Property
+Public Property Get ClassProperty_2YearInItems() As Outlook.Items
+    Set ClassProperty_2YearInItems = m2YearInItems
+End Property
+Public Property Get ClassProperty_2YearOuttems() As Outlook.Items
+    Set ClassProperty_2YearOuttems = m2YearOuItems
+End Property
+Public Property Get ClassProperty_Reminders() As Outlook.Reminders
+    Set ClassProperty_Reminders = mOutlookReminders
+End Property
+Public Property Get ClassProperty_MailItem() As Outlook.MailItem
+    Set ClassProperty_MailItem = mMailItem
+End Property
+Public Property Get ClassProperty_DelayedEventTrigger() As Outlook.AppointmentItem
+    Set ClassProperty_DelayedEventTrigger = mDelayedEventTrigger
+End Property
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,447 @@
+Attribute VB_Name = "myInvoiceDownloader"
+Option Explicit
+'Option Private Module
+
+'                                                                                                       '
+'   Cycles through selected emails and saves attachments to a unique folder                             '
+'                                                                                                       '
+
+'                                                                                                       '
+'########################################################################################################
+'   VBA MODULE DEPENDENCIES                                                                             '
+'--------------------------------------------------------------------------------------------------------
+'   myInvoiceDownloaderForm1                                                                            '
+'   myInvoiceDownloaderForm2                                                                            '
+'   pGetMyMAPIFolder                                                                                    '
+'########################################################################################################
+'                                                                                                       '
+
+Public mAttachmentDetails() As New clsTYPEattachmentDetails
+
+Private mDownloadForm As myInvoiceDownloaderForm1
+
+Private Const mPDF_EXT As String = ".PDF"
+Private Const mPNG_EXT As String = ".PNG"
+Private Const mXLS_EXT As String = ".XLS"
+Private Const mJPG_EXT As String = ".JPG"
+Private Const mJPEG_EXT As String = ".JPEG"
+Private Const mGIF_EXT As String = ".GIF"
+Private Const mDOC_EXT As String = ".DOC"
+Private Const mXLSX_EXT As String = ".XLSX"
+Private Const mDOCX_EXT As String = ".DOCX"
+
+Private Const mDELIM As String = "\"
+Private Const mDBLLN As String = vbCr & vbCr
+
+Private mSavePath As String
+
+
+'Private Declare Function ShowWindow Lib "user32" (ByVal hWnd As Long, ByVal nCmdShow As Long) As Long
+'Private Declare Function IsIconic Lib "user32.dll" (ByVal hWnd As Long) As Long
+'Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+
+Sub ShowDownloadForm()
+    If gEvents Is Nothing Then StartEvents
+    If mDownloadForm Is Nothing Then
+        Set mDownloadForm = New myInvoiceDownloaderForm1
+    End If
+    mDownloadForm.Show
+End Sub
+Sub ClearDownloader()
+    Set mDownloadForm = Nothing
+End Sub
+
+
+Sub SaveAttachmentsFromSelection()
+
+    Dim oOutlookApplication As Outlook.Application
+    Set oOutlookApplication = CreateObject("Outlook.Application")
+    
+    Dim oNameSpace As Outlook.NameSpace
+    Set oNameSpace = oOutlookApplication.GetNamespace("MAPI")
+    
+    With mDownloadForm
+        mSavePath = .DownloadFolder
+        Dim noDestinationFolder As Boolean
+        Select Case True
+'            Case .CheckBox_AP And .CheckBox_iServeQueue
+                
+'                noDestinationFolder = True
+'                MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Invalid Configuration"
+    
+            Case .OptionButton_UseDefaultAccount '.CheckBox_iServeQueue
+            
+                Dim oRecipient As Outlook.Recipient
+                Set oRecipient = oNameSpace.CreateRecipient("Adam Atkinson")
+                oRecipient.Resolve
+                Select Case oRecipient.Resolved
+                    Case Is = True
+                    
+                        Dim oInbox As Outlook.MAPIFolder
+                        Set oInbox = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+                        
+                        Dim oMoveToFolder As Outlook.MAPIFolder
+                        Set oMoveToFolder = gEvents.ClassProperty_2YearInFolder
+                        'Set oMoveToFolder = gfGetMAPIFolder(gEvents.ClassProperty_2YearInFolder)
+                        
+                        If oMoveToFolder Is Nothing Then
+                            noDestinationFolder = True
+                            If mDownloadForm.OptionButton_MoveEmailYes > 0 Then
+                                MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Could Not Find Email Folder"
+                            End If
+                        Else
+                            Set mDownloadForm.moveToFolder = oMoveToFolder
+                        End If
+                    Case Is = False
+                        MsgBox "Error: Unable To Resolve Atkinson Inbox"
+                        GoTo CLEANUPANDEXIT
+                    Case Else
+                        MsgBox "Error: Undefined Error Resolving AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                End Select
+                
+            Case .OptionButton_UseDefaultAccount ' .CheckBox_AP
+                Set oRecipient = oNameSpace.CreateRecipient(RECIPIENT_AP)
+                oRecipient.Resolve
+                Select Case oRecipient.Resolved
+                    Case Is = True
+                        Set oInbox = oNameSpace.GetSharedDefaultFolder(oRecipient, olFolderInbox)
+                        Set oMoveToFolder = oNameSpace.Folders(RECIPIENT_AP) _
+                                .Folders(FOLDERSTUB_MANAGEDFOLDERS).Folders(FOLDERSTUB_2YEAR).Folders("Printed Invoices")
+                        If oMoveToFolder Is Nothing Then
+                            noDestinationFolder = True
+                            If mDownloadForm.OptionButton_MoveEmailYes > 0 Then
+                                MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "Could Not Find Email Folder"
+                            End If
+                        Else
+                            Set mDownloadForm.moveToFolder = oMoveToFolder
+                        End If
+                    Case Is = False
+                        MsgBox "Error: Unable To Resolve AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                    Case Else
+                        MsgBox "Error: Undefined Error Resolving AP Inbox"
+                        GoTo CLEANUPANDEXIT
+                End Select
+'            Case Not .CheckBox_AP And Not .CheckBox_iServeQueue
+'                noDestinationFolder = True
+'                 MsgBox "Attachments will be downloaded but emails will not be moved", vbInformation, "No Email Folder Selected"
+'            Case Else
+'                MsgBox "unhandled error"
+'                Exit Sub
+        End Select
+
+        If noDestinationFolder Then
+            .CancelEvents = True
+            .CheckBox_AP = False
+            .CheckBox_iServeQueue = False
+            .CancelEvents = False
+        End If
+    End With
+
+    'look for mSavePath and prompt user to create if not found; exit if not found and created
+    If Len(Dir(mSavePath, vbDirectory)) = 0 Then
+        Select Case MsgBox("'" & mSavePath & "' does not exist!" & mDBLLN & "Do you want to create it now?", vbYesNo)
+            Case Is = vbYes
+                MkDir mSavePath
+            Case Is = vbNo
+                MsgBox "Cannot continue until folder exists.  Program terminated"
+                GoTo CLEANUPANDEXIT
+        End Select
+    End If
+      
+    'loop through every email in the active selection, looping through and saving the attachments for each one
+    Dim oActiveExplorer As Outlook.Explorer
+    Set oActiveExplorer = Application.ActiveExplorer
+    
+    Dim oSelection As Outlook.Selection
+    Set oSelection = oActiveExplorer.Selection
+    
+    Dim selectedItemsCount As Long
+    selectedItemsCount = oSelection.Count
+    
+    Dim selectedItemCounter As Long
+    mDownloadForm.StartAttachmentIndicator selectedItemCounter, selectedItemsCount
+    
+    ReDim mAttachmentDetails(0 To 0)
+    
+    Dim oSelectedItem As Object
+    For Each oSelectedItem In oSelection
+        selectedItemCounter = selectedItemCounter + 1
+        If TypeOf oSelectedItem Is Outlook.MailItem Then
+        
+            Dim oMailItem As Outlook.MailItem
+            Set oMailItem = oSelectedItem
+            
+            Dim oAttachments As Outlook.Attachments
+            Set oAttachments = oMailItem.Attachments
+            If oAttachments.Count > 0 Then
+                Dim skippedAttachmentsCount As Long
+                skippedAttachmentsCount = 0
+                Dim savedAttachmentsCount As Long
+                savedAttachmentsCount = 0
+                
+                Dim totalAttachmentCount As Long
+                totalAttachmentCount = totalAttachmentCount + oAttachments.Count
+                
+                Dim oAttachment As Outlook.Attachment
+                For Each oAttachment In oAttachments
+                    Dim proceedWithCurrent As Boolean
+                    proceedWithCurrent = False
+                    
+                    Dim docExt As String
+                    docExt = UCase(Right(oAttachment.FileName, Len(oAttachment.FileName) - InStrRev(oAttachment.FileName, ".") + 1))
+                    
+                    Select Case True
+                        Case mDownloadForm.CheckBox_DOC And (docExt Like mDOC_EXT Or docExt Like mDOCX_EXT)
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_GIF And docExt Like mGIF_EXT
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_JPG And (docExt Like mJPG_EXT Or docExt Like mJPEG_EXT)
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_PDF And docExt Like mPDF_EXT
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_PNG And docExt Like mPNG_EXT
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_XLS And (docExt Like mXLS_EXT Or docExt Like mXLSX_EXT)
+                            proceedWithCurrent = True
+                        Case mDownloadForm.CheckBox_OTHER _
+                                And Not (docExt Like mXLS_EXT Or docExt Like mPNG_EXT Or docExt Like mPDF_EXT Or docExt Like mJPG_EXT _
+                                Or docExt Like mJPEG_EXT Or docExt Like mGIF_EXT Or docExt Like mDOC_EXT Or docExt Like mDOCX_EXT _
+                                Or docExt Like mXLSX_EXT)
+                            proceedWithCurrent = True
+                    End Select
+                    
+                    Dim longFilename As String
+                    longFilename = vbNullString
+                    
+                    'prepend timestamp to filename and save             '
+                    If proceedWithCurrent Then
+                        Dim newName As String
+                        Dim prefixNewName As String
+                        
+                        prefixNewName = Format(Now, "mmmdd@hhnn ")
+                        newName = prefixNewName & gfReplaceSpecialCharacters(oMailItem.Subject, "_", True, 100)
+                        newName = newName & " (Sent " & Format(oMailItem.ReceivedTime, "mmmdd@hhnn) ")
+                        newName = newName & GetShortNameFromLongFileName(oAttachment.FileName, True)
+                        newName = Replace(newName, "a Xerox Multifunction Printer", "Copier")
+                        Dim strIndex As String
+                        Dim nameDivider As String
+                        strIndex = vbNullString
+                        nameDivider = vbNullString
+                        Do
+                            DoEvents
+
+
+                            If Len(Dir(mSavePath & newName & left(nameDivider, 1) & strIndex & Right(nameDivider, 1) & docExt)) > 0 Then
+                                strIndex = CStr(Val(strIndex) + 1)
+                                nameDivider = "()"
+                            End If
+                        Loop Until Len(Dir(mSavePath & newName & left(nameDivider, 1) & strIndex & Right(nameDivider, 1) & docExt)) = 0
+
+                        longFilename = mSavePath & newName & left(nameDivider, 1) & strIndex & Right(nameDivider, 1) & docExt
+                        oAttachment.SaveAsFile longFilename
+                        Dim totalSavedAttachmentsCount As Long
+                        totalSavedAttachmentsCount = totalSavedAttachmentsCount + 1
+                        savedAttachmentsCount = savedAttachmentsCount + 1
+                    Else
+                        Dim anAttachmentWasSkipped As Boolean
+                        anAttachmentWasSkipped = True
+                        Dim totalSkippedAttachmentsCount As Long
+                        totalSkippedAttachmentsCount = totalSkippedAttachmentsCount + 1
+                        skippedAttachmentsCount = skippedAttachmentsCount + 1
+                    End If
+                    
+
+                    If UBound(mAttachmentDetails) = 0 Then
+                        ReDim mAttachmentDetails(1 To 1)
+                    Else
+                        ReDim Preserve mAttachmentDetails(LBound(mAttachmentDetails) To UBound(mAttachmentDetails) + 1)
+                    End If
+                    
+                    With oMailItem
+                        mAttachmentDetails(UBound(mAttachmentDetails)).AttachedFileWasSaved = proceedWithCurrent
+                        mAttachmentDetails(UBound(mAttachmentDetails)).AttachedFilePath = longFilename
+                        mAttachmentDetails(UBound(mAttachmentDetails)).AttachmentCount = .Attachments.Count
+                        mAttachmentDetails(UBound(mAttachmentDetails)).UnsavedCount = skippedAttachmentsCount
+                        mAttachmentDetails(UBound(mAttachmentDetails)).SavedCount = savedAttachmentsCount
+                        mAttachmentDetails(UBound(mAttachmentDetails)).AttachedFileName = oAttachment.FileName
+                        mAttachmentDetails(UBound(mAttachmentDetails)).eMailDate = .ReceivedTime
+                        mAttachmentDetails(UBound(mAttachmentDetails)).eMailSender = .SenderName
+                        mAttachmentDetails(UBound(mAttachmentDetails)).eMailSubject = .Subject
+                        Set mAttachmentDetails(UBound(mAttachmentDetails)).eMail = oMailItem
+                        Set mAttachmentDetails(UBound(mAttachmentDetails)).AttachedFile = oAttachment
+                    End With
+                    
+                    DoEvents
+                Next oAttachment
+                
+            Else 'there is not an attachment
+                Dim doNotMoveThisItem As Boolean
+                doNotMoveThisItem = True
+            End If
+        
+            If anAttachmentWasSkipped Then
+                oMailItem.UnRead = True
+                oMailItem.FlagStatus = olFlagMarked
+            Else
+                oMailItem.UnRead = False
+                oMailItem.FlagStatus = olFlagComplete
+            End If
+            
+            If oMoveToFolder Is Nothing Then
+                doNotMoveThisItem = True
+            Else
+                If oMailItem.Parent.Name = oMoveToFolder Then doNotMoveThisItem = True
+            End If
+            
+            If noDestinationFolder Or doNotMoveThisItem Then
+                Dim skippedItemCount As Long
+                skippedItemCount = skippedItemCount + 1
+                oMailItem.Categories = "2Year;VBA DL"
+            Else
+            
+'                Dim ackCopy As MailItem
+'                Set ackCopy = oMailItem.Copy
+                oMailItem.Categories = "2Year;VBA DL"
+                oMailItem.FlagStatus = olNoFlag
+'                gEvents.MoveItemToAcknowledged ackCopy
+                
+                Set mAttachmentDetails(UBound(mAttachmentDetails)).eMailInBox = oInbox
+'                Set mAttachmentDetails(UBound(mAttachmentDetails)).email = oMailItem.Move(oMoveToFolder)
+                mAttachmentDetails(UBound(mAttachmentDetails)).eMailWasMoved = True
+
+'                Dim i As Long
+                                
+                'the email and attachment indexes change when it moves so we step backward from the moved file and rewite the previous values
+'                Set mAttachmentDetails(UBound(mAttachmentDetails)).email = MoveEmailToFolderMAPI(oMailItem, oMoveToFolder)
+'                UpdateArrayWithNewEmailLocation mAttachmentDetails(UBound(mAttachmentDetails)).email
+'                For i = UBound(mAttachmentDetails) To LBound(mAttachmentDetails) + 1 Step -1
+'                    If Not mAttachmentDetails(i).eMail Is Nothing And Not mAttachmentDetails(i - 1).eMail Is Nothing Then
+'                        If mAttachmentDetails(i - 1).eMail.EntryID = oMailItem.EntryID Then _
+'                                Set mAttachmentDetails(i - 1).eMail = mAttachmentDetails(i).eMail
+'                        If Not mAttachmentDetails(i).AttachedFile Is Nothing Then _
+'                                Set mAttachmentDetails(i).AttachedFile = mAttachmentDetails(i).eMail.Attachments(mAttachmentDetails(i).AttachedFile.Index)
+'                    End If
+'                Next i
+                
+                Dim movedItemCount As Long
+                movedItemCount = movedItemCount + 1
+            End If
+            anAttachmentWasSkipped = False
+        
+            
+        'Else 'the selected item is not a mailitem
+            'do nothing
+        End If
+        
+        
+        
+        mDownloadForm.UpdateAttachmentIndicator selectedItemCounter, selectedItemsCount, movedItemCount, _
+                                                totalSavedAttachmentsCount, totalSkippedAttachmentsCount, totalAttachmentCount
+    Next oSelectedItem
+    
+    Dim i As Long
+    For i = UBound(mAttachmentDetails) To LBound(mAttachmentDetails) + 1 Step -1
+        If Not mAttachmentDetails(i).eMail Is Nothing And Not mAttachmentDetails(i - 1).eMail Is Nothing Then
+            If mAttachmentDetails(i).eMail.EntryID = mAttachmentDetails(i - 1).eMail.EntryID Then
+                mAttachmentDetails(i - 1).UnsavedCount = mAttachmentDetails(i).UnsavedCount
+                mAttachmentDetails(i - 1).SavedCount = mAttachmentDetails(i).SavedCount
+            End If
+        End If
+    Next i
+   
+    
+    'process is complete, time to show statistics and open the folder
+    If totalSavedAttachmentsCount > 0 And mDownloadForm.CheckBox_OpenDownloadFolder Then Call OpenDownloadFolder(mSavePath)
+    mDownloadForm.CallerFinished = True
+
+
+CLEANUPANDEXIT:
+
+    Set oActiveExplorer = Nothing
+    Set oSelection = Nothing
+    Set oSelectedItem = Nothing
+    Set oAttachments = Nothing
+
+End Sub
+
+Function MoveEmailToFolderMAPI(emailToMove As Outlook.MailItem, moveToFolder As Outlook.MAPIFolder) As Outlook.MailItem
+    Set MoveEmailToFolderMAPI = emailToMove.Move(moveToFolder)
+End Function
+
+        
+Sub UpdateArrayWithNewEmailLocation(emailThatMoved As Outlook.MailItem)
+    Dim i As Long
+    For i = UBound(mAttachmentDetails) To LBound(mAttachmentDetails) + 1 Step -1
+        If Not mAttachmentDetails(i).eMail Is Nothing And Not mAttachmentDetails(i - 1).eMail Is Nothing Then
+            If mAttachmentDetails(i - 1).eMail.EntryID = emailThatMoved.EntryID Then _
+                    Set mAttachmentDetails(i - 1).eMail = mAttachmentDetails(i).eMail
+            If Not mAttachmentDetails(i).AttachedFile Is Nothing Then _
+                    Set mAttachmentDetails(i).AttachedFile = mAttachmentDetails(i).eMail.Attachments(mAttachmentDetails(i).AttachedFile.Index)
+        End If
+    Next i
+End Sub
+
+
+Sub SaveSelectedSkippedAttachments(indexValue As Long)
+    Dim newSavePath As String
+    Dim newFolderName As String
+    Dim folderCreated As String
+    Dim strIndex As String
+    Dim prefixNewName As String
+    Dim nameDivider As String
+    Dim i As Long
+    Do
+        newFolderName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & " Supplemental Attachments"
+        newSavePath = mSavePath & newFolderName & mDELIM
+        If Len(Dir(newSavePath, vbDirectory)) = 0 Then
+            MkDir newSavePath
+            folderCreated = True
+        End If
+    Loop Until CBool(Len(Dir(newSavePath, vbDirectory)))
+    
+    prefixNewName = Format(Date, "yymmdd-") & Format(Time, "hhnn") & "_"
+    Do
+        DoEvents
+        If Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & mAttachmentDetails(indexValue).AttachedFile.FileName)) > 0 Then
+            strIndex = CStr(Val(strIndex) + 1)
+            nameDivider = "_"
+        End If
+    Loop Until Len(Dir(newSavePath & prefixNewName & strIndex & nameDivider & mAttachmentDetails(indexValue).AttachedFile.FileName)) = 0
+    mAttachmentDetails(indexValue).AttachedFilePath = newSavePath & prefixNewName & strIndex & nameDivider & mAttachmentDetails(indexValue).AttachedFile.FileName
+    mAttachmentDetails(indexValue).AttachedFile.SaveAsFile mAttachmentDetails(indexValue).AttachedFilePath
+    OpenDownloadFolder newSavePath
+End Sub
+
+
+Public Sub OpenDownloadFolder(ByVal FolderPath As String)
+    'requires AP_WINDOWS_API.ShowWindow
+    'requires AP_WINDOWS_API.IsIconic
+    Dim pID As Variant
+    Dim sh As Variant
+    Dim w As Object
+    Dim SW_RESTORE As Long: SW_RESTORE = 9 'used to restore the explorer window if it is minimized
+    If Right(FolderPath, 1) = Chr(92) Then FolderPath = left(FolderPath, Len(FolderPath) - 1)
+    If FolderPath = vbNullString Then FolderPath = Environ("USERPROFILE") & Chr(92)
+    On Error GoTo HANDLER:
+    Set sh = CreateObject("shell.application")
+    For Each w In sh.Windows
+        If w.Name = "Windows Explorer" Or w.Name = "File Explorer" Then
+            If w.Document.folder.self.Path = FolderPath Then
+                If CBool(IsIconic(w.hWnd)) Then
+                    w.Visible = False
+                    w.Visible = True
+                    ShowWindow w.hWnd, SW_RESTORE
+                Else
+                    w.Visible = False
+                    w.Visible = True
+                End If
+                Exit Sub
+            End If
+        End If
+    Next
+    pID = Shell("explorer.exe " & FolderPath, vbNormalFocus)
+    Exit Sub
+HANDLER:
+End Sub
