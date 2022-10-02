@@ -1,0 +1,125 @@
+Attribute VB_Name = "AP_G_WindowsAPI"
+Option Explicit
+'
+'
+'Public Declare Function AttachThreadInput Lib "user32" ( _
+'        ByVal idAttach As Long, _
+'        ByVal idAttachTo As Long, _
+'        ByVal fAttach As Long _
+'        ) As Long
+'
+'Public Declare Function EnumWindows Lib "user32" ( _
+'        ByVal lpEnumFunc As Long, _
+'        ByVal lParam As Long _
+'        ) As Long
+'
+'Public Declare Function FindWindow Lib "user32" Alias "FindWindowA" ( _
+'        ByVal lpClassName As String, _
+'        ByVal lpWindowName As String _
+'        ) As Long
+'
+'Public Declare Function GetActiveWindow Lib "user32" ( _
+'        ) As Long
+'
+'Public Declare Function GetAsyncKeyState Lib "user32" ( _
+'        ByVal vKey As Long _
+'        ) As Integer
+'
+'Public Declare Function GetClassName Lib "user32" Alias "GetClassNameA" ( _
+'        ByVal hWnd As Long, _
+'        ByVal lpClassName As String, _
+'        ByVal nMaxCount As Long _
+'        ) As Long
+'
+'Public Declare Function GetDesktopWindow Lib "user32" ( _
+'        ) As Long
+'
+'Public Declare Function GetForegroundWindow Lib "user32" ( _
+'        ) As Long
+'
+'Public Declare Function GetKeyState Lib "user32" ( _
+'        ByVal nVirtKey As Long _
+'        ) As Integer
+'
+'Public Declare Function GetWindow Lib "user32" ( _
+'        ByVal hWnd As Long, _
+'        ByVal wCmd As Long _
+'        ) As Long
+'
+'Public Declare Function GetWindowLong Lib "user32" Alias "GetWindowLongA" ( _
+'        ByVal hWnd As Long, _
+'        ByVal nIndex As Long _
+'        ) As Long
+'
+'Public Declare Function GetWindowText Lib "user32" Alias "GetWindowTextA" ( _
+'        ByVal hWnd As Long, _
+'        ByVal lpString As String, _
+'        ByVal aint As Long _
+'        ) As Long
+'
+'Public Declare Function GetWindowThreadProcessId Lib "user32" ( _
+'        ByVal hWnd As Long, _
+'        ByVal lpdwProcessId As Long _
+'        ) As Long
+'
+'Public Declare Function IsIconic Lib "user32" ( _
+'        ByVal hWnd As Long _
+'        ) As Long
+'
+'Public Declare Function SendMessage Lib "user32" Alias "SendMessageA" ( _
+'        ByVal hWnd As Long, _
+'        ByVal wMsg As Long, _
+'        ByVal wParam As Long, _
+'        lParam As Any _
+'        ) As Long
+'
+'Public Declare PtrSafe Function SendInput Lib "user32" ( _
+'        ByVal nInputs As LongPtr, _
+'        pInputs As Any, _
+'        ByVal cbSize As LongPtr _
+'        ) As LongPtr
+'
+'Public Declare Function SetForegroundWindow Lib "user32" ( _
+'        ByVal hWnd As Long _
+'        ) As Long
+'
+'Public Declare Function ShellExecute Lib "Shell32.dll" Alias "ShellExecuteA" ( _
+'        ByVal hWnd As Long, _
+'        ByVal lpOperation As String, _
+'        ByVal lpFile As String, _
+'        ByVal lpParameters As String, _
+'        ByVal lpDirectory As String, _
+'        ByVal nShowCmd As Long _
+'        ) As Long
+'
+'Public Declare Function ShowWindow Lib "user32" ( _
+'        ByVal hWnd As Long, _
+'        ByVal nCmdShow As Long _
+'        ) As Long
+'
+'Public Declare Sub Sleep Lib "kernel32" ( _
+'        ByVal dwMilliseconds As LongPtr _
+'        )
+'
+'Public Declare PtrSafe Function VkKeyScan Lib "user32" Alias "VkKeyScanA" ( _
+'        ByVal cChar As Byte _
+'        ) As Integer
+'
+'
+''Public Declare Function SetWinEventHook Lib "user32" ( _
+''        ByVal eventMin As Long, _
+''        ByVal eventMax As Long, _
+''        ByVal hmodWinEventProc As Long, _
+''        ByVal lpfnWinEventProc As Long, _
+''        ByVal idProcess As Long, _
+''        ByVal idThread As Long, _
+''        ByVal dwflags As Long _
+''        ) As Long
+''
+''Public Declare Function UnhookWinEvent Lib "user32" ( _
+''        ByVal hWinEventHook As Long _
+''        ) As Long
+'
+'
+'
+'

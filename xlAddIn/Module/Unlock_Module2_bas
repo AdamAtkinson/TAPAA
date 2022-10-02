@@ -1,0 +1,20 @@
+Attribute VB_Name = "Unlock_Module2"
+'This the second of two modules that unlock an accidentaly locked module.
+
+
+'Directions
+'Open the file(s) that contain your locked VBA Projects
+'Create a new xlsm file and store OTHER code in Module1
+'Paste THIS code in Module2 and run it
+'Come back to your VBA Projects and enjoy.
+
+
+
+Option Explicit 'option added because this is how i do
+
+
+Sub unprotected()
+    If Hook Then
+        MsgBox "VBA Project is unprotected!", vbInformation, "*****"
+    End If
+End Sub

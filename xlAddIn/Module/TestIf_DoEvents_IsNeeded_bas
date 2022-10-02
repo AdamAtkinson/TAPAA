@@ -1,0 +1,35 @@
+Attribute VB_Name = "TestIf_DoEvents_IsNeeded"
+Option Explicit
+
+'this checks to see if DoEvents needs to be called; otherwise it doesnt call it
+
+'
+'Private Declare Function GetAsyncKeyState Lib "user32.DLL" (ByVal vKey As Long) As Integer
+'Private Declare Function GetQueueStatus Lib "user32" (ByVal qsFlags As Long) As Long
+
+Private Const QS_HOTKEY = &H80
+Private Const QS_KEY = &H1
+Private Const QS_MOUSEBUTTON = &H4
+Private Const QS_MOUSEMOVE = &H2
+Private Const QS_PAINT = &H20
+Private Const QS_POSTMESSAGE = &H8
+Private Const QS_SENDMESSAGE = &H40
+Private Const QS_TIMER = &H10
+Private Const QS_MOUSE = (QS_MOUSEMOVE Or QS_MOUSEBUTTON)
+Private Const QS_INPUT = (QS_MOUSE Or QS_KEY)
+Private Const QS_ALLEVENTS = (QS_INPUT Or QS_POSTMESSAGE Or QS_TIMER Or QS_PAINT Or QS_HOTKEY)
+Private Const QS_ALLINPUT = (QS_SENDMESSAGE Or QS_PAINT Or QS_TIMER Or QS_POSTMESSAGE Or QS_MOUSEBUTTON Or _
+                QS_MOUSEMOVE Or QS_HOTKEY Or QS_KEY)
+
+'example
+Private Sub thisIsHowToUseIt()
+    If cGetInputState() <> 0 Then DoEvents
+End Sub
+
+Function cGetInputState()
+    Dim qsRet As Long
+    qsRet = GetQueueStatus(QS_HOTKEY Or QS_KEY Or QS_MOUSEBUTTON Or QS_PAINT)
+    cGetInputState = qsRet
+End Function
+
+

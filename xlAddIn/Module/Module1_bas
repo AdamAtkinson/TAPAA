@@ -1,0 +1,66 @@
+Attribute VB_Name = "Module1"
+Option Explicit
+
+Sub SelectBookOrSheet()
+    Dim frm As UserForm_SelectWorkbook
+    If frm Is Nothing Then Set frm = New UserForm_SelectWorkbook
+    
+    Select Case MsgBox("Include worksheets in search?", vbYesNo)
+        Case vbYes
+            frm.Show
+        Case vbNo
+            frm.WorkbookOnly = True
+            MergeAllSheetsIntoOne frm.SelectedWorkbook
+    End Select
+End Sub
+
+Sub addnewmenu()
+Dim WB As Workbook
+Set WB = Application.Workbooks(1)
+WB.Activate
+Dim combarname As String
+combarname = "My Toolbar"
+Dim barControl  As CommandBarControl
+Dim barcontrol1  As CommandBarControl
+Dim combar As CommandBar
+Dim combar1 As CommandBar
+On Error Resume Next
+Application.CommandBars(combarname).Delete
+On Error GoTo 0
+Set combar1 = Application.CommandBars(1)
+Set combar = Application.CommandBars.Add(Name:=combarname, Position:=msoBarMenuBar, Temporary:=True)
+
+combar1.Visible = True
+Set barcontrol1 = combar1.Controls.Add(Type:=msoControlPopup)
+barcontrol1.Caption = "barcontrol"
+barcontrol1.Visible = True
+
+combar.Visible = True
+Set barControl = combar.Controls.Add(Type:=msoControlPopup)
+barControl.Caption = "barcontrol"
+barControl.Visible = True
+
+End Sub
+Sub deleteit()
+Application.CommandBars("My Toolbar").Delete
+End Sub
+ 
+Sub listthem()
+FreezeScreen
+Dim WB As Workbook
+Dim WS As Worksheet
+Set WB = Application.Workbooks(1)
+Set WS = WB.Worksheets.Add
+Dim i As Long
+Dim j As Long
+Dim k As Long
+k = 1
+For i = 1 To Application.CommandBars.Count
+For j = 1 To Application.CommandBars(i).Controls.Count
+WS.Cells(k, 1) = Application.CommandBars(i).Name
+WS.Cells(k, 2) = Application.CommandBars(i).Controls(j).Caption
+k = k + 1
+Next j
+Next i
+UpdateScreen
+End Sub

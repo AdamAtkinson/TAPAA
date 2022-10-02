@@ -1,0 +1,258 @@
+Attribute VB_Name = "B_TOOLS_LISTS"
+'gets process information for grabbing a window
+Option Explicit
+
+'
+'
+'Private Declare Function apiGetClassName Lib "user32" Alias _
+'                "GetClassNameA" (ByVal hWnd As Long, _
+'                ByVal lpClassName As String, _
+'                ByVal nMaxCount As Long) As Long
+'Private Declare Function apiGetDesktopWindow Lib "user32" Alias _
+'                "GetDesktopWindow" () As Long
+'Private Declare Function apiGetWindow Lib "user32" Alias _
+'                "GetWindow" (ByVal hWnd As Long, _
+'                ByVal wCmd As Long) As Long
+'Private Declare Function apiGetWindowLong Lib "user32" Alias _
+'                "GetWindowLongA" (ByVal hWnd As Long, ByVal _
+'                nIndex As Long) As Long
+'Private Declare Function apiGetWindowText Lib "user32" Alias _
+'                "GetWindowTextA" (ByVal hWnd As Long, ByVal _
+'                lpString As String, ByVal aint As Long) As Long
+'Private Declare Function GetWindowThreadProcessId Lib "user32" _
+'                (ByVal hWnd As Long, lpdwProcessId As Long) As Long
+'
+
+
+Private Const mcGWCHILD = 5
+Private Const mcGWHWNDNEXT = 2
+Private Const mcGWLSTYLE = (-16)
+Private Const mcWSVISIBLE = &H10000000
+Private Const mconMAXLEN = 255
+
+
+Sub ListAllOpenWorkbooksInAllInstances()
+
+    Dim S As String
+    Dim ts As Word.Task
+    With CreateObject("Word.Application")
+        If .Tasks.Exists("Microsoft Excel") Then
+           For Each ts In .Tasks
+              If InStr(ts.Name, "Microsoft Excel") = 1 Or InStr(ts.Name, ".xls") Then S = S & vbLf & ts.Name
+           Next
+        End If
+        .Quit
+    End With
+    Debug.Print S
+End Sub
+
+
+Sub List_All_Command_Bars()
+    Dim combar As CommandBar
+    Dim KeepIt As Boolean
+    Dim WS As Worksheet
+    Dim i As Long
+    Dim j As Long
+    Set WS = Worksheets.Add
+    i = 2
+    j = 2
+    WS.Cells(1, 1) = "CommandBar Name"
+    WS.Cells(1, 2) = "Index"
+    WS.Cells(1, 3) = "Visible"
+    WS.Cells(1, 5) = "CommandBar Name"
+    WS.Cells(1, 6) = "Index"
+    WS.Cells(1, 7) = "Visible"
+ 
+    On Error Resume Next
+
+    For Each combar In Application.CommandBars
+        KeepIt = combar.Visible
+        Err.Number = 0
+        combar.Visible = True
+
+        If Err.Number = 0 Then
+            WS.Cells(i, 1) = combar.Name
+            WS.Cells(i, 2) = combar.Index
+            WS.Cells(i, 3) = combar.Visible
+            i = i + 1
+        Else
+            WS.Cells(j, 5) = combar.Name
+            WS.Cells(j, 6) = combar.Index
+            WS.Cells(j, 7) = combar.Visible
+            WS.Cells(j, 8) = ">>> Visible Property Failed"
+            j = j + 1
+        End If
+        
+        combar.Visible = KeepIt
+        
+    Next combar
+End Sub
+
+
+Sub CreatePIDTable()
+    Dim strBuffer As String * mconMAXLEN 'fixed length string required for api call
+    Dim lnghWnd As Long
+    Dim lngLen As Long
+    Dim lngThread As Long
+    Dim lngProcess As Long
+    Dim lngStyle As Long
+    Dim blnVisOnly As Boolean 'used for print.debug only - limits results to visible windows with titles if true
+    Dim blnOutFile As Boolean 'creates excel output if true, print.debug if false
+    Dim strTitle As String
+    Dim strClass As String
+    Dim intRow As Integer
+    Select Case MsgBox("Do you want to create an output file?", vbYesNo)
+        Case VbMsgBoxResult.vbYes 'create and format excel output
+            blnOutFile = True
+            'turn off screen updating to speed report generation
+            Application.ScreenUpdating = False
+            Workbooks.Add
+            ActiveSheet.Name = "PID Table"
+            Cells(1, 1) = "Class"
+            Cells(1, 2) = "Title"
+            Cells(1, 3) = "Process"
+            Cells(1, 4) = "Thread"
+            Cells(1, 5) = "Visible"
+            Columns("A:A").ColumnWidth = 75
+            Columns("B:B").ColumnWidth = 100
+            With Columns("C:E")
+                .ColumnWidth = 12
+                .HorizontalAlignment = xlCenter
+            End With
+            With Rows("1:1")
+                With .Font
+                    .Bold = True
+                    .Name = "Calibri"
+                    .Size = 14
+                End With
+                .HorizontalAlignment = xlCenter
+                .AutoFilter
+            End With
+            With ActiveWindow
+                .SplitColumn = 0
+                .SplitRow = 1
+                .FreezePanes = True
+            End With
+        Case VbMsgBoxResult.vbNo 'output goes to print.debug - option to exclude invisible windows for smaller report
+            blnOutFile = False
+            Select Case MsgBox("Do you want to to skip invisible and untitled windows?", vbYesNo)
+                Case VbMsgBoxResult.vbYes 'do not send invisible and untitled windows to debug.print
+                    blnVisOnly = True
+                Case VbMsgBoxResult.vbNo 'send everything to debug.print
+                    blnVisOnly = False
+            End Select
+    End Select
+    'set row index
+    intRow = 1
+    'get desktop window
+    lnghWnd = apiGetDesktopWindow()
+    'get first child window
+    lnghWnd = apiGetWindow(lnghWnd, mcGWCHILD)
+    Do While Not lnghWnd = 0 'loop through all "next" windows
+            'get window title (API requires strBuffer to be fixed length - trim null characters after fetching)
+            lngLen = apiGetWindowText(lnghWnd, strBuffer, mconMAXLEN)
+            strTitle = left(strBuffer, lngLen)
+            'get window class (API requires strBuffer to be fixed length - trim null characters after fetching)
+            lngLen = apiGetClassName(lnghWnd, strBuffer, mconMAXLEN)
+            strClass = left(strBuffer, lngLen)
+            'get window style (needed for visible attribute)
+            lngStyle = apiGetWindowLong(lnghWnd, mcGWLSTYLE)
+            'get process id and process thread
+            lngThread = GetWindowThreadProcessId(lnghWnd, lngProcess)
+            Select Case blnOutFile
+                Case True
+                    intRow = intRow + 1
+                    Cells(intRow, 1) = strClass
+                    Cells(intRow, 2) = strTitle
+                    Cells(intRow, 3) = lngProcess
+                    Cells(intRow, 4) = lngThread
+                    Cells(intRow, 5) = (lngStyle And mcWSVISIBLE) = mcWSVISIBLE
+                Case False
+                    If (blnVisOnly = True _
+                    And (lngStyle And mcWSVISIBLE) _
+                    And Len(strTitle) > 0) _
+                    Or blnVisOnly = False Then
+                        Debug.Print "Class = " & strClass,
+                        Debug.Print "Title = " & strTitle,
+                        Debug.Print "Process ID = " & lngProcess,
+                        Debug.Print "Thread ID = " & lngThread
+                    End If
+            End Select
+        'advances to next window
+        lnghWnd = apiGetWindow(lnghWnd, mcGWHWNDNEXT)
+    Loop
+    Application.ScreenUpdating = True
+End Sub
+
+
+''===================================================================================================
+''  POSSIBLY OBSOLETE OR HIDDEN VALUE - NEED TO EVALUATE                                            '
+''===================================================================================================
+''this one may be a straggler                                                                       '
+'Sub fEnumWindows()                                                                                 '
+'Dim lngx As Long, lngLen As Long                                                                   '
+'Dim lngStyle As Long, strCaption As String                                                         '
+'Dim lThreadID As Long                                                                              '
+'Dim lProcessId As Long                                                                             '
+'Dim bVisOnly As Boolean                                                                            '
+'                                                                                                   '
+'Select Case MsgBox("Do you ONLY want to see visible processes?", vbYesNo)                          '
+'    Case VbMsgBoxResult.vbYes                                                                      '
+'        bVisOnly = True                                                                            '
+'    Case VbMsgBoxResult.vbNo                                                                       '
+'        bVisOnly = False                                                                           '
+'End Select                                                                                         '
+'lngx = apiGetDesktopWindow()                                                                       '
+''Return the first child to Desktop                                                                 '
+'lngx = apiGetWindow(lngx, mcGWCHILD)                                                               '
+'Do While Not lngx = 0                                                                              '
+'    strCaption = fGetCaption(lngx)                                                                 '
+'    If Len(strCaption) > 0 Then                                                                    '
+'        lngStyle = apiGetWindowLong(lngx, mcGWLSTYLE)                                              '
+'        lThreadID = GetWindowThreadProcessId(lngx, lProcessId)                                     '
+'            Select Case bVisOnly                                                                   '
+'                Case Is = True                                                                     '
+'                'enum visible windows only                                                         '
+'                    If lngStyle And mcWSVISIBLE Then                                               '
+'                        Debug.Print "Class = " & fGetClassName(lngx),                              '
+'                        Debug.Print "Caption = " & fGetCaption(lngx),                              '
+'                        Debug.Print "Process ID = " & lProcessId,                                  '
+'                        Debug.Print "Thread ID = " & lThreadID                                     '
+'                    End If                                                                         '
+'                Case Is = False                                                                    '
+'                'enum all processes                                                                '
+'                        Debug.Print "Class = " & fGetClassName(lngx),                              '
+'                        Debug.Print "Caption = " & fGetCaption(lngx),                              '
+'                        Debug.Print "Process ID = " & lProcessId,                                  '
+'                        Debug.Print "Thread ID = " & lThreadID                                     '
+'            End Select                                                                             '
+'    End If                                                                                         '
+'    lngx = apiGetWindow(lngx, mcGWHWNDNEXT)                                                        '
+'Loop                                                                                               '
+'End Sub                                                                                            '
+'Private Function fGetClassName(hWnd As Long) As String                                             '
+'    Dim strBuffer As String                                                                        '
+'    Dim intCount As Integer                                                                        '
+'                                                                                                   '
+'    strBuffer = String$(mconMAXLEN - 1, 0)                                                         '
+'    intCount = apiGetClassName(hWnd, strBuffer, mconMAXLEN)                                        '
+'    If intCount > 0 Then                                                                           '
+'        fGetClassName = Left$(strBuffer, intCount)                                                 '
+'    End If                                                                                         '
+'End Function                                                                                       '
+'Private Function fGetCaption(hWnd As Long) As String                                               '
+'    Dim strBuffer As String                                                                        '
+'    Dim intCount As Integer                                                                        '
+'    strBuffer = String$(mconMAXLEN - 1, 0)                                                         '
+'    intCount = apiGetWindowText(hWnd, strBuffer, mconMAXLEN)                                       '
+'    If intCount > 0 Then                                                                           '
+'        fGetCaption = Left$(strBuffer, intCount)                                                   '
+'    End If                                                                                         '
+'End Function                                                                                       '
+''===================================================================================================
+
+
+
+
+
+

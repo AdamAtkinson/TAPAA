@@ -1,0 +1,73 @@
+Attribute VB_Name = "B_TOOLS_FileManipulation"
+Option Explicit
+
+Sub RepleaceExtensionOfAllFilesInFolder()
+    Dim docExt As String
+    Dim srch As String
+    docExt = FILENAME_EXTENSION_PDF
+    srch = ".tmp"
+    Dim myFile As String
+
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Filters.Clear
+        .AllowMultiSelect = False
+        .Title = "Select Folder"
+        .InitialView = msoFileDialogViewList
+        .InitialFileName = vbNullString
+        .ButtonName = "Open Folder"
+        If .Show <> -1 Then Exit Sub
+        myFile = Dir(.SelectedItems(1) & "\*" & srch)
+        Do While Len(myFile) > 0
+            Name (.SelectedItems(1) & "\" & myFile) As Replace(.SelectedItems(1) & "\" & myFile, srch, docExt)
+            myFile = Dir
+        Loop
+    End With
+End Sub
+
+Sub SeperateAllFilesInFolderIntoDifferentFolders()
+'uses function GetProperFolderName
+    Dim originalFileName As String
+    Dim originalFolder As String
+    Dim newFolder As String
+    originalFolder = "C:\Users\e-aatkinson\Documents\9) Temp\New folder\"
+
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Filters.Clear
+        .AllowMultiSelect = False
+        .Title = "Select Folder"
+        .InitialView = msoFileDialogViewList
+        .InitialFileName = vbNullString
+        .ButtonName = "Open Folder"
+        If .Show <> -1 Then Exit Sub
+        originalFileName = Dir(.SelectedItems(1) & "\*")
+        Do While Len(originalFileName) > 0
+            newFolder = GetProperFolderName(originalFileName)
+            If CBool(Len(newFolder)) Then Name (originalFolder & originalFileName) As Replace(originalFolder & originalFileName, originalFolder, newFolder)
+            originalFileName = Dir
+        Loop
+    End With
+End Sub
+Private Function GetProperFolderName(ByVal fileToFind As String) As String
+    Dim WB As Workbook
+    Dim WS As Worksheet
+    Dim searchString As String
+    Dim searchRange As Range
+    Dim searchResult As Range
+    Dim determinant As String
+    Set WB = Application.Workbooks("AP.xlsm")
+    Set WS = WB.Worksheets("Sheet1")
+    searchString = Replace(left(fileToFind, InStr(1, fileToFind, "-") - 1), "PREMIER", vbNullString)
+    Set searchRange = WS.Range("A1:A" & Application.WorksheetFunction.CountA(WS.Columns(1)))
+    Set searchResult = searchRange.Find(what:=searchString)
+    If Not searchResult Is Nothing Then
+        determinant = searchResult.Offset(0, 1)
+        Select Case determinant
+            Case "560301", "560711"
+                GetProperFolderName = "C:\Users\e-aatkinson\Documents\9) Temp\New folder\" & determinant & "\"
+            Case Else
+                'do nothing
+        End Select
+    Else
+        'do nothing
+    End If
+End Function

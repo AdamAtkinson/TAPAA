@@ -1,0 +1,108 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Class_CommandBar_Menu"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+'Option Explicit
+'
+'Private Type typeSubMenu
+'    Caption As String
+'    Tag As String
+'    Command As String
+'    Icon As Long
+'End Type
+'Private Type typeMenuItem
+'    Caption As String
+'    Tag As String
+'    Items() As typeSubMenu
+'End Type
+'
+'
+'Private Const mCOMMANDBAR_NAME As String = "Worksheet Menu Bar"
+'Private Const mMENU_GROUP_CONTROL_TYPE As Long = msoControlPopup
+'Private Const mMENU_ITEM_CONTROL_TYPE As Long = msoControlButton
+'
+'Private mMenuName As String
+'Private mArrayOfMenuItems() As typeMenuItem
+'
+'Private Sub Class_Initialize()
+'    ReDim mArrayOfMenuItems(0 To 0)
+'    ReDim mArrayOfMenuItems(0).Items(0 To 0)
+'End Sub
+'
+'Public Property Get Name() As String
+'    Name = mMenuName
+'End Property
+'Public Property Let Name(p_Name As String)
+'    On Error Resume Next
+'    Application.CommandBars(mCOMMANDBAR_NAME).Controls(mMenuName).Caption = p_Name
+'    On Error GoTo 0
+'    mMenuName = p_Name
+'End Property
+'
+'Public Sub RemoveMenuFromCommandBar()
+'    On Error Resume Next
+'    Do
+'    Application.CommandBars(mCOMMANDBAR_NAME).Controls(mMenuName).Delete
+'    Loop While Err.Number = 0
+'    On Error GoTo 0
+'End Sub
+'
+'Public Sub AddMenuItem(ItemGroup As String, ItemCaption As String, ItemAction As String, _
+'                    Optional ItemTag As String, Optional ItemIcon As Long)
+'    Dim i As Long
+'    Dim groupIndex As Long
+'
+'    For i = 1 To UBound(mArrayOfMenuItems)
+'        If mArrayOfMenuItems(i).Caption = ItemGroup Then groupIndex = i
+'    Next i
+'
+'    If groupIndex = 0 Then
+'        If UBound(mArrayOfMenuItems) = 0 Then
+'            ReDim mArrayOfMenuItems(1 To 1)
+'        Else
+'            ReDim Preserve mArrayOfMenuItems(1 To UBound(mArrayOfMenuItems) + 1)
+'        End If
+'        ReDim mArrayOfMenuItems(UBound(mArrayOfMenuItems)).Items(1 To 1)
+'        mArrayOfMenuItems(UBound(mArrayOfMenuItems)).Caption = ItemGroup
+'    Else
+'        ReDim Preserve mArrayOfMenuItems(groupIndex).Items(1 To UBound(mArrayOfMenuItems(groupIndex).Items) + 1)
+'    End If
+'
+'    With mArrayOfMenuItems(UBound(mArrayOfMenuItems)).Items(UBound(mArrayOfMenuItems(UBound(mArrayOfMenuItems)).Items))
+'        .Caption = ItemCaption
+'        .Command = ItemAction
+'        .Tag = ItemTag
+'        If ItemIcon > 0 Then .Icon = ItemIcon
+'    End With
+'End Sub
+'
+'Public Sub CreateMenu()
+'    Dim i As Long
+'    Dim j As Long
+'    Dim menuAnchor As CommandBarControl
+'    Dim groupControl As CommandBarControl
+'    Dim itemControl As CommandBarControl
+'    RemoveMenuFromCommandBar
+'    Set menuAnchor = Application.CommandBars(mCOMMANDBAR_NAME).Controls.Add(Type:=mMENU_GROUP_CONTROL_TYPE, Temporary:=True)
+'    menuAnchor.Caption = mMenuName
+'    For i = 1 To UBound(mArrayOfMenuItems)
+'        Set groupControl = Application.CommandBars(mCOMMANDBAR_NAME).Controls(mMenuName).Controls.Add _
+'                        (Type:=mMENU_GROUP_CONTROL_TYPE, Temporary:=True)
+'        groupControl.Caption = mArrayOfMenuItems(i).Caption
+'        For j = 1 To UBound(mArrayOfMenuItems(i).Items)
+'            Set itemControl = groupControl.Controls.Add(Type:=mMENU_ITEM_CONTROL_TYPE, Temporary:=True)
+'            itemControl.Caption = mArrayOfMenuItems(i).Items(j).Caption
+'            itemControl.OnAction = mArrayOfMenuItems(i).Items(j).Command
+'            itemControl.FaceID = mArrayOfMenuItems(i).Items(j).Icon
+'            itemControl.Tag = mArrayOfMenuItems(i).Items(j).Tag
+'        Next
+'    Next
+'End Sub
+'
+'
+'

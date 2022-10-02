@@ -1,0 +1,82 @@
+Attribute VB_Name = "Module3"
+Option Explicit
+
+Sub SplitColumnByDelimiter()
+    On Error GoTo INVALIDINPUT
+    Dim delim As String
+    delim = Application.InputBox("Delimiter=", "Split Column", ",", Type:=enumInputBoxDataTypes.eString)
+    Dim rangeToSplit As Range
+    Set rangeToSplit = Application.InputBox("Select range to split=", "Split Column", Type:=enumInputBoxDataTypes.eRange)
+    rangeToSplit.Select
+    If Not CBool(Len(delim)) Or rangeToSplit Is Nothing Then Exit Sub
+    On Error GoTo 0
+    
+    Dim WS As Worksheet
+    Set WS = rangeToSplit.Parent
+    
+    Dim firstColumn As Long
+    firstColumn = rangeToSplit.Column
+    Dim lastColumn As Long
+    lastColumn = firstColumn + rangeToSplit.Columns.Count - 1
+    Dim firstRow As Long
+    firstRow = rangeToSplit.Row
+    Dim lastRow As Long
+    lastRow = firstRow + rangeToSplit.Rows.Count - 1
+    
+
+    If lastRow < WS.UsedRange.Rows.Count Or firstRow > WS.UsedRange.Row Then
+        Select Case MsgBox("Do you want to expand the selection to include all data in the selected columns ?", vbYesNo, "Extended Data Range Detected")
+            Case vbYes
+                firstRow = WS.UsedRange.Row
+                lastRow = WS.UsedRange.Row + WS.UsedRange.Rows.Count - 1
+                Set rangeToSplit = WS.Range(Cells(firstRow, firstColumn), WS.Cells(lastRow, lastColumn))
+                rangeToSplit.Select
+            Case vbNo
+        End Select
+    End If
+    
+    Dim splitvalues()
+    ReDim splitvalues(firstRow To lastRow, firstColumn To lastColumn)
+    
+    Dim expansionIndexes() As Long
+    ReDim expansionIndexes(firstColumn To lastColumn)
+    
+    Dim workingColumnIndex As Long
+    For workingColumnIndex = firstColumn To lastColumn
+    
+        Dim workingRowIndex As Long
+        For workingRowIndex = firstRow To lastRow
+            
+            Dim workingCellSplitValues
+            workingCellSplitValues = Split(WS.Cells(workingRowIndex, workingColumnIndex).value, delim)
+            
+
+            splitvalues(workingRowIndex, workingColumnIndex) = workingCellSplitValues
+
+            Dim delimCount As Long
+            delimCount = UBound(workingCellSplitValues)
+            Dim maxDelimCount As Long
+            If delimCount > maxDelimCount Then maxDelimCount = delimCount
+            
+        Next workingRowIndex
+        
+        expansionIndexes(workingColumnIndex) = maxDelimCount
+        maxDelimCount = 0
+    Next workingColumnIndex
+        
+    For workingColumnIndex = lastColumn To firstColumn Step -1
+        WS.Columns(workingColumnIndex).Resize(, expansionIndexes(workingColumnIndex)).Insert xlToRight, xlFormatFromLeftOrAbove
+        For workingRowIndex = firstRow To lastRow
+            workingCellSplitValues = splitvalues(workingRowIndex, workingColumnIndex)
+            If UBound(workingCellSplitValues) < expansionIndexes(workingColumnIndex) Then ReDim Preserve workingCellSplitValues(1 To expansionIndexes(workingColumnIndex))
+            WS.Range(WS.Cells(workingRowIndex, workingColumnIndex), WS.Cells(workingRowIndex, workingColumnIndex + expansionIndexes(workingColumnIndex))) = _
+                        Application.WorksheetFunction.Transpose(workingCellSplitValues)
+            
+        Next workingRowIndex
+    Next workingColumnIndex
+    
+    'normal exit
+    Exit Sub
+
+INVALIDINPUT:
+End Sub

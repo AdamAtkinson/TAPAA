@@ -1,0 +1,221 @@
+Attribute VB_Name = "Adam_UDF"
+Option Explicit
+
+Private Enum udfFunctionColumnIndex
+    eFieldLabels = 1
+    eUDF_FindAllMatchesInRange
+    eUDF_ColumnLetter
+    [_placeholder]
+    [_last] = [_placeholder] - 1
+End Enum
+
+Private Enum udfRegisterMode
+    eRegister = 1
+    eUnregister = 2
+End Enum
+
+Private Enum udfRegisterFields
+    [_first] = 1
+    eName = 1
+    eWorkbook
+    eModule
+    eCategory
+    eDescription
+    [_placeholder]
+    eArguments
+    [_last] = [_placeholder] - 1
+End Enum
+
+Private Type udfType
+    tName As String
+    tWorkbook As String
+    tModule As String
+    tDescription As String
+    tCategory As String
+    tQName As String
+    tArgs() As String
+End Type
+
+Sub RegisterUDF()
+    UpdateUDFRegistry udfRegisterMode.eRegister, udfFunctionColumnIndex.eUDF_ColumnLetter
+End Sub
+
+Private Sub UpdateUDFRegistry(registermode As udfRegisterMode, udfSheetColumnNumber As udfFunctionColumnIndex)
+    Dim i As Long
+    Dim udf As udfType
+    udf.tName = UDF_Registry.Cells(udfRegisterFields.eName, udfSheetColumnNumber)
+    udf.tWorkbook = UDF_Registry.Cells(udfRegisterFields.eWorkbook, udfSheetColumnNumber)
+    udf.tModule = UDF_Registry.Cells(udfRegisterFields.eModule, udfSheetColumnNumber)
+    udf.tDescription = UDF_Registry.Cells(udfRegisterFields.eDescription, udfSheetColumnNumber)
+    udf.tCategory = UDF_Registry.Cells(udfRegisterFields.eCategory, udfSheetColumnNumber)
+    udf.tQName = Chr(39) & udf.tWorkbook & Chr(39) & Chr(33) & udf.tModule & Chr(46) & udf.tName
+    ReDim udf.tArgs(1 To Application.WorksheetFunction.CountA(UDF_Registry.Columns(udfSheetColumnNumber)) - udfRegisterFields.[_last])
+    For i = LBound(udf.tArgs) To UBound(udf.tArgs)
+        udf.tArgs(i) = UDF_Registry.Cells(i + udfRegisterFields.[_last], udfSheetColumnNumber)
+    Next i
+    Excel.Application.MacroOptions Macro:=udf.tQName, _
+                                Description:=Choose(registermode, udf.tDescription, Empty), _
+                                Category:=Choose(registermode, udf.tCategory, Empty), _
+                                ArgumentDescriptions:=Choose(registermode, udf.tArgs, Array(Empty))
+End Sub
+
+Public Function ColumnLetter(ByVal RangeOrColumnNumber As Variant) As Variant
+Attribute ColumnLetter.VB_Description = "Returns the first column letter in a reference range or converts a column number to letter"
+Attribute ColumnLetter.VB_ProcData.VB_Invoke_Func = " \n19"
+    On Error GoTo RETURNERROR
+    If TypeName(RangeOrColumnNumber) = "String" Then
+        If IsNumeric(RangeOrColumnNumber) Then
+            RangeOrColumnNumber = CDbl(RangeOrColumnNumber)
+        Else
+            Set RangeOrColumnNumber = Range(RangeOrColumnNumber)
+        End If
+    End If
+    Select Case TypeName(RangeOrColumnNumber)
+        Case "Range"
+            ColumnLetter = Split(RangeOrColumnNumber.Address(True, False), "$")(0)
+        Case "Double"
+            If RangeOrColumnNumber >= 1 And CInt(RangeOrColumnNumber) - RangeOrColumnNumber = 0 Then
+                ColumnLetter = Split(Cells(1, RangeOrColumnNumber).Address(True, False), "$")(0)
+            Else
+                ColumnLetter = CVErr(xlErrNum)
+            End If
+        Case Else
+            ColumnLetter = CVErr(xlErrRef)
+        End Select
+    Exit Function
+RETURNERROR:
+    ColumnLetter = CVErr(xlErrRef)
+End Function
+
+
+Function FindAllMatchesInRange( _
+                                ByVal searchFor As String, _
+                                ByVal searchRange As Range, _
+                                Optional ByVal columnOffset As Long, _
+                                Optional ByVal rowOffset As Long, _
+                                Optional ByVal countMatches As Boolean, _
+                                Optional ByVal showAddresses As Boolean, _
+                                Optional ByVal findPartialMatch As Boolean = True, _
+                                Optional ByVal searchByColumn As Boolean, _
+                                Optional ByVal reverseDirection As Boolean, _
+                                Optional ByVal caseSensitive As Boolean, _
+                                Optional ByVal lookAtFormat As Boolean, _
+                                Optional ByVal lookInside As XlFindLookIn = xlValues, _
+                                Optional ByVal delimiter As String = "," _
+                            ) As String
+Attribute FindAllMatchesInRange.VB_Description = "Search for every occurance of a string in a range of cells.\r\nResults are concatenated and returned in a delimited string."
+Attribute FindAllMatchesInRange.VB_ProcData.VB_Invoke_Func = " \n19"
+
+    Dim firstMatchCellAddress As String
+    Dim searchResult As Range
+    Dim returnString As String
+    Dim matchCount As Long
+    Set searchResult = searchRange
+       
+    Do
+
+        Set searchResult = searchRange.Find(what:=searchFor, LookIn:=lookInside, MatchCase:=caseSensitive, SearchFormat:=lookAtFormat, _
+                        after:=Choose(-reverseDirection + 1, searchResult.Cells(searchResult.Cells.Count), searchResult.Cells(1)), _
+                        searchorder:=-searchByColumn + 1, lookat:=-findPartialMatch + 1, searchdirection:=-reverseDirection + 1)
+                        
+        Select Case True
+        
+            Case searchResult Is Nothing
+                Exit Do
+                
+            Case firstMatchCellAddress = searchResult.Address
+                Exit Do
+                
+            Case CBool(matchCount)
+                If showAddresses Then
+                    returnString = returnString & delimiter & searchResult.Offset(rowOffset, columnOffset).Address
+                Else
+                    returnString = returnString & delimiter & searchResult.Offset(rowOffset, columnOffset)
+                End If
+                
+            Case Else
+                firstMatchCellAddress = searchResult.Address
+                If showAddresses Then
+                    returnString = searchResult.Offset(rowOffset, columnOffset).Address
+                Else
+                    returnString = searchResult.Offset(rowOffset, columnOffset)
+                End If
+
+        End Select
+
+        matchCount = matchCount + 1
+
+    Loop While True
+
+    If countMatches Then
+        If CBool(matchCount) Then
+            returnString = matchCount & delimiter & returnString
+        Else
+            returnString = 0
+        End If
+    End If
+    
+   FindAllMatchesInRange = returnString
+
+End Function
+
+Public Function ConvertColumnNumberToLetter(ColumNumber As Long)
+    ConvertColumnNumberToLetter = Split(Cells(1, ColumNumber).Address, "$")(1)
+End Function
+Public Function ConvertColumnLetterToNumber(ColumnLetter)
+    ConvertColumnLetterToNumber = Range(ColumnLetter & 1).Column
+End Function
+
+'Returns a Range of the current cell executing a UDF
+Public Function CurrentCell() As Range
+    Set CurrentCell = Application.Caller
+End Function
+
+Public Function GetLastRow(ByVal TargetWorksheet As Worksheet, ByVal ColumnNo As Variant) As Long
+    GetLastRow = TargetWorksheet.Cells(TargetWorksheet.Rows.Count, ColumnNo).End(xlUp).Row
+End Function
+
+Public Function GetLastCol(ByVal TargetWorksheet As Worksheet, ByVal RowNo As Variant) As Long
+    GetLastCol = TargetWorksheet.Cells(RowNo, TargetWorksheet.Columns.Count).End(xlToLeft).Column
+End Function
+
+Function ConcatNC(Sep As String, ParamArray RngList() As Variant) As String
+    Dim rng As Variant
+    Dim cell As Range
+    Dim x As Variant
+    For Each rng In RngList
+        If TypeOf rng Is Range Then
+            For Each cell In rng.Cells
+                ConcatNC = ConcatNC & cell.value & Sep
+            Next cell
+        ElseIf IsArray(rng) Then
+            For Each x In rng
+                ConcatNC = ConcatNC & x & Sep
+            Next x
+        Else
+            ConcatNC = ConcatNC & rng & Sep
+        End If
+    Next rng
+    ConcatNC = left(ConcatNC, Len(ConcatNC) - Len(Sep))
+End Function
+
+
+Public Function IsVisible(rangeToTest As Range) As Boolean()
+'returns an boolean array indicating if cells in the test range are visible
+    Dim rng As Range
+    Dim returnArray() As Boolean
+    Dim rowIndex As Integer
+    Dim colIndex As Integer
+    ReDim returnArray(1 To rangeToTest.Rows.Count, 1 To rangeToTest.Columns.Count)
+    For rowIndex = 1 To rangeToTest.Rows.Count
+        For colIndex = 1 To rangeToTest.Columns.Count
+            Set rng = rangeToTest(rowIndex, colIndex)
+            If rng.EntireRow.Hidden = True Or rng.EntireColumn.Hidden = True Then
+                returnArray(rowIndex, colIndex) = False
+            Else
+                returnArray(rowIndex, colIndex) = True
+            End If
+        Next colIndex
+    Next rowIndex
+    IsVisible = returnArray
+End Function

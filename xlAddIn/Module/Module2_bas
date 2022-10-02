@@ -1,0 +1,16 @@
+Attribute VB_Name = "Module2"
+Option Explicit
+Private Const medtext = "This is an example of long text that fills the length of the screen and wraps down to the next line, if not further"
+
+Private Const longtext = "This is an example of long text that fills the length of the screen and wraps down to the next line, if not further" & _
+                            DBLLN & "And then I'll continue becuase I often do this." & DBLLN & "Because it makes a point" & DBLLN & _
+                            "And sometimes there's a lot of points that I want to make" & DBLLN & DBLLN & "Some points are worth making more than others"
+Private Const shorttext = "Just a short message"
+
+
+Sub testingit()
+Dim frm As New TestForm
+Dim i As Long
+i = frm.Prompt(eModal, longtext, e1Left + e2Center + e4Right, "This is my text", "left button", "center button", "right buton", "Title")
+
+End Sub

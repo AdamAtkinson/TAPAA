@@ -1,0 +1,476 @@
+Attribute VB_Name = "TOOLS_WORKSHEET_MANIPULATION"
+Option Explicit
+'BEGIN ======== Used for MergeAllSheetsIntoOne()
+    Type SourceInfo
+        BookName As Workbook
+        SheetName As Worksheet
+        CopyRange As Range
+    End Type
+    
+    Type DestinationInfo
+        BookName As Workbook
+        SheetName As Worksheet
+        CopyRange As Range
+        firstRow As Long
+        lastRow As Long
+    End Type
+    
+    Type CopyData
+        Source As SourceInfo
+        Destination As DestinationInfo
+    End Type
+'END ========Used for MergeAllSheetsIntoOne()
+
+
+'Reset the UsedRange
+Sub ResetUsedRange()
+    ActiveSheet.UsedRange
+End Sub
+
+
+
+
+Sub MergeAllSheetsIntoOne(Optional sourceWB As Workbook)
+
+    Dim x As CopyData
+    Dim i As Integer
+    
+    If sourceWB Is Nothing Then
+        Set x.Source.BookName = ActiveWorkbook
+    Else
+        Set x.Source.BookName = sourceWB
+    End If
+    
+    Set x.Source.SheetName = x.Source.BookName.Sheets(1)
+    
+    Set x.Destination.BookName = ActiveWorkbook
+    x.Destination.BookName.Sheets.Add before:=Sheets(1)
+    Set x.Destination.SheetName = x.Destination.BookName.Sheets(1)
+    
+    x.Destination.firstRow = 1
+    x.Destination.lastRow = 1
+        
+        For i = 2 To x.Source.BookName.Sheets.Count
+            Set x.Source.SheetName = x.Source.BookName.Sheets(i)
+            Set x.Source.CopyRange = x.Source.SheetName.UsedRange
+            x.Source.CopyRange.Copy Destination:=x.Destination.SheetName.Range("A" & x.Destination.firstRow)
+            x.Destination.firstRow = x.Destination.firstRow + 1 + x.Source.CopyRange.Rows.Count
+        Next i
+End Sub
+
+
+Sub DeselectCells()
+    Dim rng As Range
+    Dim InputRng As Range
+    Dim DeleteRng As Range
+    Dim result As Range
+    Dim xTitleID As String
+    xTitleID = "Deselect Cells"
+
+    Set InputRng = Application.Selection
+    If InputRng.Count <= 1 Then
+        Set InputRng = Application.InputBox("Range is not determined, please select a range :", xTitleID, InputRng.Address, Type:=8)
+    End If
+    Set DeleteRng = Application.InputBox("Deselect Range", xTitleID, Type:=8)
+    For Each rng In InputRng
+        If Application.Intersect(rng, DeleteRng) Is Nothing Then
+            If result Is Nothing Then
+                Set result = rng
+            Else
+                Set result = Application.Union(result, rng)
+            End If
+        End If
+    Next
+    result.Select
+End Sub
+
+
+
+
+Sub CleanData()
+    Dim rng As Range
+    Dim c As Range
+    Dim var As Variant
+    Dim cIndex As Long
+    Dim cCount As Long
+    Dim frmProgressIndicator As New frmProgressIndicator
+    On Error GoTo ESCAPE
+    Set rng = Application.InputBox("Numbers stored as text will be converted to numbers" & vbNewLine _
+                & "and all currency/date/text formats will be removed." & vbNewLine & vbNewLine _
+                & "CAUTION: THIS CANNOT BE UNDONE!!" & vbNewLine & vbNewLine _
+                & "Use the mouse or keyboard to select a range." & vbNewLine, "Select a range", Type:=8)
+    Application.ScreenUpdating = False
+    cCount = rng.Cells.Count
+    Call frmProgressIndicator.StartIndicator(cIndex, cCount)
+    For Each c In rng
+        With c
+            .NumberFormat = "General"
+            .Value2 = Application.WorksheetFunction.Clean(.Value2)
+            cIndex = cIndex + 1
+            Call frmProgressIndicator.UpdateProgressIndicator(cIndex, cCount)
+            If Not frmProgressIndicator.Visible Then GoTo ESCAPE
+            DoEvents
+        End With
+    Next
+    Call frmProgressIndicator.CloseIndicator(cIndex, cCount)
+    Application.ScreenUpdating = True
+    MsgBox ("Finished!")
+    Exit Sub
+ESCAPE:
+    Application.ScreenUpdating = True
+    var = MsgBox("User canceled or an error occured.", vbExclamation, Title:="Forced Exit")
+End Sub
+
+
+'create or update a table of contents listing every worksheet in the workbook
+Sub PopulateTableOfContents(Optional ByVal PromptBeforeClear As Boolean = False)
+Dim WB As Workbook
+Dim WS As Worksheet
+Dim ToC As Worksheet
+Dim SheetName As String
+Dim IsFound As Boolean
+Dim Answer As String
+Dim ToCFound As Boolean
+SheetName = "Contents"
+ToCFound = False
+Set WB = ActiveWorkbook
+For Each WS In WB
+    If WS.Name = SheetName Then ToCFound = True
+Next WS
+If ToCFound = False Then
+    Set ToC = Worksheets.Add(before:=Worksheets(1))
+    ToC.Name = SheetName
+Else
+    Set ToC = Sheets(SheetName)
+End If
+ToC.Activate
+If PromptBeforeClear = True And ToCFound = True Then
+    Answer = MsgBox("Clear the full sheet before writing the table of contents?" & vbNewLine & _
+                    "Selecting 'No' will clear the first column.", vbYesNoCancel, "Clear Old Table of Contents")
+    Select Case Answer
+        Case Answer = vbYes
+            ToC.Cells.Clear
+        Case Answer = vbNo
+            ToC.Columns(1).ClearContents
+        Case Answer = vbCancel
+            GoTo UserCanceled:
+    End Select
+Else
+    ToC.Cells.Clear
+End If
+For Each WS In Worksheets
+    ToC.Cells(WS.Index, 1) = WS.Name
+Next WS
+Columns("A:A").EntireColumn.AutoFit
+With Range("A1")
+    .Font.Bold = True
+    .HorizontalAlignment = xlCenter
+End With
+UserCanceled:
+End Sub
+
+'replace the string in all worksheets
+Sub ReplaceStringInAllSheetNames()
+Dim WB As Workbook
+Dim WS As Worksheet
+Dim str As String
+str = " Totals"
+Set WB = ActiveWorkbook
+For Each WS In WB.Worksheets
+    WS.Name = Replace(WS.Name, str, "")
+Next
+End Sub
+
+
+'insert table in the used range for all sheets
+Sub InsertTableInAllSheets()
+Dim WB As Workbook
+Dim WS As Worksheet
+Set WB = ActiveWorkbook
+For Each WS In WB.Worksheets
+    WS.Activate
+    If WS.ListObjects.Count = 0 Then
+    WS.ListObjects.Add(xlSrcRange, Range(WS.UsedRange.Address), , xlYes).Name = WS.Name & "Transactions2016"
+    End If
+Next
+End Sub
+
+
+Sub BypassWorksheetProtection()
+'unlocks a protected worksheet
+    Dim i As Integer, j As Integer, k As Integer
+    Dim l As Integer, m As Integer, N As Integer
+    Dim i1 As Integer, i2 As Integer, i3 As Integer
+    Dim i4 As Integer, i5 As Integer, i6 As Integer
+    On Error Resume Next
+    For i = 65 To 66: For j = 65 To 66: For k = 65 To 66
+    For l = 65 To 66: For m = 65 To 66: For i1 = 65 To 66
+    For i2 = 65 To 66: For i3 = 65 To 66: For i4 = 65 To 66
+    For i5 = 65 To 66: For i6 = 65 To 66: For N = 32 To 126
+        ActiveSheet.Unprotect Chr(i) & Chr(j) & Chr(k) & _
+            Chr(l) & Chr(m) & Chr(i1) & Chr(i2) & Chr(i3) & _
+            Chr(i4) & Chr(i5) & Chr(i6) & Chr(N)
+        If ActiveSheet.ProtectContents = False Then
+            MsgBox "Password is " & Chr(i) & Chr(j) & _
+                Chr(k) & Chr(l) & Chr(m) & Chr(i1) & Chr(i2) & _
+                Chr(i3) & Chr(i4) & Chr(i5) & Chr(i6) & Chr(N)
+            Exit Sub
+        End If
+    Next: Next: Next: Next: Next: Next
+    Next: Next: Next: Next: Next: Next
+End Sub
+
+
+Sub TopRow()
+'loops through every worksheet
+'removes all frozen/split windows
+'freezes top row and adds an autofilter if it wasn't previously set
+Dim WB As Workbook
+Dim WS As Worksheet
+Dim iwsvis As Integer
+For Each WS In Worksheets
+    iwsvis = WS.Visible
+    If iwsvis > -1 Then WS.Visible = -1
+    WS.Activate
+    With ActiveWindow
+    'reset to splits and freezes
+        .FreezePanes = False
+        .SplitColumn = 0
+        .SplitRow = 0
+    End With
+    WS.Cells(1, 1).Select
+    With ActiveWindow
+    'freeze top row
+        .SplitRow = 1
+        .FreezePanes = True
+    End With
+    If Not WS.AutoFilterMode Then
+        On Error Resume Next
+        WS.Range("a1").AutoFilter
+        On Error GoTo 0
+    End If
+    WS.Visible = iwsvis
+Next WS
+Sheets(1).Activate
+End Sub
+
+
+Sub ResetStyles()
+'delete all styles that aren't default
+    Dim objStyle As Style
+    Dim ConfirmDelete As Integer
+    Dim PromptBefore As Integer
+    PromptBefore = MsgBox("Prompt before removing each style?", vbYesNo)
+    For Each objStyle In ActiveWorkbook.Styles
+        If Not objStyle.BuiltIn Then
+            If PromptBefore = vbYes Then
+                ConfirmDelete = MsgBox("Delete style '" & objStyle.Name & "'?", vbYesNo)
+                If ConfirmDelete = vbYes Then objStyle.Delete
+            Else 'do not prompt before delete
+                objStyle.Delete
+            End If
+        End If
+    Next objStyle
+End Sub
+
+
+
+Sub OpenAndImportAllExcel()
+    Dim WB As Workbook
+    Dim wbMaster As Workbook
+    Dim WS As Worksheet
+    Dim fldFolder As FileDialog
+    Dim strFileType As String
+    Dim strRootDir As String
+    Dim strFileName As String
+    Dim strFilePath As String
+    Dim strFileSearchName As String
+    Dim strSearch As String
+    Dim strDir As String
+    Dim lngFileCount As Long
+    Dim lngFileIndex As Long
+    '===================================
+    strFileType = ".xl*"
+    strRootDir = "C:\"
+    '===================================
+    Set wbMaster = ActiveWorkbook
+    Set fldFolder = Application.FileDialog(msoFileDialogFolderPicker)
+    With fldFolder
+        .Title = "Select the Folder to Search"
+        .AllowMultiSelect = False
+        .InitialFileName = strRootDir
+        If .Show <> -1 Then GoTo UserQuit
+        strFilePath = .SelectedItems(1)
+    End With
+    strFileSearchName = Application.InputBox("Leave this field blank to search every Excel workbook in the folder" _
+            & vbNewLine & "or enter a file name to constrain the search." & vbNewLine & vbNewLine & _
+            "Wild cards can be used but this program will only search Excel files." & vbNewLine & vbNewLine & " ", _
+            "Enter File Name Constraints")
+        Select Case strFileSearchName
+            Case Is = ""
+                strFileSearchName = "*"
+            Case Is = "False"
+                GoTo UserQuit
+        End Select
+    If Right(strFilePath, 1) <> "\" Then strFilePath = strFilePath & "\"
+    strFileName = strFilePath & strFileSearchName & strFileType
+    strDir = Dir(strFileName)
+    Do While strDir <> ""
+        lngFileCount = lngFileCount + 1
+        strDir = Dir
+    Loop
+    strDir = Dir(strFileName)
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.AutomationSecurity = msoAutomationSecurityForceDisable
+    Application.Calculation = xlCalculationManual
+    Call frmProgressIndicator.StartIndicator(lngFileIndex, lngFileCount)
+    While (strDir <> "")
+        Workbooks.Open strFilePath & strDir, ReadOnly:=True
+        ActiveWindow.Visible = False
+        If cGetInputState() <> 0 Then DoEvents
+        lngFileIndex = lngFileIndex + 1
+        Call frmProgressIndicator.UpdateProgressIndicator(lngFileIndex, lngFileCount)
+        If cGetInputState() <> 0 Then DoEvents
+        Set WB = Workbooks(strDir)
+        For Each WS In WB.Worksheets
+            WS.Copy before:=wbMaster.Sheets(1)
+        Next
+        strDir = Dir
+        WB.Close savechanges:=False
+    Wend
+    Call frmProgressIndicator.CloseIndicator(lngFileIndex, lngFileCount)
+UserQuit:
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Set fldFolder = Nothing
+End Sub
+
+
+
+Sub NormalizeData()
+    Dim rng As Range
+    Dim WS As Worksheet
+    Dim i As Long
+    Dim c As Long
+    Dim r As Long
+    
+    On Error Resume Next
+    Set rng = Application.InputBox(Prompt:="Select a range to normalize data" _
+    , Title:="Select a range", Default:=ActiveCell.Address, Type:=8)
+    On Error GoTo 0
+     
+    If rng Is Nothing Then
+    Else
+        Application.ScreenUpdating = False
+        Set WS = Sheets.Add
+        i = 0
+        For r = 1 To rng.Rows.Count - 1
+            For c = 1 To rng.Columns.Count - 1
+                WS.Range("A1").Offset(i, 0) = rng.Offset(0, c).value
+                WS.Range("A1").Offset(i, 1) = rng.Offset(r, 0).value
+                WS.Range("A1").Offset(i, 2) = rng.Offset(r, c).value
+                i = i + 1
+            Next c
+        Next r
+        WS.Range("A:C").EntireColumn.AutoFit
+        Application.ScreenUpdating = True
+    End If
+End Sub
+
+Function Find_num(rng As Range, cell As Range)
+ 
+Dim com() As Single, c As Single, i As Single
+Dim S As Single, d As Single, u As Single, v As Single
+Dim arr() As String, r As Single, p As Single, t As Single
+Dim sum_cells As Single, j As Single, k As Single, l As Single
+ 
+sum_cells = Application.WorksheetFunction.Sum(rng)
+c = rng.Rows.Count
+ReDim arr(1 To 1000, 1 To c)
+r = 1
+ 
+For i = 0 To Int(c / 2)
+  If i <> Int(c / 2) - 1 Then
+    t = WorksheetFunction.Combin(c, i + 1)
+  Else
+    t = WorksheetFunction.Combin(c, i + 1) / 2
+  End If
+  ReDim com(i)
+  For j = 0 To i
+    com(j) = j + 1
+  Next
+  k = i
+  For S = 1 To t
+    If com(k) > c And i > 0 Then
+      p = 0
+       
+      Do Until com(k) <= c - p
+        com(k - 1) = com(k - 1) + 1
+        k = k - 1
+        p = p + 1
+      Loop
+ 
+      Do Until k >= i
+        k = k + 1
+        com(k) = com(k - 1) + 1
+      Loop
+       
+    End If
+    d = 0
+     
+    For j = 0 To i
+      d = d + rng(com(j))
+    Next j
+     
+    If d = cell Then
+       
+      For j = 1 To i + 1
+        arr(r, j) = rng(com(j - 1))
+      Next j
+       
+      r = r + 1
+    End If
+     
+    If sum_cells - d = cell Then
+       
+      For j = 1 To c
+        v = 0
+         
+        For u = 0 To i
+          If rng(com(u)) = rng(j) Then v = 1
+        Next u
+         
+        If v = 0 Then
+           arr(r, j) = rng(j)
+        End If
+       
+      Next j
+      r = r + 1
+     
+    End If
+    com(k) = com(k) + 1
+  Next S
+Next i
+ 
+Find_num = arr()
+ 
+End Function
+
+
+
+Sub DeleteEmptySheets()
+    Dim i As Long
+    Dim WB As Workbook
+    Dim WS As Worksheet
+    Dim cnt As Long
+    Set WB = ActiveWorkbook
+    cnt = WB.Worksheets.Count
+    Application.DisplayAlerts = False
+    For i = cnt To 1 Step -1
+        If WB.Worksheets(i).UsedRange.Address = "$A$1" Then WB.Worksheets(i).Delete
+        DoEvents
+    Next
+    Application.DisplayAlerts = True
+End Sub
+

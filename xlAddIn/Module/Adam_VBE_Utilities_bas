@@ -1,0 +1,754 @@
+Attribute VB_Name = "Adam_VBE_Utilities"
+Option Explicit
+
+
+
+#Const CCA_DBPL = -1
+
+'
+'Private Declare Function GetCurrentProcessId Lib "kernel32" () As Long
+'Private Declare Function CoCreateGuid Lib "OLE32.DLL" (pGuid As GUID) As Long
+
+Private Type GUID
+    Data1 As Long
+    Data2 As Integer
+    Data3 As Integer
+    Data4(0 To 7) As Byte
+End Type
+
+
+Private VBAEditor As VBIDE.VBE
+Private VBProj As VBIDE.VBProject
+Private VBComp As VBIDE.VBComponent
+Private CodeMod As VBIDE.CodeModule
+
+Public Enum ProcScope
+    ScopePrivate = 1
+    ScopePublic = 2
+    ScopeFriend = 3
+    ScopeDefault = 4
+End Enum
+
+Public Enum LineSplits
+    LineSplitRemove = 0
+    LineSplitKeep = 1
+    LineSplitConvert = 2
+End Enum
+
+Public Type ProcInfo
+    ProcName As String
+    ProcKind As VBIDE.vbext_ProcKind
+    ProcStartLine As Long
+    ProcBodyLine As Long
+    ProcCountLines As Long
+    ProcScope As ProcScope
+    ProcDeclaration As String
+End Type
+
+
+
+'Set VBAEditor = Application.VBE
+''''''''''''''''''''''''''''''''''''''''''''
+'Set VBProj = VBAEditor.ActiveVBProject
+'' or
+'Set VBProj = Application.Workbooks("Book1.xls").VBProject
+''''''''''''''''''''''''''''''''''''''''''''
+'Set VBComp = ActiveWorkbook.VBProject.VBComponents("Module1")
+'' or
+'Set VBComp = VBProj.VBComponents("Module1")
+''''''''''''''''''''''''''''''''''''''''''''
+'Set CodeMod = ActiveWorkbook.VBProject.VBComponents("Module1").CodeModule
+'' or
+'Set CodeMod = VBComp.CodeModule
+
+
+'Private mTimerIncrement As String
+'Private mTimerNextCallTime As String
+
+Sub ShowPopupTimer()
+'    mTimerIncrement = "00:20:00"
+    If gfrmTimedPopupReminder Is Nothing Then
+        Set gfrmTimedPopupReminder = New Form_TimedPopupReminder
+        gfrmTimedPopupReminder.Show
+    ElseIf gfrmTimedPopupReminder.Visible Then
+        gfrmTimedPopupReminder.Hide
+    Else
+        gfrmTimedPopupReminder.Show
+    End If
+End Sub
+
+Public Function BackupXLAMafterBatch(ByVal savePath As String) As Boolean
+    ThisWorkbook.Save
+    savePath = Replace(savePath, "AP ).xlsm", "AddIn ).xlam")
+    If xNoNullStr(savePath) Then ThisWorkbook.SaveCopyAs savePath
+    If xNoNullStr(Dir(savePath)) Then BackupXLAMafterBatch = True
+End Function
+
+
+Public Sub ExportVBA()
+    Dim sDestinationFolder As String
+    Dim oVBComponent As VBIDE.VBComponent
+    sDestinationFolder = "C:\Users\e-aatkinson\Documents\9) Temp" & "\VBComponents\"
+    For Each oVBComponent In ThisWorkbook.VBProject.VBComponents
+        With oVBComponent
+            Dim strtype As String
+            Dim strFolder As String
+
+            Select Case .Type
+                Case VBIDE.vbext_ct_StdModule '1
+                    strtype = "_bas"
+                    strFolder = "Module\"
+                Case VBIDE.vbext_ct_ClassModule '2
+                    strtype = "_cls"
+                    strFolder = "Class\"
+                Case VBIDE.vbext_ct_MSForm '3
+                    strtype = "_frm"
+                    strFolder = "Form\"
+                Case VBIDE.vbext_ct_Document '100
+                    strtype = "_obj"
+                    strFolder = "Built In\"
+                Case Else
+                    strtype = "_unk"
+                    strFolder = "Unkown\"
+            End Select
+
+            Dim strNewFolder As String
+            strNewFolder = sDestinationFolder & strFolder
+
+            If Dir(strNewFolder, vbDirectory) = vbNullString Then MkDir strNewFolder
+            strNewFolder = strNewFolder & .Name & strtype
+            .Export strNewFolder
+            DoEvents
+        End With
+    Next oVBComponent
+End Sub
+
+
+
+Public Sub VBEimportAllModulesInFolder()
+    Dim oVBComponent As VBComponent
+    Dim fName As String
+    Dim sourceFolder As String
+    sourceFolder = "C:\Users\e-aatkinson\Documents\9) Temp\VBComponents\excel\"
+    fName = Dir(sourceFolder & "*.*")
+    Do
+        If Not CBool(InStr(1, fName, ".frx")) Then
+            ThisWorkbook.VBProject.VBComponents.Import sourceFolder & fName
+        End If
+        DoEvents
+        fName = Dir
+    Loop While CBool(Len(fName))
+End Sub
+
+Public Sub VBEdeleteModule()
+    Dim oVBComponent As VBComponent
+    For Each oVBComponent In ThisWorkbook.VBProject.VBComponents
+        With oVBComponent
+            If .Name <> "TEST_Events" _
+                    And .Type <> VBIDE.vbext_ct_Document _
+                    And .Type <> VBIDE.vbext_ct_ActiveXDesigner _
+                    Then
+                ThisWorkbook.VBProject.VBComponents.Remove ThisWorkbook.VBProject.VBComponents(.Name)
+            End If
+            DoEvents
+        End With
+    Next oVBComponent
+End Sub
+
+
+Sub StartGlobalTimer()
+    'Application.OnTime mTimerNextCallTime, "Adam_VBE_Utilities.ShowPopupTimer"
+    Application.OnTime gfrmTimedPopupReminder.NextCallTime, "Adam_VBE_Utilities.ShowPopupTimer"
+End Sub
+Sub StopGlobalTimer()
+    On Error Resume Next
+    'Application.OnTime mTimerNextCallTime, "Adam_VBE_Utilities.ShowPopupTimer", Schedule:=False
+    Application.OnTime gfrmTimedPopupReminder.NextCallTime, "Adam_VBE_Utilities.ShowPopupTimer", Schedule:=False
+    On Error GoTo 0
+End Sub
+
+
+
+   Function GetMemUsage()
+
+     ' Returns the current Excel.Application
+     ' memory usage in MB
+    Dim objSWbemServices As Object
+     Set objSWbemServices = GetObject("winmgmts:")
+     GetMemUsage = objSWbemServices.Get( _
+       "Win32_Process.Handle='" & _
+       GetCurrentProcessId & "'").WorkingSetSize / 1024
+
+     Set objSWbemServices = Nothing
+
+   End Function
+
+'dbP is one of the best <10 line tools i've written
+'and dbPL makes it even better !!!!!!!!!!!!!!!!!!!!
+Public Sub dbP(ParamArray printStrings() As Variant)
+    Dim joinStrings() As Variant
+    If UBound(printStrings) <> -1 Then
+        If VarType(printStrings(0)) >= vbArray Then
+            joinStrings = printStrings(0)
+        Else
+            joinStrings = printStrings
+        End If
+        Dim delimString As String: delimString = " ; "
+        Debug.Print Join(joinStrings, delimString)
+    End If
+End Sub
+Public Sub dbPL(ParamArray conditionalDisplayStrings() As Variant)
+    #If CCC_dbPL Then
+        'expand and shift right to append time and date
+        Dim newArray() As Variant
+        ReDim newArray(0 To UBound(conditionalDisplayStrings) + 1)
+        newArray(0) = Now
+        Dim i As Long
+        For i = UBound(newArray) To 1
+            newArray(i) = conditionalDisplayStrings(i - 1)
+        Next i
+        dbP newArray
+    #End If
+End Sub
+
+
+'this program will call use the name of the macro button to call the program
+'the button should be named EXACTLY the same as the program it means to call
+'but should point here instead
+Sub WhichButton()
+Run Application.Caller
+End Sub
+
+
+
+'these macros can be combined and improved to search every shape (ie: form button) on every worksheet in the workbook
+'read the On.Action property and replace the external link with a fully qualified local link
+'
+'THIS IS VERY HELPFUL WHEN YOU GET A "WORKSHEET CONTAINS EXTERNAL LINKS" notification
+Sub FixMacroLinks(myWorkbook As Workbook)
+'PURPOSE: Localize any shape macro links (needs a target workbook to work)
+'Source: www.TheSpreadsheetGuru.com
+    Dim shp As Shape
+    Dim sht As Worksheet
+    Dim MacroLink As String
+    Dim SplitLink As Variant
+    Dim NewLink As String
+    Set myWorkbook = ActiveWorkbook
+'Loop through each shape in each worksheet
+  For Each sht In myWorkbook.Worksheets
+    For Each shp In sht.Shapes
+      'Grab current macro link (if available)
+        MacroLink = shp.OnAction
+      'Determine if shape was linking to a macro
+        If MacroLink <> "" And InStr(MacroLink, "!") <> 0 Then
+          'Split Macro Link at the exclaimation mark (store in Array)
+            SplitLink = Split(MacroLink, "!")
+          'Pull text occurring after exclaimation mark
+            NewLink = SplitLink(1)
+          'Remove any straggling apostrophes from workbook name
+            If Right(NewLink, 1) = "'" Then
+              NewLink = left(NewLink, Len(NewLink) - 1)
+            End If
+          'Apply New Link
+            shp.OnAction = NewLink
+        End If
+    Next shp
+  Next sht
+End Sub
+
+'this one grabs the module name!!!!!
+Sub MyMacroInfo()
+    Dim MacroName$, SubName$, ModArr As Variant
+    Dim modName As Object, strModName$, i&, j&
+    Dim shp As Shape
+    Dim WS As Worksheet
+    Set WS = ActiveSheet
+    For Each shp In WS.Shapes
+        MacroName = shp.OnAction
+        SubName = Application.Replace(MacroName, 1, Application.Search("!", MacroName), "")
+        ModArr = Array(0, 1, 2, 3)
+        For Each modName In ActiveWorkbook.VBProject.VBComponents
+        For j = LBound(ModArr) To UBound(ModArr)
+        i = 0
+        On Error Resume Next
+        i = modName.CodeModule.ProcStartLine(SubName, CLng(ModArr(j)))
+        Err.Clear
+        If i > 0 Then
+        strModName = modName.Name
+        Exit For
+        End If
+        Next j
+        Next modName
+        MsgBox _
+        "Full macro name:" & vbCrLf & MacroName & vbCrLf & vbCrLf & _
+        "Actual subroutine name:" & vbCrLf & SubName & vbCrLf & vbCrLf & _
+        "Module name where " & SubName & " is housed: " & vbCrLf & strModName, _
+        64, "Information about macro being run..."
+    Next shp
+End Sub
+
+Function IsUserFormLoaded(ByVal UFName As String) As Boolean
+  Dim UForm As Object
+  IsUserFormLoaded = False
+  For Each UForm In VBA.UserForms
+    If UForm.Name = UFName Then
+      IsUserFormLoaded = True
+      Exit For
+    End If
+  Next
+End Function 'IsUserFormLoaded
+
+
+Function ColorToRGB(lColor As Long) As String
+    'Convert Decimal Color Code to RGB
+    Dim iRed, iGreen, iBlue
+    iRed = (lColor Mod 256)
+    iGreen = (lColor \ 256) Mod 256
+    iBlue = (lColor \ 65536) Mod 256
+    ColorToRGB = "(" & iRed & "," & iGreen & "," & iBlue & ")"
+End Function
+'
+'
+'Public Sub SetButtonState(ByRef button As MSForms.Control, ByVal buttonState As BUTTONSTATES, Optional ByVal buttonText As String)
+'    With button
+'        Select Case buttonState
+'            Case BUTTONSTATES.eClicked
+'                .BackColor = ClickedButtonColors.fillColor
+'                .ForeColor = ClickedButtonColors.textColor
+'                .Tag = BUTTONSTATES.eClicked
+'            Case BUTTONSTATES.eDefault
+'                .BackColor = DefaultButtonColors.fillColor
+'                .ForeColor = DefaultButtonColors.textColor
+'                .Tag = BUTTONSTATES.eDefault
+'            Case BUTTONSTATES.eDisabled
+'                .BackColor = DisabledButtonColors.fillColor
+'                .ForeColor = DisabledButtonColors.textColor
+'                .Tag = BUTTONSTATES.eDisabled
+'            Case BUTTONSTATES.eMouseOver
+'                .BackColor = MouseOverButtonColors.fillColor
+'                .ForeColor = MouseOverButtonColors.textColor
+'                .Tag = BUTTONSTATES.eMouseOver
+'        End Select
+'        If CBool(Len(buttonText)) Then .Caption = buttonText
+'    End With
+'End Sub
+Public Sub SetButtonsToDefault(ParamArray buttons() As Variant)
+    Dim i As Long
+    Dim btn As MSForms.Control
+    For i = LBound(buttons) To UBound(buttons)
+        Set btn = buttons(i)
+        If btn.Visible = True Then SetButtonState btn, eDefault
+    Next i
+End Sub
+
+
+Public Sub ListAllControlsInUserForm(Optional ByVal theUserForm As MSForms.UserForm)
+    Dim WS As Worksheet
+    With ActiveWorkbook
+        Set WS = .Sheets.Add
+    End With
+    Dim i As Long
+    Dim c As MSForms.Control
+    i = 1
+    WS.Cells(i, 1) = "Name"
+    WS.Cells(i, 2) = "Tag"
+    WS.Cells(i, 3) = "Visible"
+    For Each c In theUserForm.Controls
+        i = i + 1
+        WS.Cells(i, 1) = c.Name
+        WS.Cells(i, 2) = c.Tag
+        WS.Cells(i, 3) = c.Visible
+    Next c
+End Sub
+
+'===========================================================================================================================================================================================
+'===========================================================================================================================================================================================
+'===========================================================================================================================================================================================
+
+'This code will list all the modules and their types in the workbook, starting the listing in cell A1.
+ Sub ListModules()
+'     Dim VBProj As VBIDE.VBProject
+'     Dim VBComp As VBIDE.VBComponent
+     Dim WS As Worksheet
+     Dim newWB As Workbook
+     Dim rng As Range
+
+     Dim projectWB As Workbook
+     Set projectWB = ThisWorkbook 'ActiveWorkbook
+
+     Set VBProj = projectWB.VBProject
+     Set newWB = Application.Workbooks.Add
+     Set WS = newWB.Worksheets("Sheet1")
+     Set rng = WS.Range("A1")
+        rng(1, 1).value = "CompName: "
+        rng(1, 3).value = "CompType: "
+        rng(1, 3).value = "ProcName: "
+        rng(1, 4).value = "ProcKind: "
+        rng(1, 5).value = "ProcStartLine: "
+        rng(1, 6).value = "ProcBodyLine: "
+        rng(1, 7).value = "ProcCountLines: "
+        rng(1, 8).value = "ProcScope: "
+        rng(1, 9).value = "ProcDeclaration: "
+
+     Set rng = rng(2, 1)
+
+     For Each VBComp In VBProj.VBComponents
+
+         rng(1, 1).value = VBComp.Name
+         rng(1, 2).value = ComponentTypeToString(VBComp.Type)
+        ListProcedures rng
+
+         Set rng = rng(2, 1)
+     Next VBComp
+ End Sub
+
+
+
+
+'Listing All Procedures In A Module
+'This code will list all the procedures in Module1, beginning the listing in cell A1.
+ Sub ListProcedures(rng As Range)
+'     Dim VBProj As VBIDE.VBProject
+'     Dim VBComp As VBIDE.VBComponent
+'     Dim CodeMod As VBIDE.CodeModule
+     Dim LineNum As Long
+     Dim NumLines As Long
+     Dim ProcName As String
+     Dim ProcKind As VBIDE.vbext_ProcKind
+
+     Set CodeMod = VBComp.CodeModule
+
+     With CodeMod
+         LineNum = .CountOfDeclarationLines + 1
+         Do Until LineNum >= .CountOfLines
+
+            Dim PInfo As ProcInfo
+
+             ProcName = .ProcOfLine(LineNum, ProcKind)
+
+             LineNum = .ProcStartLine(ProcName, ProcKind) + _
+                     .ProcCountLines(ProcName, ProcKind) + 1
+
+            PInfo = ProcedureInfo(ProcName, ProcKind, CodeMod)
+            rng(1, 3).value = PInfo.ProcName
+            rng(1, 4).value = ProcKindString(PInfo.ProcKind)
+            rng(1, 5).value = CStr(PInfo.ProcStartLine)
+            rng(1, 6).value = CStr(PInfo.ProcBodyLine)
+            rng(1, 7).value = CStr(PInfo.ProcCountLines)
+            rng(1, 8).value = ScopeToString(PInfo.ProcScope)
+            rng(1, 9).value = PInfo.ProcDeclaration
+
+            Set rng = rng(2, 1)
+         Loop
+     End With
+
+ End Sub
+
+
+ 'You can call the ProcedureInfo function using code like the following:
+ Sub ShowProcedureInfo(rng As Range)
+     Dim VBProj As VBIDE.VBProject
+     Dim VBComp As VBIDE.VBComponent
+     Dim CodeMod As VBIDE.CodeModule
+     Dim CompName As String
+     Dim ProcName As String
+     Dim ProcKind As VBIDE.vbext_ProcKind
+     Dim PInfo As ProcInfo
+
+     CompName = "modVBECode"
+     ProcName = "ProcedureInfo"
+     ProcKind = vbext_pk_Proc
+'                             vbext_pk_Get (3). A Property Get procedure.
+'                             vbext_pk_Let (1). A Property Let procedure.
+'                             vbext_pk_Set (2). A Property Set procedure.
+'                             vbext_pk_Proc (0). A Sub or Function procedure.
+
+     Set VBProj = ActiveWorkbook.VBProject
+     Set VBComp = VBProj.VBComponents(CompName)
+     Set CodeMod = VBComp.CodeModule
+
+     PInfo = ProcedureInfo(ProcName, ProcKind, CodeMod)
+
+
+     Debug.Print "ProcName: " & PInfo.ProcName
+     Debug.Print "ProcKind: " & CStr(PInfo.ProcKind)
+     Debug.Print "ProcStartLine: " & CStr(PInfo.ProcStartLine)
+     Debug.Print "ProcBodyLine: " & CStr(PInfo.ProcBodyLine)
+     Debug.Print "ProcCountLines: " & CStr(PInfo.ProcCountLines)
+     Debug.Print "ProcScope: " & CStr(PInfo.ProcScope)
+     Debug.Print "ProcDeclaration: " & PInfo.ProcDeclaration
+ End Sub
+
+
+
+
+'General Infomation About A Procedure
+'The code below returns the following information about a procedure in a module, loaded into the ProcInfo Type.
+'The function ProcedureInfo takes as input:
+                                'the name of the procedure,
+                                'a VBIDE.vbext_ProcKind procedure type,
+                                'and a reference to the CodeModule object containing the procedure.
+
+ Function ProcedureInfo(ProcName As String, ProcKind As VBIDE.vbext_ProcKind, _
+     CodeMod As VBIDE.CodeModule) As ProcInfo
+
+     Dim PInfo As ProcInfo
+     Dim BodyLine As Long
+     Dim Declaration As String
+     Dim FirstLine As String
+
+
+     BodyLine = CodeMod.ProcStartLine(ProcName, ProcKind)
+     If BodyLine > 0 Then
+         With CodeMod
+             PInfo.ProcName = ProcName
+             PInfo.ProcKind = ProcKind
+             PInfo.ProcBodyLine = .ProcBodyLine(ProcName, ProcKind)
+             PInfo.ProcCountLines = .ProcCountLines(ProcName, ProcKind)
+             PInfo.ProcStartLine = .ProcStartLine(ProcName, ProcKind)
+
+             FirstLine = .Lines(PInfo.ProcBodyLine, 1)
+             If StrComp(left(FirstLine, Len("Public")), "Public", vbBinaryCompare) = 0 Then
+                 PInfo.ProcScope = ScopePublic
+             ElseIf StrComp(left(FirstLine, Len("Private")), "Private", vbBinaryCompare) = 0 Then
+                 PInfo.ProcScope = ScopePrivate
+             ElseIf StrComp(left(FirstLine, Len("Friend")), "Friend", vbBinaryCompare) = 0 Then
+                 PInfo.ProcScope = ScopeFriend
+             Else
+                 PInfo.ProcScope = ScopeDefault
+             End If
+             PInfo.ProcDeclaration = GetProcedureDeclaration(CodeMod, ProcName, ProcKind, LineSplitKeep)
+         End With
+     End If
+
+     ProcedureInfo = PInfo
+
+ End Function
+
+
+ Public Function GetProcedureDeclaration(CodeMod As VBIDE.CodeModule, _
+     ProcName As String, ProcKind As VBIDE.vbext_ProcKind, _
+     Optional LineSplitBehavior As LineSplits = LineSplitRemove)
+ '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+ ' GetProcedureDeclaration
+ ' This return the procedure declaration of ProcName in CodeMod. The LineSplitBehavior
+ ' determines what to do with procedure declaration that span more than one line using
+ ' the "_" line continuation character. If LineSplitBehavior is LineSplitRemove, the
+ ' entire procedure declaration is converted to a single line of text. If
+ ' LineSplitBehavior is LineSplitKeep the "_" characters are retained and the
+ ' declaration is split with vbNewLine into multiple lines. If LineSplitBehavior is
+ ' LineSplitConvert, the "_" characters are removed and replaced with vbNewLine.
+ ' The function returns vbNullString if the procedure could not be found.
+ '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+     Dim LineNum As Long
+     Dim S As String
+     Dim Declaration As String
+
+     On Error Resume Next
+     LineNum = CodeMod.ProcBodyLine(ProcName, ProcKind)
+     If Err.Number <> 0 Then
+         Exit Function
+     End If
+     S = CodeMod.Lines(LineNum, 1)
+     Do While Right(S, 1) = "_"
+         Select Case True
+             Case LineSplitBehavior = LineSplitConvert
+                 S = left(S, Len(S) - 1) & vbNewLine
+             Case LineSplitBehavior = LineSplitKeep
+                 S = S & vbNewLine
+             Case LineSplitBehavior = LineSplitRemove
+                 S = left(S, Len(S) - 1) & " "
+         End Select
+         Declaration = Declaration & S
+         LineNum = LineNum + 1
+         S = CodeMod.Lines(LineNum, 1)
+     Loop
+     Declaration = SingleSpace(Declaration & S)
+     GetProcedureDeclaration = Declaration
+
+
+ End Function
+
+ Private Function SingleSpace(ByVal Text As String) As String
+     Dim Pos As String
+     Pos = InStr(1, Text, Space(2), vbBinaryCompare)
+     Do Until Pos = 0
+         Text = Replace(Text, Space(2), Space(1))
+         Pos = InStr(1, Text, Space(2), vbBinaryCompare)
+     Loop
+     SingleSpace = Text
+ End Function
+
+Function ScopeToString(Scope As ProcScope) As String
+    Select Case Scope
+        Case 1
+            ScopeToString = "Private"
+        Case 2
+             ScopeToString = "Public"
+        Case 3
+            ScopeToString = "Friend"
+        Case 4
+            ScopeToString = "Default"
+        Case Else
+            ScopeToString = "Invalid"
+    End Select
+End Function
+
+  Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As String
+     Select Case ComponentType
+         Case VBIDE.vbext_ct_ActiveXDesigner
+             ComponentTypeToString = "ActiveX Designer"
+         Case VBIDE.vbext_ct_ClassModule
+             ComponentTypeToString = "Class Module"
+         Case VBIDE.vbext_ct_Document
+             ComponentTypeToString = "Document Module"
+         Case VBIDE.vbext_ct_MSForm
+             ComponentTypeToString = "UserForm"
+         Case VBIDE.vbext_ct_StdModule
+             ComponentTypeToString = "Code Module"
+         Case Else
+             ComponentTypeToString = "Unknown Type: " & CStr(ComponentType)
+     End Select
+ End Function
+
+ Function ProcKindString(ProcKind As VBIDE.vbext_ProcKind) As String
+     Select Case ProcKind
+         Case vbext_pk_Get
+             ProcKindString = "Property Get"
+         Case vbext_pk_Let
+             ProcKindString = "Property Let"
+         Case vbext_pk_Set
+             ProcKindString = "Property Set"
+         Case vbext_pk_Proc
+             ProcKindString = "Sub Or Function"
+         Case Else
+             ProcKindString = "Unknown Type: " & CStr(ProcKind)
+     End Select
+ End Function
+
+Public Function TotalCodeLinesInProject(VBProj As VBIDE.VBProject) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of code lines (excluding blank lines and
+' comment lines) in all VBComponents of VBProj. Returns -1 if VBProj
+' is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+    Dim VBComp As VBIDE.VBComponent
+    Dim LineCount As Long
+    If VBProj.Protection = vbext_pp_locked Then
+        TotalCodeLinesInProject = -1
+        Exit Function
+    End If
+    For Each VBComp In VBProj.VBComponents
+        LineCount = LineCount + TotalCodeLinesInVBComponent(VBComp)
+    Next VBComp
+
+    TotalCodeLinesInProject = LineCount
+End Function
+
+
+
+Public Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of code lines (excluding blank lines and
+' comment lines) in the VBComponent referenced by VBComp. Returns -1
+' if the VBProject is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Dim N As Long
+    Dim S As String
+    Dim LineCount As Long
+
+    If VBComp.Collection.Parent.Protection = vbext_pp_locked Then
+        TotalCodeLinesInVBComponent = -1
+        Exit Function
+    End If
+
+    With VBComp.CodeModule
+        For N = 1 To .CountOfLines
+            S = .Lines(N, 1)
+            If Trim(S) = vbNullString Then
+                ' blank line, skip it
+            ElseIf left(Trim(S), 1) = "'" Then
+                ' comment line, skip it
+            Else
+                LineCount = LineCount + 1
+            End If
+        Next N
+    End With
+    TotalCodeLinesInVBComponent = LineCount
+End Function
+
+
+Sub Display_GUID_Info(Optional ByVal targetWorkbook As Workbook)
+
+'PURPOSE: Displays GUID information for each active _
+Object Library reference in the VBA project
+'SOURCE: www.TheSpreadsheetGuru.com
+
+    Dim ref As Reference
+    If targetWorkbook Is Nothing Then Set targetWorkbook = ThisWorkbook
+
+'Loop Through Each Active Reference (Displays in Immediate Window [ctrl + g])
+  For Each ref In targetWorkbook.VBProject.References
+    Debug.Print "Reference Name: ", ref.Name
+    Debug.Print "Path: ", ref.FullPath
+    Debug.Print "GUID: " & ref.GUID
+    Debug.Print "Version: " & ref.Major & "." & ref.Minor
+    Debug.Print " "
+  Next ref
+
+End Sub
+
+
+Public Function CreateGUID() As String
+    Dim G As GUID
+    Dim returnString As String
+    With G
+        If (CoCreateGuid(G) = 0) Then
+        returnString = _
+            String$(8 - Len(Hex$(.Data1)), "0") & Hex$(.Data1) & _
+            String$(4 - Len(Hex$(.Data2)), "0") & Hex$(.Data2) & _
+            String$(4 - Len(Hex$(.Data3)), "0") & Hex$(.Data3) & _
+            IIf((.Data4(0) < &H10), "0", "") & Hex$(.Data4(0)) & _
+            IIf((.Data4(1) < &H10), "0", "") & Hex$(.Data4(1)) & _
+            IIf((.Data4(2) < &H10), "0", "") & Hex$(.Data4(2)) & _
+            IIf((.Data4(3) < &H10), "0", "") & Hex$(.Data4(3)) & _
+            IIf((.Data4(4) < &H10), "0", "") & Hex$(.Data4(4)) & _
+            IIf((.Data4(5) < &H10), "0", "") & Hex$(.Data4(5)) & _
+            IIf((.Data4(6) < &H10), "0", "") & Hex$(.Data4(6)) & _
+            IIf((.Data4(7) < &H10), "0", "") & Hex$(.Data4(7))
+        End If
+    End With
+    CreateGUID = "{" & left(returnString, 8) & "-" & Mid(returnString, 9, 4) & _
+            "-" & Mid(returnString, 13, 4) & "-" & Mid(returnString, 17, 4) & "-" & _
+            Right(returnString, 12) & "}"
+End Function
+
+ Private Sub RemoveReference(sReferenceName, sReferenceGUID, Optional ByVal targetWorkbook As Workbook)
+    Dim iIndex As Long
+    Dim oReference As Object
+    On Error Resume Next
+    For iIndex = 1 To ThisWorkbook.VBProject.References.Count
+       Set oReference = ThisWorkbook.VBProject.References.Item(iIndex)
+       ThisWorkbook.VBProject.References.Remove oReference
+    Next
+ End Sub
+
+Sub AddReference(sReferenceName, sReferenceGUID, Optional ByVal targetWorkbook As Workbook)
+    If targetWorkbook Is Nothing Then Set targetWorkbook = ThisWorkbook
+   Dim iIndex As Long
+   Dim oReference As Object
+   On Error Resume Next
+   For iIndex = 1 To targetWorkbook.VBProject.References.Count
+      Set oReference = targetWorkbook.VBProject.References.Item(iIndex)
+      If oReference.Name = sReferenceName Then
+          If oReference.GUID = sReferenceGUID And oReference.IsBroken Then
+            targetWorkbook.VBProject.References.Remove oReference
+          Else
+            Exit Sub
+          End If
+      End If
+   Next
+   targetWorkbook.VBProject.References.AddFromGuid sReferenceGUID, 1, 0
+End Sub
+

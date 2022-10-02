@@ -1,0 +1,25 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+'
+'
+'Private Sub Workbook_AfterSave(ByVal success As Boolean)
+'    If Not success Then MsgBox "Error Saving - xAddIn"
+'End Sub
+'
+'Private Sub Workbook_Open()
+'    If gclsProjectEnvironmentals Is Nothing Then Set gclsProjectEnvironmentals = New Class_Environment_Configuration
+'    '    CommandBar_Menu.AdamsTools_Add
+'End Sub
+'
+''Private Sub Workbook_BeforeClose(Cancel As Boolean)
+''    CommandBar_Menu.AdamsTools_Remove
+''End Sub
+''

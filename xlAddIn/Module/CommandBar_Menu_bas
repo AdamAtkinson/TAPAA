@@ -1,0 +1,133 @@
+Attribute VB_Name = "CommandBar_Menu"
+Option Explicit
+
+
+'Private Const mNUMBER_OF_MENUS As Long = 2
+'
+'Private Type typeMenuItems
+'    Category As String
+'    Item As String
+'    Command As String
+'    Tag As String
+'    FaceID As Long
+'End Type
+'Private Type typeMenu
+'    Name As String
+'    Key As String
+'    Items() As typeMenuItems
+'End Type
+
+Sub AdamsTools_Add()
+    Dim menuList() As Class_CommandBar_Menu
+    Dim menu As Class_CommandBar_Menu
+    If menu Is Nothing Then Set menu = New Class_CommandBar_Menu
+    
+    With menu
+        .Name = "Adam's Tools"
+        .AddMenuItem "PDF", "Split", "Quick_Access_Toolbar.PDF_Split", 1, 1098
+        .AddMenuItem "PDF", "Close All", "Quick_Access_Toolbar.PDF_SaveAndClose", 2, 1098
+        .AddMenuItem "PDF", "Match", "Quick_Access_Toolbar.PDF_MatchAndName", 3, 1098
+        .AddMenuItem "Sheet", "Merge All", "Quick_Access_Toolbar.Sheets_Merge", 4, 1098
+        .AddMenuItem "Sheet", "Add Checkbox", "Quick_Access_Toolbar.Sheets_CheckBoxes_Add", 5, 1098
+        .AddMenuItem "Sheet", "Remove Checkbox", "Quick_Access_Toolbar.Sheets_CheckBoxes_Remove", 6, 1098
+        .AddMenuItem "Sheet", "All Checkbox False", "Quick_Access_Toolbar.Sheets_Checkboxes_AllFalse", 7, 1098
+        .AddMenuItem "File", "Rename All", "Quick_Access_Toolbar.File_RenameAllInFolder", 8, 1098
+        .CreateMenu
+    End With
+    Set menu = Nothing
+    
+
+'    Set menu = New Class_CommandBar_Menu
+'    With menu
+'        .Name = "Menu Name"
+'        .AddMenuItem "Menu Category", "Item Name", "Module.Procedure", "TAG", 1098 'faceID
+'        .CreateMenu
+'    End With
+'    Set menu = Nothing
+        
+End Sub
+
+
+Sub AdamsTools_Remove()
+    On Error Resume Next
+    Do
+        Application.CommandBars("Worksheet Menu Bar").Controls("Adam's Menu").Delete
+    Loop While Err.Number = 0
+    On Error GoTo 0
+End Sub
+
+
+'
+'
+'Private Sub MenuDefinitions(menuIndex As Long, menu As typeMenu)
+'    Select Case menuIndex
+'        Case 1
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "PDF", "Split", "Quick_Access_Toolbar.PDF_Split", 1, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "PDF", "Close All", "Quick_Access_Toolbar.PDF_SaveAndClose", 2, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "PDF", "Match", "Quick_Access_Toolbar.PDF_MatchAndName", 3, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "Sheet", "Merge All", "Quick_Access_Toolbar.Sheets_Merge", 4, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "Sheet", "Add Checkbox", "Quick_Access_Toolbar.Sheets_CheckBoxes_Add", 5, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "Sheet", "Remove Checkbox", "Quick_Access_Toolbar.Sheets_CheckBoxes_Remove", 6, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "Sheet", "All Checkbox False", "Quick_Access_Toolbar.Sheets_Checkboxes_AllFalse", 7, 1098)
+'            menu = MenuFactory(menu, "Adam's Tools", 1, "File", "Rename All", "Quick_Access_Toolbar.File_RenameAllInFolder", 8, 1098)
+'        Case 2
+'        Case 3
+'    End Select
+'End Sub
+'
+'Private Function MenuFactory(menu As typeMenu, p_Name As String, p_Tag As String, _
+'                c_Category As String, c_Item As String, c_Command As String, c_Tag As String, c_FaceID As Long _
+'                ) As typeMenu
+'
+'    Dim tempMenu As typeMenu
+'
+'    With tempMenu
+'        If Len(menu.Name) = 0 Then
+'            .Name = p_Name
+'            .Tag = p_Tag
+'            ReDim .Items(1 To 1)
+'        Else
+'            tempMenu = menu
+'            ReDim .Items(1 To UBound(.Items) + 1)
+'        End If
+'        With .Items(UBound(.Items))
+'            .Category = c_Category
+'            .Item = c_Item
+'            .Command = c_Command
+'            .Tag = c_Tag
+'            .FaceID = c_FaceID
+'        End With
+'    End With
+'
+'    MenuFactory = tempMenu
+'
+'End Function
+'
+'Private Sub AttachMenuToCommandBar(menus() As typeMenu)
+'    Dim i As Long
+'    Dim j As Long
+'    Dim cmndbarMenuAnchor As CommandBarControl
+'    Dim cmndcntrlMenuGroup As CommandBarControl
+'    Dim cmndcntrlGroupMember As CommandBarControl
+'
+'    For i = 1 To UBound(menus)
+'        With menus(i)
+'            Set cmndbarMenuAnchor = Application.CommandBars(mCOMMANDBAR_NAME) _
+'                        .Controls.Add(Type:=mMENU_GROUP_CONTROL_TYPE, Temporary:=True)
+'            cmndbarMenuAnchor.Caption = .Name
+'            For j = 1 To UBound(menus(i).Items)
+'                Set cmndcntrlMenuGroup = Application.CommandBars(mCOMMANDBAR_NAME).Controls(.Name).Controls.Add _
+'                                (Type:=mMENU_GROUP_CONTROL_TYPE, Temporary:=True)
+'                    With .Items(j)
+'                        cmndcntrlMenuGroup.Caption = .Category
+'
+'                For j = 1 To UBound(mArrayOfMenuItems(i).Items)
+'                    Set cmndcntrlGroupMember = cmndcntrlMenuGroup.Controls.Add(Type:=mMENU_ITEM_CONTROL_TYPE, Temporary:=True)
+'                    cmndcntrlGroupMember.Caption = mArrayOfMenuItems(i).Items(j).Caption
+'                    cmndcntrlGroupMember.OnAction = mArrayOfMenuItems(i).Items(j).Command
+'                    cmndcntrlGroupMember.FaceID = mArrayOfMenuItems(i).Items(j).Icon
+'                    cmndcntrlGroupMember.Tag = mArrayOfMenuItems(i).Items(j).Tag
+'                Next
+'
+'    Next
+'End Sub

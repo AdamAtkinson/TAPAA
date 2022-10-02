@@ -1,0 +1,22 @@
+Attribute VB_Name = "Module4"
+Option Explicit
+Function obj_exists(obj_name As String, on_worksheet As Worksheet) As Boolean
+  On Error GoTo errHandler
+  Debug.Print on_worksheet.OLEObjects(obj_name).Name
+  obj_exists = True
+  On Error GoTo 0
+  Exit Function
+errHandler:
+  obj_exists = False
+  On Error GoTo 0
+End Function
+Sub dfgsdfg()
+Dim w As Worksheet
+Dim b As Workbook
+Dim y As String
+Set b = ThisWorkbook
+For Each w In b
+obj_exists(t,w)
+
+
+End Sub

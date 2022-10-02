@@ -1,0 +1,27 @@
+Attribute VB_Name = "Logging"
+Option Explicit
+
+Private mDebugLog As String
+
+
+Sub clearDebug()
+    mDebugLog = vbNullString
+End Sub
+
+Sub logDebug(debugString As String)
+    mDebugLog = mDebugLog & vbNewLine & debugString
+End Sub
+
+Sub writeLog(stringtowrite As String)
+    Dim streamToFile As TextStream
+    Dim fso As FileSystemObject
+    Set fso = New FileSystemObject
+    If Not fso.FileExists("C:\Users\e-aatkinson\Documents\2) Dev\Logs\debug.log") Then
+        Set streamToFile = fso.CreateTextFile("C:\Users\e-aatkinson\Documents\2) Dev\Logs\debug.log")
+    Else
+        Set streamToFile = fso.OpenTextFile("C:\Users\e-aatkinson\Documents\2) Dev\Logs\debug.log", ForWriting)
+    End If
+    streamToFile.Write stringtowrite
+    streamToFile.Close
+End Sub
+

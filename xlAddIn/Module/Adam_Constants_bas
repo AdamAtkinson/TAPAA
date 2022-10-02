@@ -1,0 +1,55 @@
+Attribute VB_Name = "Adam_Constants"
+'Option Explicit
+'
+'
+'    Public Const kCAPITAL As Long = 20
+'    Public Const kNUMLOCK As Long = 144
+'    Public Const SHIFT_MASK = 1
+'
+'    Public Const SW_SHOWNORMAL = 1
+'    Public Const SW_SHOWMAXIMIZED = 3
+'    Public Const WM_CLOSE = &H10
+'    Public Const SW_RESTORE = 9
+'    Public Const SW_SHOW = 5
+'
+'    Public Const DBLLN As String = vbNewLine & vbNewLine
+'
+'    Public Const LongSleep As Integer = 500
+'    Public Const MediumSleep As Integer = 200
+'    Public Const ShortSleep As Integer = 50
+'
+'
+'    Public Const BUTTON_DEFAULT_FORECOLOR = 5855577     'RGB( 89, 89,   89)     '
+'    Public Const BUTTON_DEFAULT_BACKCOLOR = 14806254    'RGB(238, 236, 225)     '
+'    Public Const BUTTON_DISABLED_FORECOLOR = 12369084   'RGB(188, 188, 188)     '
+'    Public Const BUTTON_DISABLED_BACKCOLOR = 15921906   'RGB(242, 242, 242)     '
+'    Public Const BUTTON_MOUSEOVER_FORECOLOR = 0         'RGB(  0,  0,    0)     '
+'    Public Const BUTTON_MOUSEOVER_BACKCOLOR = 10213059  'RGB(195, 214, 155)     '
+'    Public Const BUTTON_CLICKED_FORECOLOR = 16777215    'RGB(255, 255, 255)     '
+'    Public Const BUTTON_CLICKED_BACKCOLOR = 5855577     'RGB( 89,  89,  89)     '
+'
+'
+'    Public Const FILENAME_EXTENSION_PDF As String = ".pdf"
+'    Public Const FILENAME_EXTENSION_XLSM As String = ".xlsm"
+'    Public Const FILENAME_EXTENSION_XLSX As String = ".xlsx"
+'
+'    Public Const strNUANCETITLESUFFIX As String = " - Nuance Power PDF Advanced"
+'
+'
+'    Public Enum enumInputBoxDataTypes
+'        eFormula = 0
+'        eNumber = 1
+'        eString = 2
+'        eBoolean = 4
+'        eRange = 8
+'        eError = 16
+'        eArray = 64
+'    End Enum
+'
+''    0   a Formula                          '
+''    1   a Number                           '
+''    2   Text (a string)                    '
+''    4   A logical value (True or False)    '
+''    8   A cell reference, as a Range object'
+''    16  An error value, such as #N/A       '
+''    64  An array of values                 '
